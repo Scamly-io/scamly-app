@@ -95,8 +95,7 @@ export default function Login() {
                     <View style={styles.disclaimer}>
                         <Text style={styles.disclaimerText}>New here? You'll need to create an account through our online dashboard before logging in. We know its not ideal.</Text>
                     </View>
-                </SafeAreaView>
-                
+                </SafeAreaView>       
             </SafeAreaProvider>
         </ImageBackground>
     )
