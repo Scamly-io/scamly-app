@@ -1,25 +1,14 @@
-import Feather from '@expo/vector-icons/Feather';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from "expo-router";
 
 export default function TabsLayout() {
   return (
-    <Tabs screenOptions={{ tabBarActiveTintColor: "coral" }}>
-      <FontAwesome name="home" size={24} color="black" />
-      <Tabs.Screen 
-        name="index" 
-        options={{ 
-          title: "Home", 
-          tabBarIcon: ({ color, focused }) => {
-            return focused ?  (
-              <FontAwesome name="home" size={24} color={color} />
-             ) : (
-              <Feather name="home" size={24} color="black" />
-             )
-          }
-        }}
-      />
-      <Tabs.Screen name="login" options={{ title: "Login"}}/>
+    <Tabs>
+      <Tabs.Screen name="home" options={{ title: "Home", headerShown: false }} />
+      <Tabs.Screen name="scan" options={{ title: "Scan", headerShown: false }} />
+      <Tabs.Screen name="learn" options={{ title: "Learn", headerShown: false }} />
+      <Tabs.Screen name="chat" options={{ title: "Chat", headerShown: false }} />
+      <Tabs.Screen name="phone-database" options={{ title: "Phone Database", headerShown: false }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile", headerShown: false }} />
     </Tabs>
-  )
+  );
 }

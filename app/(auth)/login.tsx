@@ -1,6 +1,9 @@
+import { supabase } from "@/utils/supabase";
 import { useFonts } from "expo-font";
 import { LinearGradient } from "expo-linear-gradient";
-import { Image, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { Alert, Image, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 export default function Login() {
@@ -9,6 +12,38 @@ export default function Login() {
         "Poppins-Regular": require("@/assets/fonts/Poppins-Regular.ttf"),
         "Poppins-Bold": require("@/assets/fonts/Poppins-Bold.ttf"),
     });
+
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+
+    const router = useRouter();
+
+    const handleLogin =  async () => {
+        if (!email || !password) {
+            Alert.alert("Error", "Please enter an email and password");
+            return;
+        }
+
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (error) {
+                Alert.alert("Error", error.message);
+                return;
+            }
+
+            //ADD LOGGING
+
+            router.replace("/home");
+
+        } catch (error) {
+            //ADD LOGGING
+            Alert.alert("Error", "Something went wrong while logging in. Please try again.");
+        }
+    }
 
     return (
         <ImageBackground
@@ -29,6 +64,10 @@ export default function Login() {
                             <TextInput
                                 placeholder="Email"
                                 style={styles.input}
+                                value={email}
+                                onChangeText={setEmail}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
                             />
                         </View>
                         <View style={styles.inputContainer}>
@@ -37,9 +76,12 @@ export default function Login() {
                                 placeholder="Password"
                                 style={styles.input}
                                 secureTextEntry={true}
+                                value={password}
+                                onChangeText={setPassword}
+                                autoCapitalize="none"
                             />
                         </View>
-                        <TouchableOpacity style={styles.loginButton}>
+                        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
                             <LinearGradient
                                 colors={["#5426F8", "#CF68FF"]}
                                 start={{ x: 0, y: 0.5 }}
@@ -49,6 +91,9 @@ export default function Login() {
                                 <Text style={styles.loginButtonText}>Sign in</Text>
                             </LinearGradient>
                         </TouchableOpacity>
+                    </View>
+                    <View style={styles.disclaimer}>
+                        <Text style={styles.disclaimerText}>New here? You'll need to create an account through our online dashboard before logging in. We know its not ideal.</Text>
                     </View>
                 </SafeAreaView>
                 
@@ -83,7 +128,10 @@ const styles = StyleSheet.create({
     loginText: {
         fontSize: 30,
         marginTop: 50,
+        marginBottom: 20,
         fontFamily: "Poppins-Regular",
+        includeFontPadding: false,
+        textAlignVertical: "center",
     },
     inputContainer: {
         marginTop: 20,
@@ -93,14 +141,19 @@ const styles = StyleSheet.create({
     inputText: {
         fontSize: 20,
         fontFamily: "Poppins-Regular",
+        includeFontPadding: false,
+        textAlignVertical: "center",
     },
     input: {
         backgroundColor: "#EAEAEA",
         borderRadius: 999,
-        paddingLeft: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         marginTop: 5,
         fontSize: 18,
         fontFamily: "Poppins-Regular",
+        includeFontPadding: false,
+        textAlignVertical: "center",
     },
     loginButton: {
         marginTop: 10,
@@ -109,13 +162,20 @@ const styles = StyleSheet.create({
         borderRadius: 999,
         paddingVertical: 10,
         marginTop: 10,
-        fontSize: 18,
-        fontFamily: "Poppins-Regular",
     },
     loginButtonText: {
         color: "white",
         fontSize: 18,
         fontFamily: "Poppins-Bold",
+        textAlign: "center",
+    },
+    disclaimer: {
+        marginTop: 30
+    },
+    disclaimerText: {
+        color: "white",
+        fontSize: 16,
+        fontFamily: "Poppins-Regular",
         textAlign: "center",
     }
 })
