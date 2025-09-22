@@ -31,16 +31,12 @@ export default function ChatDetail() {
             
             setLoading(true);
 
-            console.log("fetching messages");
             const { data, error } = await supabase
                 .from("messages")
                 .select("id, role, content, created_at")
                 .eq("chat_id", id)
                 .order("created_at", { ascending: true });
-
-            console.log("messages fetched");
-            console.log(data);
-
+                
             if (error) {
                 console.error("Error fetching messages:", error);
             } else {
@@ -55,15 +51,15 @@ export default function ChatDetail() {
     const sendMessage = async () => {
         if (!input.trim() || !id) return;
 
-        const newMessage = {
+        const userMessage = {
             chat_id: id,
             role: "user" as const,
             content: input.trim(),
         }
 
-        const { data, error } = await supabase
+        const { data: insertedMessage, error } = await supabase
             .from("messages")
-            .insert([newMessage])
+            .insert([userMessage])
             .select()
             .single();
 
@@ -72,17 +68,80 @@ export default function ChatDetail() {
             return;
         }
 
-        const { error: updateError } = await supabase
-            .from("chats")
-            .update({ last_message: newMessage.content })
-            .eq("id", id);
+        await supabase.from("chats").update({ last_message: userMessage.content }).eq("id", id);
 
-        if (updateError) {
-            console.error("Error updating last message: ", updateError);
+        setMessages((prev) => [...prev, insertedMessage]);
+        setInput("");
+
+        const typingBubble = {
+            id: "typing",
+            chat_id: id,
+            role: "assistant" as const,
+            content: "...",
+            created_at: new Date().toISOString(),
         }
 
-        setMessages((prev) => [...prev, data]);
-        setInput("");
+        setMessages((prev) => [...prev, typingBubble]);
+
+        try {
+            // Check if the environment variable is configured
+            if (!process.env.EXPO_PUBLIC_AI_CHAT_LAMBDA_URL) {
+                console.error("AI_CHAT_LAMBDA_URL environment variable is not configured");
+                setMessages((prev) => prev.filter(msg => msg.id !== "typing"));
+                return;
+            }
+
+            const lambdaResponse = await fetch(process.env.EXPO_PUBLIC_AI_CHAT_LAMBDA_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messages: [...messages, insertedMessage].map((m) => ({
+                        role: m.role,
+                        content: m.content
+                    })),
+                }),
+            });
+
+            const result = await lambdaResponse.json();
+
+            if (!lambdaResponse.ok) {
+                throw new Error(`HTTP error! status: ${result}`);
+            }
+
+            if (!result.reply) {
+                console.error("Lambda did not return a reply: ", result);
+                setMessages((prev) => prev.filter(msg => msg.id !== "typing"));
+                return;
+            }
+            
+            const assistantMessage = {
+                chat_id: id,
+                role: "assistant" as const,
+                content: result.reply,
+            }
+
+            const { data: insertedAssistantMessage, error: assistantError } = await supabase
+                .from("messages")
+                .insert([assistantMessage])
+                .select()
+                .single();
+                
+
+            if (assistantError) {
+                console.error("Error saving assistant message: ", assistantError);
+                setMessages((prev) => prev.filter(msg => msg.id !== "typing"));
+                return;
+            }
+
+            await supabase.from("chats").update({ last_message: assistantMessage.content }).eq("id", id);
+
+            // Remove typing bubble and add the actual response
+            setMessages((prev) => [...prev.filter(msg => msg.id !== "typing"), insertedAssistantMessage]);
+        } catch (error) {
+            console.error("Error calling lambda for AI chat: ", error);
+            // Remove typing bubble on error
+            setMessages((prev) => prev.filter(msg => msg.id !== "typing"));
+        }
     }
 
     if (loading) {
@@ -106,7 +165,7 @@ export default function ChatDetail() {
                         keyExtractor={(item) => item.id.toString()}
                         renderItem={({ item }) => (
                             <View style={item.role === "user" ? styles.messageContainerUser : styles.messageContainerAssistant}>
-                                <Text style={{ fontFamily: "Poppins-Regular" }}>{item.content}</Text>
+                                <Text style={{ fontFamily: "Poppins-Regular" }}>{item.id === "typing" ? "Typing..." : item.content}</Text>
                             </View>
                         )}
                     />
