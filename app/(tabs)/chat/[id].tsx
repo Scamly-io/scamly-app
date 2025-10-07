@@ -4,6 +4,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import uuid from "react-native-uuid";
 
 type Message = {
     id: string;
@@ -12,7 +13,6 @@ type Message = {
     created_at: string;
 };
 
-
 export default function ChatDetail() {
 
     const [fontsLoaded] = useFonts({
@@ -20,127 +20,96 @@ export default function ChatDetail() {
         "Poppins-Bold": require("@/assets/fonts/Poppins-Bold.ttf"),
     });
 
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id: chatId } = useLocalSearchParams<{ id: string }>();
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
     const [input, setInput] = useState("");
+    const [conversationId, setConversationId] = useState("");
 
     useEffect(() => {
         const fetchMessages = async () => {
-            if (!id) return;
+            if (!chatId) return;
             
             setLoading(true);
 
-            const { data, error } = await supabase
-                .from("messages")
-                .select("id, role, content, created_at")
-                .eq("chat_id", id)
-                .order("created_at", { ascending: true });
-                
-            if (error) {
-                console.error("Error fetching messages:", error);
+            const [fetchCid, fetchMessages] = await Promise.all([
+                supabase.from("chats").select("openai_conversation_id").eq("id", chatId).single(),
+                supabase.from("messages").select("id, role, content, created_at").eq("chat_id", chatId).order("created_at", { ascending: true }),
+            ])
+
+            if (fetchCid.error) {
+                console.error("Error fetching conversation ID:", fetchCid.error);
             } else {
-                setMessages(data || []);
+                setConversationId(fetchCid.data.openai_conversation_id);
+            }
+                
+            if (fetchMessages.error) {
+                console.error("Error fetching messages:", fetchMessages.error);
+            } else {
+                setMessages(fetchMessages.data || []);
             }
             setLoading(false);
         }
 
         fetchMessages();
-    }, [id]);
+    }, [chatId]);
 
-    const sendMessage = async () => {
-        if (!input.trim() || !id) return;
+    //This looks weird but it just requires the current typing message to be replaced with the error message
+    function displayErrorMessage(typingMessage: Message) {
+        setMessages((prev) => {
+            return prev.map(msg => 
+                msg.id === typingMessage.id 
+                    ? { ...msg, content: "Sorry, I encountered an error. Please try again later." }
+                    : msg
+            );
+        });
+    }
+
+    async function processMessage () {
+        const content = input;
 
         const userMessage = {
-            chat_id: id,
-            role: "user" as const,
-            content: input.trim(),
+            id: uuid.v4().toString(),
+            role: "user",
+            content,
+            created_at: new Date().toISOString()
         }
 
-        const { data: insertedMessage, error } = await supabase
-            .from("messages")
-            .insert([userMessage])
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error sending message: ", error);
-            return;
+        const typingMessage = {
+            id: uuid.v4().toString(),
+            role: "assistant",
+            content: "Typing...",
+            created_at: new Date().toISOString()
         }
 
-        await supabase.from("chats").update({ last_message: userMessage.content }).eq("id", id);
-
-        setMessages((prev) => [...prev, insertedMessage]);
+        setMessages((prev) => [...prev, userMessage, typingMessage]);
         setInput("");
 
-        const typingBubble = {
-            id: "typing",
-            chat_id: id,
-            role: "assistant" as const,
-            content: "...",
-            created_at: new Date().toISOString(),
-        }
-
-        setMessages((prev) => [...prev, typingBubble]);
-
         try {
-            // Check if the environment variable is configured
-            if (!process.env.EXPO_PUBLIC_AI_CHAT_LAMBDA_URL) {
-                console.error("AI_CHAT_LAMBDA_URL environment variable is not configured");
-                setMessages((prev) => prev.filter(msg => msg.id !== "typing"));
-                return;
-            }
-
-            const lambdaResponse = await fetch(process.env.EXPO_PUBLIC_AI_CHAT_LAMBDA_URL, {
+            const res = await fetch(`https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/get-ai-response`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    messages: [...messages, insertedMessage].map((m) => ({
-                        role: m.role,
-                        content: m.content
-                    })),
-                }),
+                body: JSON.stringify({ content, chatId, conversationId })
             });
 
-            const result = await lambdaResponse.json();
-
-            if (!lambdaResponse.ok) {
-                throw new Error(`HTTP error! status: ${result}`);
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+                displayErrorMessage(typingMessage); 
             }
 
-            if (!result.reply) {
-                console.error("Lambda did not return a reply: ", result);
-                setMessages((prev) => prev.filter(msg => msg.id !== "typing"));
-                return;
-            }
+            const data = await res.json();
             
-            const assistantMessage = {
-                chat_id: id,
-                role: "assistant" as const,
-                content: result.reply,
-            }
-
-            const { data: insertedAssistantMessage, error: assistantError } = await supabase
-                .from("messages")
-                .insert([assistantMessage])
-                .select()
-                .single();
-                
-
-            if (assistantError) {
-                console.error("Error saving assistant message: ", assistantError);
-                setMessages((prev) => prev.filter(msg => msg.id !== "typing"));
-                return;
-            }
-
-            await supabase.from("chats").update({ last_message: assistantMessage.content }).eq("id", id);
-
-            // Remove typing bubble and add the actual response
-            setMessages((prev) => [...prev.filter(msg => msg.id !== "typing"), insertedAssistantMessage]);
+            //Replace the "typing" message with the actual response
+            setMessages((prev) => {
+                return prev.map(msg => 
+                    msg.id === typingMessage.id 
+                        ? { ...msg, content: data.fullText }
+                        : msg
+                );
+            });
         } catch (error) {
-            console.error("Error calling lambda for AI chat: ", error);
-            // Remove typing bubble on error
-            setMessages((prev) => prev.filter(msg => msg.id !== "typing"));
+            console.error("Error getting response from lambda: ", error);
+            displayErrorMessage(typingMessage);
         }
     }
 
@@ -165,7 +134,7 @@ export default function ChatDetail() {
                         keyExtractor={(item) => item.id.toString()}
                         renderItem={({ item }) => (
                             <View style={item.role === "user" ? styles.messageContainerUser : styles.messageContainerAssistant}>
-                                <Text style={{ fontFamily: "Poppins-Regular" }}>{item.id === "typing" ? "Typing..." : item.content}</Text>
+                                <Text style={{ fontFamily: "Poppins-Regular" }}>{item.content}</Text>
                             </View>
                         )}
                     />
@@ -177,7 +146,7 @@ export default function ChatDetail() {
                         value={input}
                         onChangeText={setInput}
                     />
-                    <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+                    <TouchableOpacity style={styles.sendButton} onPress={processMessage}>
                         <Text style={styles.sendButtonText}>Send</Text>
                     </TouchableOpacity>
                 </View>

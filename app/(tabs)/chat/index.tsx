@@ -26,8 +26,6 @@ export default function ChatIndex() {
             return;
         }
 
-        console.log(user.id);
-
         const { data, error } = await supabase
             .from("chats")
             .select("*")
@@ -38,7 +36,6 @@ export default function ChatIndex() {
             console.error("Error fetching chats:", error);
         } else {
             setChats(data || []);
-            console.log("chats worked")
         }
 
         setLoading(false);
@@ -83,11 +80,7 @@ export default function ChatIndex() {
         
         const { data, error } = await supabase
             .from("chats")
-            .insert([
-                {
-                    user_id: user.id
-                }
-            ])
+            .insert([{ user_id: user.id }])
             .select()
             .single();
 
@@ -99,6 +92,17 @@ export default function ChatIndex() {
 
         setChats([...chats, data]);
         router.push(`/chat/${data.id}`);
+
+        try {
+            fetch("https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/create-cid", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: data.id })
+            });
+        } catch (error) {
+            console.error("Error creating conversation ID:", error);
+            Alert.alert("Error", "There was an error creating your new chat. Please exit and try again.");
+        }
     }
 
     async function deleteChat(chatId: string) {
@@ -115,22 +119,30 @@ export default function ChatIndex() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            const { error: chatError } = await supabase
+                            setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
+
+                            const res = await fetch("https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/delete-cid", {
+                                method: "DELETE",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ chatId: chatId })
+                            })
+
+                            const { error: delChatError } = await supabase
                                 .from("chats")
                                 .delete()
-                                .eq("id", chatId);
+                                .eq("id", chatId)
 
-                            if (chatError) {
-                                console.error("Error deleting chat:", chatError);
-                                Alert.alert("Error", "Could not delete chat");
+                            if (delChatError) {
+                                console.error("Error deleting chat:", delChatError);
+                                return;
+                            }
+                            if (!res.ok) {
+                                console.error("Error deleting conversation ID:", res.statusText);
                                 return;
                             }
 
-                            // Update local state
-                            setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
-                            
                         } catch (error) {
-                            console.error("Error deleting chat:", error);
+                            console.error("Uncaught chat:", error);
                             Alert.alert("Error", "Could not delete chat");
                         }
                     }
@@ -138,9 +150,6 @@ export default function ChatIndex() {
             ]
         );
     }
-
-
-    
 
     if (loading) {
         return (
@@ -176,7 +185,7 @@ export default function ChatIndex() {
                                         }}
                                     >
                                         <Text style={{ fontSize: 16, fontWeight: "bold" }}>
-                                            Chat #{item.id.slice(0, 6)}
+                                            {item.created_at.split("T")[0]}
                                         </Text>
                                         <Text style={{ color: "#555" }} numberOfLines={1}>
                                             {item.last_message || "No messages yet"}
