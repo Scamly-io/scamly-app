@@ -1,5 +1,4 @@
 import { supabase } from "@/utils/supabase";
-import { useFonts } from "expo-font";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -7,11 +6,6 @@ import { Alert, Image, ImageBackground, StyleSheet, Text, TextInput, TouchableOp
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 export default function Login() {
-
-    const [fontsLoaded] = useFonts({
-        "Poppins-Regular": require("@/assets/fonts/Poppins-Regular.ttf"),
-        "Poppins-Bold": require("@/assets/fonts/Poppins-Bold.ttf"),
-    });
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -47,14 +41,14 @@ export default function Login() {
 
     return (
         <ImageBackground
-            source={require("@/assets/page-assets/bg_vertical.jpg")}
+            source={require("@/assets/images/page-images/bg_vertical.jpg")}
             style={styles.background}
         >
             <SafeAreaProvider>
                 <SafeAreaView style={styles.mainContainer}>
                     <View style={styles.loginContainer}>
                         <Image
-                            source={require("@/assets/page-assets/logo_long_light.png")}
+                            source={require("@/assets/images/page-images/logo_long_light.png")}
                             style={styles.logo}
                             resizeMode="contain"
                         />

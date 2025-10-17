@@ -1,8 +1,10 @@
+import Header from "@/components/Header";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
+import { Trash2 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 type Chat = {
@@ -132,6 +134,7 @@ export default function ChatIndex() {
                                 .delete()
                                 .eq("id", chatId)
 
+                            //BROKEN LOGIC    
                             if (delChatError) {
                                 console.error("Error deleting chat:", delChatError);
                                 return;
@@ -154,8 +157,8 @@ export default function ChatIndex() {
     if (loading) {
         return (
             <SafeAreaProvider>
-                <SafeAreaView style={{ flex: 1 }}>
-                    <View style={{ flex: 1, padding: 16 }}>
+                <SafeAreaView style={styles.loadingContainer}>
+                    <View style={styles.loadingContent}>
                         <ActivityIndicator size="large" />
                     </View>
                 </SafeAreaView>
@@ -164,54 +167,141 @@ export default function ChatIndex() {
     }
 
     return (
-        <SafeAreaProvider>
-            <SafeAreaView style={{ flex: 1 }}>
-                <View style={{ flex: 1, padding: 16 }}>
+        <>
+            <Header 
+                title="AI Chat" 
+                imageUrl={require("@/assets/images/page-images/chat.png")} 
+                subtitle="Chat with our AI agent and discuss scams, fraud, and cyber crime." 
+            />
+            <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
+                <View style={styles.content}>
+                    <View style={styles.titleContainer}>
+                        <Text style={styles.title}>Chats</Text>
+                        <TouchableOpacity onPress={createNewChat} style={styles.createChatButton}>
+                            <Text style={styles.createChatButtonText}>New</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.separator} />
                     <FlatList
                         data={chats}
                         keyExtractor={(item) => item.id}
+                        style={styles.flatList}
+                        contentContainerStyle={styles.flatListContent}
                         renderItem={({ item }) => (
-                            <View style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                borderBottomWidth: 1,
-                                borderColor: "#ddd",
-                            }}>
-                                <Link href={`/chat/${item.id}`} asChild>
-                                    <Pressable
-                                        style={{
-                                            flex: 1,
-                                            padding: 16,
-                                        }}
+                            <>
+                                <View style={styles.chatItem}>
+                                    <Link href={`/chat/${item.id}`} asChild>
+                                        <Pressable style={styles.chatPressable}>
+                                            <Text style={styles.chatDate}>
+                                                {item.created_at.split("T")[0]}
+                                            </Text>
+                                            <Text style={styles.chatMessage} numberOfLines={1}>
+                                                {item.last_message || "No messages yet"}
+                                            </Text>
+                                        </Pressable>
+                                    </Link>
+                                    <TouchableOpacity
+                                        onPress={() => deleteChat(item.id)}
+                                        style={styles.deleteButton}
                                     >
-                                        <Text style={{ fontSize: 16, fontWeight: "bold" }}>
-                                            {item.created_at.split("T")[0]}
-                                        </Text>
-                                        <Text style={{ color: "#555" }} numberOfLines={1}>
-                                            {item.last_message || "No messages yet"}
-                                        </Text>
-                                    </Pressable>
-                                </Link>
-                                <TouchableOpacity
-                                    onPress={() => deleteChat(item.id)}
-                                    style={{
-                                        padding: 16,
-                                        backgroundColor: "#ff4444",
-                                        marginRight: 8,
-                                        borderRadius: 4,
-                                    }}
-                                >
-                                    <Text style={{ color: "white", fontWeight: "bold" }}>Delete</Text>
-                                </TouchableOpacity>
-                            </View>
+                                        <Trash2 size={20} color="white" />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.separator} />
+                            </>
+                            
                         )}
                     />
-                    <TouchableOpacity onPress={createNewChat} style={{ marginTop: 20, backgroundColor: "coral", padding: 10, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Text>Create New Chat</Text>
-                    </TouchableOpacity>
                 </View>
             </SafeAreaView>
-        </SafeAreaProvider>
+        </>
         
     )
 }
+
+const styles = StyleSheet.create({
+    loadingContainer: {
+        flex: 1,
+    },
+    loadingContent: {
+        flex: 1,
+        padding: 16,
+    },
+    container: {
+        flex: 1,
+        padding: 16,
+    },
+    content: {
+        flex: 1,
+        padding: 16,
+        backgroundColor: "white",
+        borderRadius: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    titleContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginVertical: 16,
+    },
+    title: {
+        fontSize: 24,
+        fontWeight: "bold",
+    },
+    createChatButton: {
+        backgroundColor: "#5DB6FF",
+        borderRadius: 999,
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    createChatButtonText: {
+        color: "white",
+        fontFamily: "Poppins-Bold",
+    },
+    chatItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 20,
+    },
+    chatPressable: {
+        flex: 1,
+        gap: 8,
+        paddingVertical: 16,
+    },
+    chatDate: {
+        fontSize: 18,
+        fontWeight: "bold",
+    },
+    chatMessage: {
+        color: "#555",
+    },
+    deleteButton: {
+        padding: 10,
+        backgroundColor: "#ff6565",
+        marginRight: 8,
+        borderRadius: 999,
+    },
+    deleteButtonText: {
+        color: "white",
+        fontWeight: "bold",
+    },
+    separator: {
+        height: 1,
+        backgroundColor: "#b4b4b4",
+        marginVertical: 8,
+    },
+    flatList: {
+        flex: 1,
+    },
+    flatListContent: {
+        flexGrow: 1,
+    },
+
+})
