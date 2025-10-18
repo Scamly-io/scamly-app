@@ -1,8 +1,9 @@
+import ChatHeader from "@/components/ChatHeader";
 import { supabase } from "@/utils/supabase";
 import { useFonts } from "expo-font";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
 
@@ -22,9 +23,31 @@ export default function ChatDetail() {
 
     const { id: chatId } = useLocalSearchParams<{ id: string }>();
     const [messages, setMessages] = useState<Message[]>([]);
+    const [createdAt, setCreatedAt] = useState("");
     const [loading, setLoading] = useState(true);
     const [input, setInput] = useState("");
     const [conversationId, setConversationId] = useState("");
+
+    const flatListRef = useRef<FlatList>(null);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+            setKeyboardHeight(e.endCoordinates.height);
+            setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+        })
+
+        const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+            setKeyboardHeight(0);
+        })
+
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        }
+    }, []);
 
     useEffect(() => {
         const fetchMessages = async () => {
@@ -32,27 +55,27 @@ export default function ChatDetail() {
             
             setLoading(true);
 
-            const [fetchCid, fetchMessages] = await Promise.all([
+            const [fetchCid, fetchMessages, fetchDate] = await Promise.all([
                 supabase.from("chats").select("openai_conversation_id").eq("id", chatId).single(),
                 supabase.from("messages").select("id, role, content, created_at").eq("chat_id", chatId).order("created_at", { ascending: true }),
+                supabase.from("chats").select("created_at").eq("id", chatId).single(),
             ])
 
-            if (fetchCid.error) {
-                console.error("Error fetching conversation ID:", fetchCid.error);
-            } else {
-                setConversationId(fetchCid.data.openai_conversation_id);
-            }
-                
-            if (fetchMessages.error) {
-                console.error("Error fetching messages:", fetchMessages.error);
-            } else {
-                setMessages(fetchMessages.data || []);
-            }
+            if (!fetchCid.error) setConversationId(fetchCid.data.openai_conversation_id);
+            if (!fetchMessages.error) setMessages(fetchMessages.data || []);
+            if (!fetchDate.error) setCreatedAt(fetchDate.data.created_at);
+
             setLoading(false);
         }
 
         fetchMessages();
     }, [chatId]);
+
+    useEffect(() => {
+        if (messages.length > 0) {
+            flatListRef.current?.scrollToEnd({ animated: true });
+        }
+    }, [messages]);
 
     //This looks weird but it just requires the current typing message to be replaced with the error message
     function displayErrorMessage(typingMessage: Message) {
@@ -116,6 +139,7 @@ export default function ChatDetail() {
     if (loading) {
         return (
             <SafeAreaProvider>
+                <ChatHeader date={createdAt} />
                 <SafeAreaView style={styles.mainContainer}>
                     <View style={styles.mainContainer}>
                         <ActivityIndicator size="large" />
@@ -127,33 +151,59 @@ export default function ChatDetail() {
 
     return (
         <SafeAreaProvider>
-            <SafeAreaView style={styles.mainContainer}>
-                <View style={styles.mainContainer}>
-                    <FlatList
-                        data={messages}
-                        keyExtractor={(item) => item.id.toString()}
-                        renderItem={({ item }) => (
-                            <View style={item.role === "user" ? styles.messageContainerUser : styles.messageContainerAssistant}>
-                                <Text style={{ fontFamily: "Poppins-Regular" }}>{item.content}</Text>
-                            </View>
-                        )}
-                    />
-                </View>
+            <ChatHeader date={createdAt} />
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
+                <SafeAreaView edges={["bottom", "left", "right"]} style={styles.mainContainer}>
+                    <View style={styles.mainContainer}>
+                        <FlatList
+                            ref={flatListRef}
+                            data={messages}
+                            keyExtractor={(item) => item.id.toString()}
+                            renderItem={({ item }) => (
+                                <View style={
+                                    item.role === "user" 
+                                        ? styles.messageContainerUser 
+                                        : styles.messageContainerAssistant
+                                    }
+                                >
+                                    <Text style={
+                                        item.role === "user" 
+                                            ? styles.messageContentUser 
+                                            : styles.messageContentAssistant
+                                        }
+                                    >
+                                        {item.content}
+                                    </Text>
+                                </View>
+                            )}
+                            inverted={false}
+                            contentContainerStyle={{ paddingBottom: keyboardHeight }}
+                            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                        />
+                    </View>
 
-                <View style={styles.inputContainer}>
-                    <TextInput
-                        style={styles.input}
-                        value={input}
-                        onChangeText={setInput}
-                    />
-                    <TouchableOpacity style={styles.sendButton} onPress={processMessage}>
-                        <Text style={styles.sendButtonText}>Send</Text>
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
+                    <View style={styles.inputContainer}>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Type a message"
+                            returnKeyType="send"
+                            value={input}
+                            onChangeText={setInput}
+                            blurOnSubmit={false}
+                            multiline={false}
+                            onSubmitEditing={processMessage}
+                        />
+                    </View>
+                </SafeAreaView>
+            </KeyboardAvoidingView>
         </SafeAreaProvider>
     )
 }
+
 
 const styles = StyleSheet.create({
     background: {
@@ -161,30 +211,38 @@ const styles = StyleSheet.create({
     },
     mainContainer: {
         flex: 1,
-        padding: 16
+        paddingHorizontal: 16,
     },
     messageContainerUser: {
         alignSelf: "flex-end",
-        backgroundColor: "#DCF8C6",
+        backgroundColor: "#2074F3",
         borderRadius: 12,
         padding: 10,
-        marginVertical: 4,
-        maxWidth: "80%"
+        marginVertical: 8,
+        maxWidth: "80%",
     },
     messageContainerAssistant: {
         alignSelf: "flex-start",
-        backgroundColor: "#EEE",
+        backgroundColor: "#DBDBDB",
         borderRadius: 12,
         padding: 10,
-        marginVertical: 4,
+        marginVertical: 8,
         maxWidth: "80%"
+    },
+    messageContentUser: {
+        color: "white",
+        fontFamily: "Poppins-Regular",
+    },
+    messageContentAssistant: {
+        color: "#000",
+        fontFamily: "Poppins-Regular",
     },
     inputContainer: {
         flexDirection: "row",
         alignItems: "center",
         borderTopWidth: 1,
         borderColor: "#ddd",
-        paddingVertical: 8,
+        paddingTop: 8,
     },
     input: {
         flex: 1,

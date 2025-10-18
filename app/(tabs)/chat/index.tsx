@@ -171,7 +171,7 @@ export default function ChatIndex() {
             <Header 
                 title="AI Chat" 
                 imageUrl={require("@/assets/images/page-images/chat.png")} 
-                subtitle="Chat with our AI agent and discuss scams, fraud, and cyber crime." 
+                subtitle="Discuss scams, fraud, and cyber crime." 
             />
             <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
                 <View style={styles.content}>

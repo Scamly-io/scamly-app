@@ -19,11 +19,13 @@ export default function Header({ title, imageUrl, subtitle }: HeaderProps) {
             style={styles.headerContainer}
         >
             <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>{title}</Text>
+                <View style={styles.headerContent}>
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={styles.headerTitle}>{title}</Text>
+                        <Text style={styles.headerSubtitle}>{subtitle}</Text>
+                    </View>
                     <Image source={imageUrl} style={styles.headerImage} />
                 </View>
-                <Text style={styles.headerSubtitle}>{subtitle}</Text>
             </SafeAreaView>
         </LinearGradient>
     )
@@ -39,10 +41,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingBottom: 10,
     },
-    headerTitleContainer: {
+    headerContent: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 40,
+    },
+    headerTitleContainer: {
+        flexDirection: "column",
+        alignItems: "flex-start",
+        maxWidth: "75%",
     },
     headerTitle: {
         fontSize: 32,
@@ -50,15 +56,12 @@ const styles = StyleSheet.create({
         color: "white",
     },
     headerImage: {
-        width: 52,
-        height: 52,
+        width: 82,
+        height: 82,
     },
     headerSubtitle: {
         fontSize: 16,
         fontFamily: "Poppins-Medium",
         color: "white",
-        includeFontPadding: false,
-        textAlignVertical: "center",
-        marginBottom: 10,
     },
 })
