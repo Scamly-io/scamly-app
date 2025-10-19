@@ -2,8 +2,8 @@ import ChatHeader from "@/components/ChatHeader";
 import { supabase } from "@/utils/supabase";
 import { useFonts } from "expo-font";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
 
@@ -29,25 +29,6 @@ export default function ChatDetail() {
     const [conversationId, setConversationId] = useState("");
 
     const flatListRef = useRef<FlatList>(null);
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-    useEffect(() => {
-        const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
-            setKeyboardHeight(e.endCoordinates.height);
-            setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-        })
-
-        const hideSub = Keyboard.addListener("keyboardDidHide", () => {
-            setKeyboardHeight(0);
-        })
-
-        return () => {
-            showSub.remove();
-            hideSub.remove();
-        }
-    }, []);
 
     useEffect(() => {
         const fetchMessages = async () => {
@@ -71,10 +52,27 @@ export default function ChatDetail() {
         fetchMessages();
     }, [chatId]);
 
-    useEffect(() => {
-        if (messages.length > 0) {
-            flatListRef.current?.scrollToEnd({ animated: true });
-        }
+    const MessageBubble = memo(function MessageBubble({ item }: { item: Message }) {
+        const isUser = item.role === "user";
+        return (
+            <View style={isUser ? styles.messageContainerUser : styles.messageContainerAssistant}>
+                <Text style={isUser ? styles.messageContentUser : styles.messageContentAssistant}>
+                    {item.content}
+                </Text>
+            </View>
+        );
+    });
+
+    //with an inverted FlatList and maintainVisibleContentPosition, the latest messages stay anchored to the input without manual scrolling.
+
+    //Keep hooks (like useCallback) before any early returns to preserve hook order
+    const renderItem = useCallback(({ item }: { item: Message }) => (
+        <MessageBubble item={item} />
+    ), []);
+
+    //Render newest at bottom with inverted list by reversing data for display
+    const invertedData = useMemo(() => {
+        return [...messages].reverse();
     }, [messages]);
 
     //This looks weird but it just requires the current typing message to be replaced with the error message
@@ -155,34 +153,25 @@ export default function ChatDetail() {
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
+                //Keep zero offset because header sits outside this view
+                keyboardVerticalOffset={-20}
             >
                 <SafeAreaView edges={["bottom", "left", "right"]} style={styles.mainContainer}>
-                    <View style={styles.mainContainer}>
+                    <View style={{ flex: 1 }}>
                         <FlatList
                             ref={flatListRef}
-                            data={messages}
+                            data={invertedData}
                             keyExtractor={(item) => item.id.toString()}
-                            renderItem={({ item }) => (
-                                <View style={
-                                    item.role === "user" 
-                                        ? styles.messageContainerUser 
-                                        : styles.messageContainerAssistant
-                                    }
-                                >
-                                    <Text style={
-                                        item.role === "user" 
-                                            ? styles.messageContentUser 
-                                            : styles.messageContentAssistant
-                                        }
-                                    >
-                                        {item.content}
-                                    </Text>
-                                </View>
-                            )}
-                            inverted={false}
-                            contentContainerStyle={{ paddingBottom: keyboardHeight }}
-                            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                            renderItem={renderItem}
+                            inverted
+                            keyboardShouldPersistTaps="handled"
+                            maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 20 }}
+                            contentContainerStyle={{ paddingVertical: 8 }}
+                            removeClippedSubviews
+                            initialNumToRender={20}
+                            maxToRenderPerBatch={20}
+                            windowSize={7}
+                            updateCellsBatchingPeriod={50}
                         />
                     </View>
 
@@ -190,6 +179,7 @@ export default function ChatDetail() {
                         <TextInput
                             style={styles.input}
                             placeholder="Type a message"
+                            placeholderTextColor="#171924"
                             returnKeyType="send"
                             value={input}
                             onChangeText={setInput}
@@ -240,29 +230,16 @@ const styles = StyleSheet.create({
     inputContainer: {
         flexDirection: "row",
         alignItems: "center",
-        borderTopWidth: 1,
-        borderColor: "#ddd",
         paddingTop: 8,
     },
     input: {
         flex: 1,
-        borderWidth: 1,
-        borderColor: "#ddd",
+        borderWidth: 2,
+        borderColor: "#bbb",
         borderRadius: 999,
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 10,
         marginRight: 8,
         fontFamily: "Poppins-Regular",
-    },
-    sendButton: {
-        backgroundColor: "#007AFF",
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-    },
-    sendButtonText: {
-        color: "white",
-        fontSize: 16,
-        fontFamily: "Poppins-Bold",
     }
 })
