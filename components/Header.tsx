@@ -44,6 +44,7 @@ const styles = StyleSheet.create({
     headerContent: {
         flexDirection: "row",
         alignItems: "center",
+        marginBottom: 10,
     },
     headerTitleContainer: {
         flexDirection: "column",
