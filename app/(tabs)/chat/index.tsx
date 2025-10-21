@@ -1,3 +1,4 @@
+import GradientBackgound from "@/components/GradientBackground";
 import Header from "@/components/Header";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
@@ -5,7 +6,7 @@ import { Link, router } from "expo-router";
 import { Trash2 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type Chat = {
     id: string;
@@ -156,18 +157,16 @@ export default function ChatIndex() {
 
     if (loading) {
         return (
-            <SafeAreaProvider>
-                <SafeAreaView style={styles.loadingContainer}>
-                    <View style={styles.loadingContent}>
-                        <ActivityIndicator size="large" />
-                    </View>
-                </SafeAreaView>
-            </SafeAreaProvider>
+            <SafeAreaView style={styles.loadingContainer}>
+                <View style={styles.loadingContent}>
+                    <ActivityIndicator size="large" />
+                </View>
+            </SafeAreaView>
         )
     }
 
     return (
-        <>
+        <GradientBackgound>
             <Header 
                 title="AI Chat" 
                 imageUrl={require("@/assets/images/page-images/chat.png")} 
@@ -214,7 +213,7 @@ export default function ChatIndex() {
                     />
                 </View>
             </SafeAreaView>
-        </>
+        </GradientBackgound>
         
     )
 }

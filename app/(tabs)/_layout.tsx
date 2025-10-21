@@ -6,13 +6,17 @@ export default function TabsLayout() {
   const isChatDetail = pathName.includes("/chat/") && pathName !== "/chat";
 
   return (
-    <Tabs screenOptions={{ tabBarStyle: isChatDetail ? { display: "none" } : {} }}>
-      <Tabs.Screen name="home" options={{ title: "Home", headerShown: false }} />
-      <Tabs.Screen name="scan" options={{ title: "Scan", headerShown: false }} />
-      <Tabs.Screen name="learn" options={{ title: "Learn", headerShown: false }} />
-      <Tabs.Screen name="chat" options={{ title: "Chat", headerShown: false }} />
-      <Tabs.Screen name="phone-search" options={{ title: "Phone Search", headerShown: false }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile", headerShown: false }} />
+    <Tabs screenOptions={{ 
+      tabBarStyle: isChatDetail ? { display: "none" } : {}, 
+      // Avoid forcing a black content background that can flash during transitions
+      headerShown: false
+    }}>
+      <Tabs.Screen name="home" options={{ title: "Home" }} />
+      <Tabs.Screen name="scan" options={{ title: "Scan" }} />
+      <Tabs.Screen name="learn" options={{ title: "Learn" }} />
+      <Tabs.Screen name="chat" options={{ title: "Chat" }} />
+      <Tabs.Screen name="contact-search" options={{ title: "Contact Search" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
   );
 }

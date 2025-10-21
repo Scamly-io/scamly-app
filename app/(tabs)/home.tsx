@@ -10,7 +10,7 @@ export default function Home() {
     }
 
     return (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "transparent" }}>
             <Text>Home</Text>
             <TouchableOpacity onPress={handleLogout} style={{ marginTop: 20, backgroundColor: "coral", padding: 10, borderRadius: 5 }}>
                 <Text>Logout</Text>

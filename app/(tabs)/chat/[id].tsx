@@ -1,10 +1,10 @@
 import ChatHeader from "@/components/ChatHeader";
+import GradientBackgound from "@/components/GradientBackground";
 import { supabase } from "@/utils/supabase";
-import { useFonts } from "expo-font";
 import { useLocalSearchParams } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
 
 type Message = {
@@ -16,10 +16,6 @@ type Message = {
 
 export default function ChatDetail() {
 
-    const [fontsLoaded] = useFonts({
-        "Poppins-Regular": require("@/assets/fonts/Poppins-Regular.ttf"),
-        "Poppins-Bold": require("@/assets/fonts/Poppins-Bold.ttf"),
-    });
 
     const { id: chatId } = useLocalSearchParams<{ id: string }>();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -136,19 +132,19 @@ export default function ChatDetail() {
 
     if (loading) {
         return (
-            <SafeAreaProvider>
+            <>
                 <ChatHeader date={createdAt} />
                 <SafeAreaView style={styles.mainContainer}>
                     <View style={styles.mainContainer}>
                         <ActivityIndicator size="large" />
                     </View>
                 </SafeAreaView>
-            </SafeAreaProvider>
+            </>
         )
     }
 
     return (
-        <SafeAreaProvider>
+        <GradientBackgound>
             <ChatHeader date={createdAt} />
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
@@ -190,7 +186,7 @@ export default function ChatDetail() {
                     </View>
                 </SafeAreaView>
             </KeyboardAvoidingView>
-        </SafeAreaProvider>
+        </GradientBackgound>
     )
 }
 

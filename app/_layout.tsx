@@ -3,6 +3,7 @@ import { Slot } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { ActivityIndicator } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -27,5 +28,9 @@ export default function Layout() {
     return <ActivityIndicator size="large" />;
   }
 
-  return <Slot />;
+  return (
+    <SafeAreaProvider>
+      <Slot/>
+    </SafeAreaProvider>
+  )
 }
