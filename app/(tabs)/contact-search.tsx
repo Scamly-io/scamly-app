@@ -3,20 +3,47 @@ import Header from "@/components/Header";
 import { LinearGradient } from "expo-linear-gradient";
 import { ExternalLink, Globe, Phone } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 export default function PhoneSearch() {
     const [searchInput, setSearchInput] = useState("");
     const [showResults, setShowResults] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [resultData, setResultData] = useState(null);
+    const [error, setError] = useState(null);
 
     async function handleSearch() {
+        if (!searchInput.trim()) return;
+
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setShowResults(!showResults);
-        setIsLoading(false);
+        setError(null);
+        setShowResults(false);
+
+        try {
+            const response = await fetch('https://1tee7jgtpg.execute-api.ap-southeast-2.amazonaws.com/dev/search', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ companyName: searchInput.trim() })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error) //Change this to UX friendly error message
+            }
+
+            setResultData(result);
+            setShowResults(true);
+        } catch (err) {
+            console.error("Error searching: ", err)
+            setError("Failed to fetch company information. Please try again later.")
+        } finally {
+            setIsLoading(false);
+        }
     }
+
+    const company = resultData?.data || null;
 
     return (
         <SafeAreaProvider>
@@ -47,58 +74,108 @@ export default function PhoneSearch() {
                             </TouchableOpacity>
                         </View>
 
-                        {showResults && !isLoading ? (
-                            <View style={styles.elevatedBoxContainer}>
-                                <Text style={styles.companyName}>Company Information</Text>
-                                <View style={styles.separator} />
-                                <View style={styles.companyInfoContainer}>
-
-                                    <View style={styles.companyInfoItem}>
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                            <Globe size={18} color="#8B5CF6" />
-                                            <View>
-                                                <Text style={styles.companyInfoItemTitle}>Website</Text>
-                                                <Text style={styles.companyInfoItemValue}>www.company.com</Text>
-                                            </View>
-                                        </View>
-                                        <ExternalLink size={24} color="#9CA3AF"/>
-                                    </View>
-
-                                    <View style={styles.companyInfoItem}>
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                            <Phone size={18} color="#3B82F6" />
-                                            <View>
-                                                <Text style={styles.companyInfoItemTitle}>Local Phone</Text>
-                                                <Text style={styles.companyInfoItemValue}>(123) 456 7890</Text>
-                                            </View>
-                                        </View>
-                                        <ExternalLink size={24} color="#9CA3AF"/>
-                                    </View>
-
-                                    <View style={styles.companyInfoItem}>
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                            <Phone size={18} color="#EC4899" />
-                                            <View>
-                                                <Text style={styles.companyInfoItemTitle}>International</Text>
-                                                <Text style={styles.companyInfoItemValue}>+123 456 7890</Text>
-                                            </View>
-                                        </View>
-                                        <ExternalLink size={24} color="#9CA3AF"/>
-                                    </View>
-                                    
+                        {/* Results */}
+                        <View style={styles.elevatedBoxContainer}>
+                            {isLoading ? (
+                                <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+                                    <ActivityIndicator size="large" color="#5426F8" />
                                 </View>
-                            </View>
-                        ) : (
-                            <View style={styles.elevatedBoxContainer}>
-                                {isLoading ? (
-                                    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-                                        <ActivityIndicator size="large" color="#5426F8" />
+                            ) : error ? (
+                                <Text style={{ textAlign: "center", color: "red", fontFamily: "Poppins-Regular" }}>
+                                    {error}
+                                </Text>
+                            ) : showResults && company ? (
+                                <>
+                                    <Text style={styles.companyName}>{company.company_name}</Text>
+                                    <View style={styles.separator} />
+                                    <View style={styles.companyInfoContainer}>
+
+                                        {/* Website */}
+                                        <View style={styles.companyInfoItem}>
+                                            <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+                                                <Globe size={18} color="#8B5CF6" />
+                                                <View>
+                                                    <Text style={styles.companyInfoItemTitle}>Website</Text>
+                                                    <Text style={styles.companyInfoItemValue}>
+                                                        {company.website_domain !== "0"
+                                                            ? `www.${company.website_domain}`
+                                                            : "Not found"}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            {company.website_domain !== "0" && (
+                                                <TouchableOpacity
+                                                    onPress={() =>
+                                                        Linking.openURL(`https://${company.website_domain}`)
+                                                    }
+                                                >
+                                                    <ExternalLink size={24} color="#9CA3AF" />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+
+                                        {/* Local Phone */}
+                                        <View style={styles.companyInfoItem}>
+                                            <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+                                                <Phone size={18} color="#3B82F6" />
+                                                <View>
+                                                    <Text style={styles.companyInfoItemTitle}>Local Phone</Text>
+                                                    <Text style={styles.companyInfoItemValue}>
+                                                        {company.local_general_enquiries_phone_number !== "0"
+                                                            ? company.local_general_enquiries_phone_number
+                                                            : "Not found"}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        </View>
+
+                                        {/* International Phone */}
+                                        <View style={styles.companyInfoItem}>
+                                            <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+                                                <Phone size={18} color="#EC4899" />
+                                                <View>
+                                                    <Text style={styles.companyInfoItemTitle}>International</Text>
+                                                    <Text style={styles.companyInfoItemValue}>
+                                                        {company.international_general_enquiries_phone_number !== "0"
+                                                            ? company.international_general_enquiries_phone_number
+                                                            : "Not found"}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            {company.international_general_enquiries_phone_number !== "0" && (
+                                                <TouchableOpacity
+                                                    onPress={() =>
+                                                        Linking.openURL(
+                                                            `tel:${company.international_general_enquiries_phone_number}`
+                                                        )
+                                                    }
+                                                >
+                                                    <ExternalLink size={24} color="#9CA3AF" />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
                                     </View>
-                                ) : (
-                                    <Text style={{ textAlign: "center", fontFamily: "Poppins-Regular" }}>Your results will appear here.</Text>
-                                )}
-                            </View>
-                        )}
+
+                                    {!company.found_all_fields && (
+                                        <Text
+                                            style={{
+                                                color: "#D97706",
+                                                textAlign: "center",
+                                                marginTop: 10,
+                                                fontFamily: "Poppins-Regular",
+                                            }}
+                                        >
+                                            Some information could not be found:{" "}
+                                            {company.missing_fields.join(", ")}.
+                                        </Text>
+                                    )}
+                                </>
+                            ) : (
+                                <Text style={{ textAlign: "center", fontFamily: "Poppins-Regular" }}>
+                                    Your results will appear here.
+                                </Text>
+                            )}
+                        </View>
 
                         <View style={styles.disclaimerContainer}>
                             <Text style={styles.disclaimerTitle}>Disclaimer</Text>
@@ -109,6 +186,7 @@ export default function PhoneSearch() {
                                 to submit any feedback you may have.
                             </Text>
                         </View>
+                        
                     </SafeAreaView>
                 </ScrollView>
             </GradientBackground>
