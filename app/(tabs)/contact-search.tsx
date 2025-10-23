@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import { LinearGradient } from "expo-linear-gradient";
 import { ExternalLink, Globe, Phone } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 export default function PhoneSearch() {
@@ -12,6 +12,7 @@ export default function PhoneSearch() {
     const [isLoading, setIsLoading] = useState(false);
     const [resultData, setResultData] = useState(null);
     const [error, setError] = useState(null);
+    const [showModal, setShowModal] = useState(false);
 
     async function handleSearch() {
         if (!searchInput.trim()) return;
@@ -52,6 +53,10 @@ export default function PhoneSearch() {
                 <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
                     <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
                         <View style={styles.searchContainer}>
+                            { /* Need to add a modal "tip" on how to use the search */ }
+                            <TouchableOpacity onPress={() => setShowModal(true)}>
+                                <Text style={styles.howToUseText}>How to use this feature</Text>
+                            </TouchableOpacity>
                             <TextInput
                                 style={styles.searchInput}
                                 placeholder="Enter a company name"
@@ -121,8 +126,8 @@ export default function PhoneSearch() {
                                                 <View>
                                                     <Text style={styles.companyInfoItemTitle}>Local Phone</Text>
                                                     <Text style={styles.companyInfoItemValue}>
-                                                        {company.local_general_enquiries_phone_number !== "0"
-                                                            ? company.local_general_enquiries_phone_number
+                                                        {company.local_phone_number !== "0"
+                                                            ? company.local_phone_number
                                                             : "Not found"}
                                                     </Text>
                                                 </View>
@@ -136,17 +141,17 @@ export default function PhoneSearch() {
                                                 <View>
                                                     <Text style={styles.companyInfoItemTitle}>International</Text>
                                                     <Text style={styles.companyInfoItemValue}>
-                                                        {company.international_general_enquiries_phone_number !== "0"
-                                                            ? company.international_general_enquiries_phone_number
+                                                        {company.international_phone_number !== "0"
+                                                            ? company.international_phone_number
                                                             : "Not found"}
                                                     </Text>
                                                 </View>
                                             </View>
-                                            {company.international_general_enquiries_phone_number !== "0" && (
+                                            {company.international_phone_number !== "0" && (
                                                 <TouchableOpacity
                                                     onPress={() =>
                                                         Linking.openURL(
-                                                            `tel:${company.international_general_enquiries_phone_number}`
+                                                            `tel:${company.international_phone_number}`
                                                         )
                                                     }
                                                 >
@@ -186,7 +191,27 @@ export default function PhoneSearch() {
                                 to submit any feedback you may have.
                             </Text>
                         </View>
-                        
+                        <Modal
+                            animationType="fade"
+                            transparent={true}
+                            visible={showModal}
+                            onRequestClose={() => setShowModal(false)}
+                        >
+                            <View style={styles.modalOverlay}>
+                                <View style={styles.modalContainer}>
+                                    <Text style={styles.modalTitle}>💡 Tip</Text>
+                                    <Text style={styles.modalText}>
+                                        For the best results, try searching using the company’s full or most recognized name — and include a country if it’s an international brand.
+                                        {"\n\n"}✅ Example: "ANZ Bank Australia"
+                                        {"\n"}⚠️ Instead of: "ANZ"
+                                        {"\n\n"}This helps the tool find the correct official contact details.
+                                    </Text>
+                                    <Pressable onPress={() => setShowModal(false)} style={styles.closeButton}>
+                                        <Text style={styles.closeButtonText}>Got it</Text>
+                                    </Pressable>
+                                </View>
+                            </View>
+                        </Modal>
                     </SafeAreaView>
                 </ScrollView>
             </GradientBackground>
@@ -217,6 +242,13 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 20,
         elevation: 8,
+    },
+    howToUseText: {
+        fontFamily: "Poppins-Bold",
+        fontSize: 14,
+        color: "#00598a",
+        textAlign: "center",
+        textDecorationLine: "underline",
     },
     searchInput: {
         borderWidth: 2,
@@ -290,5 +322,49 @@ const styles = StyleSheet.create({
     },
     disclaimerText: {
         fontFamily: "Poppins-ExtraLightItalic",
-    }
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.4)",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 20,
+    },
+      modalContainer: {
+        backgroundColor: "white",
+        borderRadius: 20,
+        padding: 24,
+        width: "90%",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+      modalTitle: {
+        fontFamily: "Poppins-Bold",
+        fontSize: 18,
+        marginBottom: 10,
+        color: "#1F2937",
+        textAlign: "center",
+    },
+      modalText: {
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        color: "#1F2937",
+        marginBottom: 20,
+        lineHeight: 20,
+    },
+      closeButton: {
+        backgroundColor: "#5426F8",
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        alignSelf: "center",
+    },
+      closeButtonText: {
+        color: "white",
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 14,
+    },
 });
