@@ -1,10 +1,9 @@
-import GradientBackground from "@/components/GradientBackground";
-import Header from "@/components/Header";
+import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
 import { LinearGradient } from "expo-linear-gradient";
 import { ExternalLink, Globe, Phone } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PhoneSearch() {
     const [searchInput, setSearchInput] = useState("");
@@ -47,175 +46,177 @@ export default function PhoneSearch() {
     const company = resultData?.data || null;
 
     return (
-        <SafeAreaProvider>
-            <GradientBackground>
-                <Header title="Contact Search" imageUrl={require("@/assets/images/page-images/phone-search.png")} subtitle="Find contact information for any organisation worldwide." />
-                <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-                    <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
-                        <View style={styles.searchContainer}>
-                            { /* Need to add a modal "tip" on how to use the search */ }
-                            <TouchableOpacity onPress={() => setShowModal(true)}>
-                                <Text style={styles.howToUseText}>How to use this feature</Text>
-                            </TouchableOpacity>
-                            <TextInput
-                                style={styles.searchInput}
-                                placeholder="Enter a company name"
-                                placeholderTextColor="#171924"
-                                returnKeyType="search"
-                                value={searchInput}
-                                onChangeText={setSearchInput}
-                                onSubmitEditing={handleSearch}
-                            />
-                            <TouchableOpacity onPress={handleSearch}>
-                                <LinearGradient
-                                    colors={["#5426F8", "#CF68FF"]}
-                                    start={{ x: 0, y: 0.5 }}
-                                    end={{ x: 1, y: 0.5 }}
-                                    style={styles.searchButtonGradient}
-                                    disabled={!searchInput.trim()}
-                                >
-                                    <Text style={styles.searchButtonText}>Search</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        </View>
+        <CollapsibleHeaderScreen
+            headerProps={{
+                title: "Contact Search",
+                imageUrl: require("@/assets/images/page-images/phone-search.png"),
+                subtitle: "Find contact information for any organisation worldwide.",
+            }}
+            contentContainerStyle={{ flexGrow: 1 }}
+        >
+            <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
+                    <View style={styles.searchContainer}>
+                        { /* Need to add a modal "tip" on how to use the search */ }
+                        <TouchableOpacity onPress={() => setShowModal(true)}>
+                            <Text style={styles.howToUseText}>How to use this feature</Text>
+                        </TouchableOpacity>
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Enter a company name"
+                            placeholderTextColor="#171924"
+                            returnKeyType="search"
+                            value={searchInput}
+                            onChangeText={setSearchInput}
+                            onSubmitEditing={handleSearch}
+                        />
+                        <TouchableOpacity onPress={handleSearch} style={{ opacity: searchInput.trim() ? 1 : 0.5 }}>
+                            <LinearGradient
+                                colors={["#5426F8", "#CF68FF"]}
+                                start={{ x: 0, y: 0.5 }}
+                                end={{ x: 1, y: 0.5 }}
+                                style={styles.searchButtonGradient}
+                                disabled={!searchInput.trim()}
+                            >
+                                <Text style={styles.searchButtonText}>Search</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
 
-                        {/* Results */}
-                        <View style={styles.elevatedBoxContainer}>
-                            {isLoading ? (
-                                <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-                                    <ActivityIndicator size="large" color="#5426F8" />
-                                </View>
-                            ) : error ? (
-                                <Text style={{ textAlign: "center", color: "red", fontFamily: "Poppins-Regular" }}>
-                                    {error}
-                                </Text>
-                            ) : showResults && company ? (
-                                <>
-                                    <Text style={styles.companyName}>{company.company_name}</Text>
-                                    <View style={styles.separator} />
-                                    <View style={styles.companyInfoContainer}>
+                    {/* Results */}
+                    <View style={styles.elevatedBoxContainer}>
+                        {isLoading ? (
+                            <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+                                <ActivityIndicator size="large" color="#5426F8" />
+                            </View>
+                        ) : error ? (
+                            <Text style={{ textAlign: "center", color: "red", fontFamily: "Poppins-Regular" }}>
+                                {error}
+                            </Text>
+                        ) : showResults && company ? (
+                            <>
+                                <Text style={styles.companyName}>{company.company_name}</Text>
+                                <View style={styles.separator} />
+                                <View style={styles.companyInfoContainer}>
 
-                                        {/* Website */}
-                                        <View style={styles.companyInfoItem}>
-                                            <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                                <Globe size={18} color="#8B5CF6" />
-                                                <View>
-                                                    <Text style={styles.companyInfoItemTitle}>Website</Text>
-                                                    <Text style={styles.companyInfoItemValue}>
-                                                        {company.website_domain !== "0"
-                                                            ? `www.${company.website_domain}`
-                                                            : "Not found"}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                            {company.website_domain !== "0" && (
-                                                <TouchableOpacity
-                                                    onPress={() =>
-                                                        Linking.openURL(`https://${company.website_domain}`)
-                                                    }
-                                                >
-                                                    <ExternalLink size={24} color="#9CA3AF" />
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-
-                                        {/* Local Phone */}
-                                        <View style={styles.companyInfoItem}>
-                                            <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                                <Phone size={18} color="#3B82F6" />
-                                                <View>
-                                                    <Text style={styles.companyInfoItemTitle}>Local Phone</Text>
-                                                    <Text style={styles.companyInfoItemValue}>
-                                                        {company.local_phone_number !== "0"
-                                                            ? company.local_phone_number
-                                                            : "Not found"}
-                                                    </Text>
-                                                </View>
+                                    {/* Website */}
+                                    <View style={styles.companyInfoItem}>
+                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+                                            <Globe size={18} color="#8B5CF6" />
+                                            <View>
+                                                <Text style={styles.companyInfoItemTitle}>Website</Text>
+                                                <Text style={styles.companyInfoItemValue}>
+                                                    {company.website_domain !== "0"
+                                                        ? `www.${company.website_domain}`
+                                                        : "Not found"}
+                                                </Text>
                                             </View>
                                         </View>
+                                        {company.website_domain !== "0" && (
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    Linking.openURL(`https://${company.website_domain}`)
+                                                }
+                                            >
+                                                <ExternalLink size={24} color="#9CA3AF" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
 
-                                        {/* International Phone */}
-                                        <View style={styles.companyInfoItem}>
-                                            <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                                <Phone size={18} color="#EC4899" />
-                                                <View>
-                                                    <Text style={styles.companyInfoItemTitle}>International</Text>
-                                                    <Text style={styles.companyInfoItemValue}>
-                                                        {company.international_phone_number !== "0"
-                                                            ? company.international_phone_number
-                                                            : "Not found"}
-                                                    </Text>
-                                                </View>
+                                    {/* Local Phone */}
+                                    <View style={styles.companyInfoItem}>
+                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+                                            <Phone size={18} color="#3B82F6" />
+                                            <View>
+                                                <Text style={styles.companyInfoItemTitle}>Local Phone</Text>
+                                                <Text style={styles.companyInfoItemValue}>
+                                                    {company.local_phone_number !== "0"
+                                                        ? company.local_phone_number
+                                                        : "Not found"}
+                                                </Text>
                                             </View>
-                                            {company.international_phone_number !== "0" && (
-                                                <TouchableOpacity
-                                                    onPress={() =>
-                                                        Linking.openURL(
-                                                            `tel:${company.international_phone_number}`
-                                                        )
-                                                    }
-                                                >
-                                                    <ExternalLink size={24} color="#9CA3AF" />
-                                                </TouchableOpacity>
-                                            )}
                                         </View>
                                     </View>
 
-                                    {!company.found_all_fields && (
-                                        <Text
-                                            style={{
-                                                color: "#D97706",
-                                                textAlign: "center",
-                                                marginTop: 10,
-                                                fontFamily: "Poppins-Regular",
-                                            }}
-                                        >
-                                            Some information could not be found:{" "}
-                                            {company.missing_fields.join(", ")}.
-                                        </Text>
-                                    )}
-                                </>
-                            ) : (
-                                <Text style={{ textAlign: "center", fontFamily: "Poppins-Regular" }}>
-                                    Your results will appear here.
-                                </Text>
-                            )}
-                        </View>
-
-                        <View style={styles.disclaimerContainer}>
-                            <Text style={styles.disclaimerTitle}>Disclaimer</Text>
-                            <Text style={styles.disclaimerText}>
-                                This tool uses AI to help locate public company contact information. While we aim to provide accurate and up-to-date results, we cannot guarantee their completeness or accuracy. Please verify any phone numbers or contact details through official company sources before use.{"\n\n"}
-                                We appreciate your feedback on this tool. Please email
-                                <Text style={{ color: "#0058FA" }}> feedback@scamly.io </Text>
-                                to submit any feedback you may have.
-                            </Text>
-                        </View>
-                        <Modal
-                            animationType="fade"
-                            transparent={true}
-                            visible={showModal}
-                            onRequestClose={() => setShowModal(false)}
-                        >
-                            <View style={styles.modalOverlay}>
-                                <View style={styles.modalContainer}>
-                                    <Text style={styles.modalTitle}>💡 Tip</Text>
-                                    <Text style={styles.modalText}>
-                                        For the best results, try searching using the company’s full or most recognized name — and include a country if it’s an international brand.
-                                        {"\n\n"}✅ Example: "ANZ Bank Australia"
-                                        {"\n"}⚠️ Instead of: "ANZ"
-                                        {"\n\n"}This helps the tool find the correct official contact details.
-                                    </Text>
-                                    <Pressable onPress={() => setShowModal(false)} style={styles.closeButton}>
-                                        <Text style={styles.closeButtonText}>Got it</Text>
-                                    </Pressable>
+                                    {/* International Phone */}
+                                    <View style={styles.companyInfoItem}>
+                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+                                            <Phone size={18} color="#EC4899" />
+                                            <View>
+                                                <Text style={styles.companyInfoItemTitle}>International</Text>
+                                                <Text style={styles.companyInfoItemValue}>
+                                                    {company.international_phone_number !== "0"
+                                                        ? company.international_phone_number
+                                                        : "Not found"}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {company.international_phone_number !== "0" && (
+                                            <TouchableOpacity
+                                                onPress={() =>
+                                                    Linking.openURL(
+                                                        `tel:${company.international_phone_number}`
+                                                    )
+                                                }
+                                            >
+                                                <ExternalLink size={24} color="#9CA3AF" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
                                 </View>
+
+                                {!company.found_all_fields && (
+                                    <Text
+                                        style={{
+                                            color: "#D97706",
+                                            textAlign: "center",
+                                            marginTop: 10,
+                                            fontFamily: "Poppins-Regular",
+                                        }}
+                                    >
+                                        Some information could not be found:{" "}
+                                        {company.missing_fields.join(", ")}.
+                                    </Text>
+                                )}
+                            </>
+                        ) : (
+                            <Text style={{ textAlign: "center", fontFamily: "Poppins-Regular" }}>
+                                Your results will appear here.
+                            </Text>
+                        )}
+                    </View>
+
+                    <View style={styles.disclaimerContainer}>
+                        <Text style={styles.disclaimerTitle}>Disclaimer</Text>
+                        <Text style={styles.disclaimerText}>
+                            This tool uses AI to help locate public company contact information. While we aim to provide accurate and up-to-date results, we cannot guarantee their completeness or accuracy. Please verify any phone numbers or contact details through official company sources before use.{"\n\n"}
+                            We appreciate your feedback on this tool. Please email
+                            <Text style={{ color: "#0058FA" }}> feedback@scamly.io </Text>
+                            to submit any feedback you may have.
+                        </Text>
+                    </View>
+                    <Modal
+                        animationType="fade"
+                        transparent={true}
+                        visible={showModal}
+                        onRequestClose={() => setShowModal(false)}
+                    >
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.modalContainer}>
+                                <Text style={styles.modalTitle}>💡 Tip</Text>
+                                <Text style={styles.modalText}>
+                                    For the best results, try searching using the company’s full or most recognized name — and include a country if it’s an international brand.
+                                    {"\n\n"}✅ Example: "ANZ Bank Australia"
+                                    {"\n"}⚠️ Instead of: "ANZ"
+                                    {"\n\n"}This helps the tool find the correct official contact details.
+                                </Text>
+                                <Pressable onPress={() => setShowModal(false)} style={styles.closeButton}>
+                                    <Text style={styles.closeButtonText}>Got it</Text>
+                                </Pressable>
                             </View>
-                        </Modal>
-                    </SafeAreaView>
-                </ScrollView>
-            </GradientBackground>
-        </SafeAreaProvider>
+                        </View>
+                    </Modal>
+            </SafeAreaView>
+        </CollapsibleHeaderScreen>
     )
 }
 
