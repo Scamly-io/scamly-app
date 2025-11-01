@@ -40,7 +40,7 @@ export default function CollapsibleHeaderScreen({
     }, []);
 
     const TOGGLE_DISTANCE = 16; // px of cumulative scroll to toggle
-    const ANIM_DURATION = 260; // ms - fixed duration for hide/show
+    const ANIM_DURATION = 200; // ms - fixed duration for hide/show
 
     const scrollHandler = useAnimatedScrollHandler<{
         prevY?: number;

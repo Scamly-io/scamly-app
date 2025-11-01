@@ -109,9 +109,7 @@ export default function ChatIndex() {
     }
 
     async function deleteChat(chatId: string) {
-        Alert.alert(
-            "Delete Chat",
-            "Are you sure you want to delete this chat? This action cannot be undone.",
+        Alert.alert("Delete Chat", "Are you sure you want to delete this chat? This action cannot be undone.",
             [
                 {
                     text: "Cancel",
@@ -155,16 +153,6 @@ export default function ChatIndex() {
         );
     }
 
-    if (loading) {
-        return (
-            <SafeAreaView style={styles.loadingContainer}>
-                <View style={styles.loadingContent}>
-                    <ActivityIndicator size="large" />
-                </View>
-            </SafeAreaView>
-        )
-    }
-
     return (
         <GradientBackgound>
             <Header 
@@ -172,7 +160,7 @@ export default function ChatIndex() {
                 imageUrl={require("@/assets/images/page-images/chat.png")} 
                 subtitle="Discuss scams, fraud, and cyber crime." 
             />
-            <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
+            <SafeAreaView edges={[ "left", "right"]} style={styles.container}>
                 <View style={styles.content}>
                     <View style={styles.titleContainer}>
                         <Text style={styles.title}>Chats</Text>
@@ -180,51 +168,57 @@ export default function ChatIndex() {
                             <Text style={styles.createChatButtonText}>New</Text>
                         </TouchableOpacity>
                     </View>
+
                     <View style={styles.separator} />
-                    <FlatList
-                        data={chats}
-                        keyExtractor={(item) => item.id}
-                        style={styles.flatList}
-                        contentContainerStyle={styles.flatListContent}
-                        renderItem={({ item }) => (
-                            <>
-                                <View style={styles.chatItem}>
-                                    <Link href={`/chat/${item.id}`} asChild>
-                                        <Pressable style={styles.chatPressable}>
-                                            <Text style={styles.chatDate}>
-                                                {item.created_at.split("T")[0]}
-                                            </Text>
-                                            <Text style={styles.chatMessage} numberOfLines={1}>
-                                                {item.last_message || "No messages yet"}
-                                            </Text>
-                                        </Pressable>
-                                    </Link>
-                                    <TouchableOpacity
-                                        onPress={() => deleteChat(item.id)}
-                                        style={styles.deleteButton}
-                                    >
-                                        <Trash2 size={20} color="white" />
-                                    </TouchableOpacity>
-                                </View>
-                                <View style={styles.separator} />
-                            </>
-                            
-                        )}
-                    />
+
+                    { loading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color="#5426F8" />
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={chats}
+                            keyExtractor={(item) => item.id}
+                            style={styles.flatList}
+                            contentContainerStyle={styles.flatListContent}
+                            renderItem={({ item }) => (
+                                <>
+                                    <View style={styles.chatItem}>
+                                        <Link href={`/chat/${item.id}`} asChild>
+                                            <Pressable style={styles.chatPressable}>
+                                                <Text style={styles.chatDate}>
+                                                    {item.created_at.split("T")[0]}
+                                                </Text>
+                                                <Text style={styles.chatMessage} numberOfLines={1}>
+                                                    {item.last_message || "No messages yet"}
+                                                </Text>
+                                            </Pressable>
+                                        </Link>
+                                        <TouchableOpacity
+                                            onPress={() => deleteChat(item.id)}
+                                            style={styles.deleteButton}
+                                        >
+                                            <Trash2 size={20} color="white" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={styles.separator} />
+                                </>
+                                
+                            )}
+                        />
+                    )}
+                    
                 </View>
             </SafeAreaView>
         </GradientBackgound>
-        
     )
 }
 
 const styles = StyleSheet.create({
     loadingContainer: {
         flex: 1,
-    },
-    loadingContent: {
-        flex: 1,
-        padding: 16,
+        alignItems: "center",
+        justifyContent: "center",
     },
     container: {
         flex: 1,
@@ -236,10 +230,10 @@ const styles = StyleSheet.create({
         backgroundColor: "white",
         borderRadius: 20,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+        elevation: 8,
     },
     titleContainer: {
         flexDirection: "row",

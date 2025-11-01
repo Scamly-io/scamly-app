@@ -1,70 +1,188 @@
 import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
 import HalfGradientDivider from "@/components/HalfGradientDivider";
+import { supabase } from "@/utils/supabase";
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from "expo-linear-gradient";
-import { CheckCircle, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
-import { useState } from "react";
-import { Alert, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type ScanResults = {
-    isScam: boolean;
-    riskLevel: "low" | "medium" | "high";
+    is_scam: boolean;
+    risk_level: "low" | "medium" | "high";
     confidence: number;
     detections: {
-        type: string;
-        text: string;
+        category: string;
+        description: string;
         severity: "low" | "medium" | "high";
     }[];
+    scan_successful: boolean;
+    scan_failure_reason: string | null;
 }
 
 export default function Scan() {
-    const [imageSelected, setImageSelected] = useState(false);
-    const [image, setImage] = useState<string | null>(null);
+    const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+    const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [results, setResults] = useState<ScanResults | null>(null)
     const [aspectRatio, setAspectRatio] = useState<number>(1);
+    const [userId, setUserId] = useState<string | null>(null);
 
-    const mockResults = {
-        isScam: false,
-        riskLevel: 'low', // low, medium, high
-        confidence: 87,
-        detections: [
-            { type: 'grammar', text: 'Poor grammar and spelling errors detected', severity: 'low' },
-            { type: 'urgency', text: 'Creates false sense of urgency', severity: 'high' },
-            { type: 'link', text: 'Contains suspicious links', severity: 'high' },
-            { type: 'sender', text: 'Sender from unknown or unverified source', severity: 'medium' },
-            { type: 'request', text: 'Requests sensitive personal information', severity: 'high' }
-        ]
-    };
+    useEffect(() => {
+        async function checkUserExists() {
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+            if (userError || !user) {
+                console.error("No user:", userError);
+                Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+                return;
+            }
+
+            setUserId(user.id);
+        }
+        checkUserExists();
+    }, []);
+
+    // This is just used as a fallback incase the image.fileName errors. It generates a random string of given length
+    function makeId(length: number): string {
+        let result = '';
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        const charactersLength = characters.length;
+        for ( let i = 0; i < length; i++ ) {
+            result += characters.charAt(Math.floor(Math.random() * charactersLength));
+        }
+        return result;
+    }
+
+    async function convertImageToBlob(imageUri: string): Promise<Blob> {
+        const result = await ImageManipulator.manipulateAsync(
+            imageUri,
+            [],
+            {
+                compress: 0.6, // Compressed slightly as the AI model sometimes times out if the image is too large
+                format: ImageManipulator.SaveFormat.JPEG,
+            }
+        )
+        
+        const fileRequest = await fetch(result.uri);
+        const blob = await fileRequest.blob();
+        return blob;
+    }
+
+    async function uploadImageToS3(imageBlob: Blob, fileName: string) {
+        let mainUploadUrl = "";
+        let tempUploadUrl = "";
+
+        // Get presigned upload URLs
+        const response = await fetch('https://0i3wpw1lxk.execute-api.ap-southeast-2.amazonaws.com/dev/upload', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fileName })
+        })
+
+        const data = await response.json();
+        mainUploadUrl = data.upload_url_main;
+        tempUploadUrl = data.upload_url_temp;
+
+        // Async upload images to main and temp buckets
+        const [ uploadMainResponse, uploadTempResponse ] = await Promise.all([
+            fetch(mainUploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": "image/jpeg" },
+                body: imageBlob,
+            }),
+            fetch(tempUploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": "image/jpeg" },
+                body: imageBlob,
+            }),
+        ]);
+
+        if (!uploadMainResponse.ok || !uploadTempResponse.ok) {
+            throw new Error("Failed to upload images to S3");
+        }
+    }
+
+    async function scanImage(imageUrl: string, userId: string) {
+        const response = await fetch('https://ab16q62v9b.execute-api.ap-southeast-2.amazonaws.com/dev/scan', { // This may timeout if the image is too large.
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                imageUrl,
+                userId
+            
+            })
+        })
+
+        if (!response.ok) {
+            throw new Error("Failed to scan image");
+        }
+
+        const json = await response.json();
+        const data: ScanResults = typeof json === "string" ? JSON.parse(json) : json;
+
+        setResults(data);
+    }
 
     async function handleScan() {
-        if (!imageSelected) return;
-        setResults(mockResults);
+        if (!image) return;
+        if (!userId) return;
+
+        setResults(null);
+        setLoading(true);
+
+        const scrubbedFileName = image?.fileName.split(".")[0] || makeId(12);
+        const cleanFileName = `${scrubbedFileName}_${Date.now()}.jpeg`;
+        const publicUrl = `https://temp-scamly-ai-images.s3.ap-southeast-2.amazonaws.com/${cleanFileName}`;
+        setPublicImageUrl(publicUrl);
+
+        const imageBlob = await convertImageToBlob(image.uri!);
+
+        try {
+            await uploadImageToS3(imageBlob, cleanFileName);
+        } catch (err) {
+            console.error("Error getting presigned upload URL: ", err);
+            Alert.alert("Error", "Your image failed to upload to the AI agent. Please try again later");
+            setLoading(false);
+            return;
+        }
+
+        try {
+            await scanImage(publicUrl, userId);
+            setLoading(false);
+        } catch (err) {
+            console.error("Error scanning image: ", err);
+            Alert.alert("Error", "We failed to scan your image. Please try again later");
+            setLoading(false);
+            return;
+        } 
     }
 
     async function pickImage() {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
         if (status !== 'granted') {
             Alert.alert("Error", "We need permission to access your photos to upload images.");
             return;
         }
+
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: false,
             quality: 1,
         });
 
-        if (!result.canceled) {
-            setImage(result.assets[0].uri);
-            setImageSelected(true);
+        if (result.canceled) return;
 
-            Image.getSize(result.assets[0].uri, (width, height) => {
-                setAspectRatio(width / height);
-            });
-        }
+        setImage(result.assets[0]);
+
+        Image.getSize(result.assets[0].uri!, (width, height) => {
+            setAspectRatio(width / height);
+        });
     }
 
     function getRiskColour(riskLevel) {
@@ -95,17 +213,12 @@ export default function Scan() {
             <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
                     <View style={styles.elevatedBoxContainer}>
                         <View style={styles.uploadBoxContent}>
-                            {imageSelected ? (
+                            {image ? (
                                 <View style={styles.uploadedImageContainer}>
-                                    <Image source={{ uri: image }} style={[styles.uploadedImage, { aspectRatio: aspectRatio }]} resizeMode="contain" />
-                                    <View style={styles.uploadedImageTextContainer}>
-                                        <CheckCircle size={24} color="#7C3AED" />
-                                        <Text style={styles.uploadedImageText}>Image uploaded</Text>
-                                    </View>
+                                    <Image source={{ uri: image.uri }} style={[styles.uploadedImage, { aspectRatio: aspectRatio }]} resizeMode="contain" />
                                     <TouchableOpacity 
                                         onPress={() => {
                                             setImage(null);
-                                            setImageSelected(false);
                                             setResults(null);
                                     }}>
                                         <Text style={styles.clearButtonText}>Clear</Text>
@@ -113,6 +226,9 @@ export default function Scan() {
                                 </View>
                             ) : (
                                 <>
+                                    <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
+                                        <Text style={styles.howToUseText}>How to use this feature?</Text>
+                                    </TouchableOpacity>
                                     <TouchableOpacity style={styles.uploadBoxIconContainer} onPress={pickImage}>
                                         <Upload size={36} color="#7C3AED" />
                                     </TouchableOpacity>
@@ -123,15 +239,25 @@ export default function Scan() {
                         </View>
                     </View>
 
-                    <TouchableOpacity disabled={!imageSelected} style={{ marginTop: 16, opacity: imageSelected ? 1 : 0.5 }} onPress={handleScan}>
+                    <TouchableOpacity 
+                        disabled={!image || loading || !userId} 
+                        style={{ marginTop: 16, opacity: image && !loading && userId ? 1 : 0.5 }} // Opacity of 1 if the image is selected, its not loading, and the user exists
+                        onPress={handleScan}>
                         <LinearGradient
                             colors={["#5426F8", "#CF68FF"]}
                             start={{ x: 0, y: 0.5 }}
                             end={{ x: 1, y: 0.5 }}
                             style={styles.scanButtonGradient}
-                            disabled={!imageSelected}
+                            disabled={!image || loading || !userId}
                         >
-                            <Text style={styles.scanButtonText}>Scan</Text>
+                            <Text style={styles.scanButtonText}>
+                                {
+                                    loading ? (
+                                        <ActivityIndicator size="small" color="white" />
+                                    ) : "Scan"
+                                }
+
+                            </Text>
                         </LinearGradient>
                     </TouchableOpacity>
 
@@ -148,28 +274,28 @@ export default function Scan() {
 
                             <View style={styles.shadowContainer}>
                                 <LinearGradient
-                                    colors={getRiskColour(results.riskLevel)}
+                                    colors={getRiskColour(results.risk_level)}
                                     start={{ x: 0, y: 0.5 }}
                                     end={{ x: 1, y: 0.5 }}
                                     style={styles.confidenceContainer}
                                 >
                                     <View style={styles.scamResultHeader}>
                                         <View style={styles.scamResultTitleContainer}>
-                                            {results.isScam ? <TriangleAlert size={28} color="white" /> : <Shield size={28} color="white" />}
+                                            {results.is_scam ? <TriangleAlert size={28} color="white" /> : <Shield size={28} color="white" />}
                                             <Text style={styles.scamResultTitle}>
-                                                {results.isScam ? "Likely a Scam" : "Looks Safe"}
+                                                {results.is_scam ? "Likely a Scam" : "Looks Safe"}
                                             </Text>
                                         </View>
-                                        <Text style={styles.scamResultPercentage}>87%</Text>
+                                        <Text style={styles.scamResultPercentage}>{results.confidence}%</Text>
                                     </View>
                                     <View style={styles.scamResultDetails}>
                                         <Text style={styles.scamResultDetailText}>
-                                            {results.riskLevel.charAt(0).toUpperCase() + results.riskLevel.slice(1)} risk detected
+                                            {results.risk_level.charAt(0).toUpperCase() + results.risk_level.slice(1)} risk detected
                                         </Text>
                                         <Text style={styles.scamResultDetailText}>Confidence</Text>
                                     </View>
 
-                                    {results.isScam ? (
+                                    {results.is_scam ? (
                                         <View style={styles.scamWarningContainer}>
                                             <Text style={styles.scamWarningText}>⚠️ Do not respond or click any links. Report and delete this message immediately.</Text>
                                         </View>
@@ -184,13 +310,26 @@ export default function Scan() {
 
                             <View style={styles.elevatedBoxContainer}>
                                 <View style={styles.keyDetectionsHeader}>
-                                    <TriangleAlert size={24} color="#ff6900"/>
                                     <Text style={styles.keyDetectionsTitle}>Key Detections</Text>
+                                    <View style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 12 }}>
+                                        <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                                            {getSeverityIcon("high")}
+                                            <Text>High risk</Text>
+                                        </View>
+                                        <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                                            {getSeverityIcon("medium")}
+                                            <Text>Medium risk</Text>
+                                        </View>
+                                        <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                                            {getSeverityIcon("low")}
+                                            <Text>Low risk</Text>
+                                        </View>  
+                                    </View>
                                 </View>
                                 {results.detections.map((detection, index) => (
                                     <View style={styles.keyDetectionsItem} key={index}>
                                         {getSeverityIcon(detection.severity)}
-                                        <Text style={styles.keyDetectionsText}>{detection.text}</Text>
+                                        <Text style={styles.keyDetectionsText}>{detection.description}</Text>
                                     </View>
                                 ))}
                             </View>
@@ -231,11 +370,17 @@ export default function Scan() {
                         <></>
                     )}
 
-
-
-                    <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
-                        <Text style={styles.howToUseText}>How to use this feature?</Text>
-                    </TouchableOpacity>
+                    <View style={{ marginTop: 24 }}>
+                        <Text style={styles.disclaimerTitle}>Disclaimer</Text>
+                        <Text style={styles.disclaimerText}>
+                        This tool uses AI to analyze text messages, emails, social media posts, and other online content for potential signs of scams or fraud. 
+                        While we strive to provide accurate and helpful assessments, the results are generated automatically and may not always reflect the full context or intent of the content. 
+                        Always use your own judgment and verify suspicious messages or accounts through official sources before taking any action.{"\n\n"}
+                            We appreciate your feedback on this tool. Please email
+                            <Text style={{ color: "#0058FA" }}> feedback@scamly.io </Text>
+                            to submit any feedback you may have.
+                        </Text>
+                    </View>
 
                     <Modal
                         animationType="fade"
@@ -305,30 +450,17 @@ const styles = StyleSheet.create({
         backgroundColor: "#F5F3FF",
         borderRadius: 14,
         padding: 24,
-        gap: 12,
+        gap: 24,
     },
     uploadedImage: {
         width: "100%",
         maxHeight: 350,
         borderRadius: 14,
     },
-    uploadedImageTextContainer: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        marginTop: 24,
-    },
-    uploadedImageText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 20,
-        color: "#7C3AED",
-    },
     clearButtonText: {
-        textDecorationLine: "underline",
         fontSize: 16,
-        color: "#6B7280",
+        fontFamily: "Poppins-SemiBold",
+        color: "#fb2c36",
     },
     uploadBoxIconContainer: {
         backgroundColor: "#E0E7FF",
@@ -443,9 +575,10 @@ const styles = StyleSheet.create({
     },
     keyDetectionsHeader: {
         display: "flex",
-        flexDirection: "row",
+        flexDirection: "column",
         alignItems: "center",
-        gap: 8,
+        justifyContent: "center",
+        gap: 16,
     },
     keyDetectionsTitle: {
         fontFamily: "Poppins-Bold",
@@ -456,7 +589,7 @@ const styles = StyleSheet.create({
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
-        gap: 6,
+        gap: 12,
         padding: 16,
         backgroundColor: "#f9fafb",
         borderRadius: 14,
@@ -465,6 +598,7 @@ const styles = StyleSheet.create({
         fontFamily: "Poppins-Regular",
         fontSize: 14,
         color: "#1f2937",
+        flexShrink: 1,
     },
     tipsContainer: {
         marginTop: 16,
@@ -513,7 +647,7 @@ const styles = StyleSheet.create({
         color: "#374151",
     },
     howToUseButton: {
-        marginTop: 40,
+        marginBottom: 16,
     },
     howToUseText: {
         fontFamily: "Poppins-Bold",
@@ -521,6 +655,15 @@ const styles = StyleSheet.create({
         color: "#00598a",
         textAlign: "center",
         textDecorationLine: "underline",
+    },
+    disclaimerContainer: {
+        marginVertical: 36,
+    },
+    disclaimerTitle: {
+        fontFamily: "Poppins-SemiBold",
+    },
+    disclaimerText: {
+        fontFamily: "Poppins-ExtraLightItalic",
     },
     modalOverlay: {
         flex: 1,
