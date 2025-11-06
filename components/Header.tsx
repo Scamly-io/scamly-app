@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
     headerImage: {
         width: 82,
         height: 82,
+        resizeMode: "contain",
     },
     headerSubtitle: {
         fontSize: 16,
