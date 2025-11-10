@@ -204,9 +204,9 @@ export default function Scan() {
     return (
         <CollapsibleHeaderScreen
             headerProps={{
-                title: "Scam Scanner",
+                title: "Scanner",
                 imageUrl: require("@/assets/images/page-images/ai.png"),
-                subtitle: "Screenshot a text or email and scan it to check for scams.",
+                subtitle: "Scan texts, emails, or online media for scams.",
             }}
             contentContainerStyle={{ flexGrow: 1 }}
         >
@@ -390,7 +390,7 @@ export default function Scan() {
                 >
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContainer}>
-                            <Text style={styles.modalTitle}>💡 Tip: How to take a good screenshot</Text>
+                            <Text style={styles.modalTitle}>💡 Tip</Text>
                             <Text style={styles.modalText}>
                                 To get the most accurate scan results, make sure your screenshot clearly shows the key details:
                                 {"\n\n"}- Include the main message or section you want the AI to analyze.

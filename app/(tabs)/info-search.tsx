@@ -48,9 +48,9 @@ export default function PhoneSearch() {
     return (
         <CollapsibleHeaderScreen
             headerProps={{
-                title: "Contact Search",
+                title: "Info Search",
                 imageUrl: require("@/assets/images/page-images/phone-search.png"),
-                subtitle: "Find contact information for any organisation worldwide.",
+                subtitle: "Find contact info for any organisation worldwide.",
             }}
             contentContainerStyle={{ flexGrow: 1 }}
         >
@@ -208,6 +208,7 @@ export default function PhoneSearch() {
                                     {"\n\n"}✅ Example: "ANZ Bank Australia"
                                     {"\n"}⚠️ Instead of: "ANZ"
                                     {"\n\n"}This helps the tool find the correct official contact details.
+                                    {"\n\n"}Allow up to 30 seconds for the results to appear.
                                 </Text>
                                 <Pressable onPress={() => setShowModal(false)} style={styles.closeButton}>
                                     <Text style={styles.closeButtonText}>Got it</Text>

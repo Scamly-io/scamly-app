@@ -160,7 +160,7 @@ export default function ChatIndex() {
                 imageUrl={require("@/assets/images/page-images/chat.png")} 
                 subtitle="Discuss scams, fraud, and cyber crime." 
             />
-            <SafeAreaView edges={[ "left", "right"]} style={styles.container}>
+            <SafeAreaView edges={[ "left", "right", "bottom" ]} style={styles.container}>
                 <View style={styles.content}>
                     <View style={styles.titleContainer}>
                         <Text style={styles.title}>Chats</Text>

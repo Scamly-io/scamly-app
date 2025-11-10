@@ -2,20 +2,35 @@ import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
 import { supabase } from "@/utils/supabase";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { ChevronRight, TrendingUp } from "lucide-react-native";
+import { ChevronRight, Coins, LogOut, Mail, Phone, Shield, Sparkles, TrendingUp } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-
+/**
+ * Home screen component displaying navigation options, trending scams, quick tips, and premium status.
+ * Allows a user to sign out and navigate to the login screen.
+ */
 export default function Home() {
 
+    // Users display name (used in the header)
     const [userName, setUserName] = useState<string | null>(null);
+    // Trending scam articles
     const [article, setArticle] = useState<any>(null);
+    // Loading state while fetching initial page data
     const [loading, setLoading] = useState<boolean>(true);
+    // Premium subscription status
+    const [isPremium, setIsPremium] = useState<boolean>(true);
 
+    // Fetch user profile and trending scams on component mount
     useEffect(() => {
         async function fetchPageData() {
+            /**
+             * Fetch authenticated user and their profile data
+             * @param {void}
+             * @throws {Error} If there is an error fetching user
+             * @returns {void}
+             */
             async function getUser() {
                 const { data: { user }, error: userError } = await supabase.auth.getUser();
     
@@ -51,10 +66,17 @@ export default function Home() {
                 setUserName(`, ${profileData.first_name}`); 
             }
     
+            /**
+             * Fetch top 2 trending scam articles ordered by view count
+             * 
+             * @param {void}
+             * @throws {Error} If there is an error fetching articles
+             * @returns {void}
+             */
             async function getTrendingScams() {
                 const { data: articles, error: articlesError } = await supabase
                     .from("articles")
-                    .select("id, title, primary_image, description")
+                    .select("id, title, primary_image, description, slug")
                     .order("views", { ascending: false })
                     .limit(2)
                 
@@ -72,6 +94,24 @@ export default function Home() {
         fetchPageData();
     }, [])
 
+    /**
+     * Handle user sign out and redirect to login screen
+     * 
+     * @param {void}
+     * @throws {Error} If there is an error signing out
+     * @returns {void}
+     */
+    async function handleSignOut() {
+        try {
+            await supabase.auth.signOut();
+            router.replace("/login");
+        } catch (err) {
+            console.error("Error signing user out:", err);
+            Alert.alert("Error", "There was an error signing you out. Please try again.");
+        }
+    }
+
+    // Show loading indicator while fetching initial data
     if (loading) {
         return (
             <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
@@ -91,6 +131,7 @@ export default function Home() {
         >
             <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
 
+                {/* Navigation Options Section */}
                 <View style={styles.navOptionsContainer}>
                     <TouchableOpacity style={styles.navOption} onPress={() => router.push("/scan")}>
                         <LinearGradient
@@ -116,7 +157,7 @@ export default function Home() {
                         <Text style={styles.navOptionText}>Chat with our AI assistant</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.navOption} onPress={() => router.push("/contact-search")}>
+                    <TouchableOpacity style={styles.navOption} onPress={() => router.push("/info-search")}>
                         <LinearGradient
                             colors={["#ff6900", "#fb2c36"]}
                             start={{ x: 0, y: 0.5 }}
@@ -125,40 +166,140 @@ export default function Home() {
                         >
                             <Image source={require("@/assets/images/page-images/phone-search.png")} style={styles.navOptionIcon} />
                         </LinearGradient>
-                        <Text style={styles.navOptionText}>Search for contact information</Text>
+                        <Text style={styles.navOptionText}>Search for contact info</Text>
                     </TouchableOpacity>
                 </View>
-                
-                <View style={styles.trendingScamsContainer}>
+
+                {/* Trending Scams Section */}
+                <View style={styles.sectionContainer}>
                     <View style={styles.sectionHeaderContainer}>
                         <View style={styles.sectionTitleContainer}>
                             <TrendingUp size={24} color="#ad46ff" />
                             <Text style={styles.sectionTitle}>Trending Scams</Text>
                         </View>
-                        <TouchableOpacity style={styles.viewAllButton}>
-                            <Text style={styles.viewAllButtonText}>View All</Text>
+                        <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn")}>
+                            <Text style={styles.navMoreButtonText}>View All</Text>
                         </TouchableOpacity>
                     </View>
                     <View style={styles.trendingScamsContent}>
                         {article && article.map((article: any) => (
-                            <View key={article.id} style={styles.trendingScamItem}>
+                            <TouchableOpacity key={article.id} style={styles.trendingScamItem} onPress={() => router.push(`/learn/${article.slug}`)}>
                                 <Image source={{ uri: article.primary_image }} style={styles.trendingScamImage} />
                                 <View style={styles.trendingScamDetails}>
                                     <Text style={styles.trendingScamTitle}>{article.title}</Text>
                                     <Text style={styles.trendingScamDescription}>{article.description}</Text>
-                                    <TouchableOpacity style={styles.learnMoreButton}>
+                                    <View style={styles.learnMoreButton}>
                                         <Text style={styles.learnMoreButtonText}>Learn More</Text>
                                         <ChevronRight size={16} color="#ad46ff" />
-                                    </TouchableOpacity>
+                                    </View>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                         ))}
                     </View>
-                    
                 </View>
-                
-                
 
+                {/* Quick Tips Section */}
+                <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeaderContainer}>
+                        <View style={styles.sectionTitleContainer}>
+                            <Sparkles size={24} color="#ad46ff" />
+                            <Text style={styles.sectionTitle}>Quick Tips</Text>
+                        </View>
+                        <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn")}>
+                            <Text style={styles.navMoreButtonText}>See More</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.quickTipsContent}>
+                        <View style={styles.quickTipsItem}>
+                            <TouchableOpacity style={styles.quickTipsItemContent} onPress={() => router.push("/learn/suspicious-calls")}>
+                                <Text style={styles.quickTipsItemTitle}>Suspicious Calls</Text>
+                                <Text style={styles.quickTipsItemDescription}>How to identify and block scam callers</Text>
+                                <View style={styles.quickTipsItemButton}>
+                                    <Text style={styles.quickTipsItemButtonText}>Read More</Text>
+                                    <ChevronRight size={16} color="#ad46ff" />
+                                </View>
+                            </TouchableOpacity>
+                            <View style={[styles.quickTipsItemIcon, { backgroundColor: "#ffedd4" }]}>
+                                <Phone size={36} color="#fb2c36" />
+                            </View>
+                        </View>
+
+                        <View style={styles.quickTipsItem}>
+                            <TouchableOpacity style={styles.quickTipsItemContent} onPress={() => router.push("/learn/safely-buying-crypto")}>
+                                <Text style={styles.quickTipsItemTitle}>Safely Buying Crypto</Text>
+                                <Text style={styles.quickTipsItemDescription}>Avoid common cryptocurrency scams.</Text>
+                                <View style={styles.quickTipsItemButton}>
+                                    <Text style={styles.quickTipsItemButtonText}>Read More</Text>
+                                    <ChevronRight size={16} color="#ad46ff" />
+                                </View>
+                            </TouchableOpacity>
+                            <View style={[styles.quickTipsItemIcon, { backgroundColor: "#fef3c6" }]}>
+                                <Coins size={36} color="#efb100" />
+                            </View>
+                        </View>
+
+                        <View style={styles.quickTipsItem}>
+                            <TouchableOpacity style={styles.quickTipsItemContent} onPress={() => router.push("/learn/email-verification")}>
+                                <Text style={styles.quickTipsItemTitle}>Email Verification</Text>
+                                <Text style={styles.quickTipsItemDescription}>How to check if an email is legitimate.</Text>
+                                <View style={styles.quickTipsItemButton}>
+                                    <Text style={styles.quickTipsItemButtonText}>Read More</Text>
+                                    <ChevronRight size={16} color="#ad46ff" />
+                                </View>
+                            </TouchableOpacity>
+                            <View style={[styles.quickTipsItemIcon, { backgroundColor: "#dff2fe" }]}>
+                                <Mail size={36} color="#2b7fff" />
+                            </View>
+                        </View>
+
+                        <View style={styles.quickTipsItem}>
+                            <TouchableOpacity style={styles.quickTipsItemContent} onPress={() => router.push("/learn/social-media-safety")}>
+                                <Text style={styles.quickTipsItemTitle}>Social Media Safety</Text>
+                                <Text style={styles.quickTipsItemDescription}>How to protect your social media accounts.</Text>
+                                <View style={styles.quickTipsItemButton}>
+                                    <Text style={styles.quickTipsItemButtonText}>Read More</Text>
+                                    <ChevronRight size={16} color="#ad46ff" />
+                                </View>
+                            </TouchableOpacity>
+                            <View style={[styles.quickTipsItemIcon, { backgroundColor: "#f3e8ff" }]}>
+                                <Shield size={36} color="#ad46ff" />
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Premium Banner Section - Shows different content based on subscription status */}
+                {isPremium ? (
+                    <ImageBackground
+                        source={require("@/assets/images/page-images/bg_horizontal.png")}
+                        style={styles.premiumBanner}
+                    >
+                        <View style={styles.premiumBannerTitleContainer}>
+                            <Image source={require("@/assets/images/page-images/monologo.png")} style={styles.premiumBannerIcon} />
+                            <Text style={styles.premiumBannerTitle}>Scamly Premium</Text>
+                        </View>
+                        <Text style={styles.premiumBannerDescription}>Thank you for choosing Scamly Premium.</Text>
+                    </ImageBackground>
+                ) : (
+                    <ImageBackground
+                        source={require("@/assets/images/page-images/bg_horizontal.png")}
+                        style={styles.premiumBanner}
+                    >
+                        <View style={styles.premiumBannerTitleContainer}>
+                            <Image source={require("@/assets/images/page-images/monologo.png")} style={styles.premiumBannerIcon} />
+                            <Text style={styles.premiumBannerTitle}>Scamly Premium</Text>
+                        </View>
+                        <Text style={styles.premiumBannerDescription}>Premium users have full, unlimited access to everything Scamly offers. You can manage your subscription through our online portal.</Text>
+                    </ImageBackground>
+                )}
+
+                {/* Sign out button */}
+                <TouchableOpacity style={styles.signOutButtonContainer} onPress={handleSignOut}>
+                    <Text style={styles.signOutButtonText}>Sign out</Text>
+                    <LogOut size={16} color="white" />
+                </TouchableOpacity>
+                
             </SafeAreaView>
         </CollapsibleHeaderScreen>
     );
@@ -201,12 +342,12 @@ const styles = StyleSheet.create({
         resizeMode: "contain",
     },
     navOptionText: {
-        fontSize: 16,
+        fontSize: 14,
         fontFamily: "Poppins-Regular",
         textAlign: "center",
         flexShrink: 1,
     },
-    trendingScamsContainer: {
+    sectionContainer: {
         marginTop: 32,
         display: "flex",
         flexDirection: "column",
@@ -229,12 +370,12 @@ const styles = StyleSheet.create({
         fontSize: 20,
         color: "#1e2939",
     },
-    viewAllButton: {
+    navMoreButton: {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
     },
-    viewAllButtonText: {
+    navMoreButtonText: {
         fontFamily: "Poppins-Light",
         fontSize: 16,
         color: "#ad46ff",
@@ -250,11 +391,6 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         alignItems: "center",
         justifyContent: "center",
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 4,
     },
     trendingScamImage: {
         width: "100%",
@@ -274,6 +410,11 @@ const styles = StyleSheet.create({
         width: "100%",
         borderBottomLeftRadius: 14,
         borderBottomRightRadius: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
     },
     trendingScamTitle: {
         fontFamily: "Poppins-SemiBold",
@@ -295,5 +436,108 @@ const styles = StyleSheet.create({
         fontFamily: "Poppins-Light",
         fontSize: 14,
         color: "#ad46ff",
+    },
+    quickTipsContent: {
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+    },
+    quickTipsItem: {
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "white",
+        gap: 12,
+        borderRadius: 14,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    quickTipsItemContent: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        flexShrink: 1,
+        gap: 8,
+    },
+    quickTipsItemIcon: {
+        padding: 10,
+        borderRadius: 10,
+    },
+    quickTipsItemTitle: {
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 16,
+        color: "#1e2939",
+    },
+    quickTipsItemDescription: {
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        color: "#1e2939",
+    },
+    quickTipsItemButton: {
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+    },
+    quickTipsItemButtonText: {
+        fontFamily: "Poppins-Light",
+        fontSize: 14,
+        color: "#ad46ff",
+    },
+    premiumBanner: {
+        padding: 24,
+        borderRadius: 20,
+        marginTop: 32,
+        overflow: "hidden",
+    },
+    premiumBannerTitleContainer: {
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 12,
+    },
+    premiumBannerTitle: {
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 20,
+        color: "white",
+    },
+    premiumBannerIcon: {
+        width: 32,
+        height: 32,
+        resizeMode: "contain",
+    },
+    premiumBannerDescription: {
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        color: "white",
+    },
+    signOutButtonContainer: {
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        marginTop: 32,
+        backgroundColor: "#ff6467",
+        borderRadius: 14,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    signOutButtonText: {
+        fontFamily: "Poppins-Medium",
+        fontSize: 14,
+        color: "white",
     },
 })
