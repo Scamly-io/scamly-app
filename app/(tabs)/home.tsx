@@ -1,4 +1,5 @@
 import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
+import QuickTipTile from "@/components/QuickTipTile";
 import { supabase } from "@/utils/supabase";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -6,6 +7,41 @@ import { ChevronRight, Coins, LogOut, Mail, Phone, Shield, Sparkles, TrendingUp 
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const quickTips = [
+    {
+        slug: "suspicious-calls",
+        title: "Suspicious Calls",
+        description: "How to identify and block scam callers",
+        icon: <Phone size={36} color="#fb2c36" />,
+        iconBackground: "#ffedd4",
+        readMoreVisible: true,
+    },
+    {
+        slug: "safely-buying-crypto",
+        title: "Safely Buying Crypto",
+        description: "Avoid common cryptocurrency scams.",
+        icon: <Coins size={36} color="#efb100" />,
+        iconBackground: "#fef3c6",
+        readMoreVisible: true,
+    },
+    {
+        slug: "email-verification",
+        title: "Email Verification",
+        description: "How to check if an email is legitimate.",
+        icon: <Mail size={36} color="#2b7fff" />,
+        iconBackground: "#dff2fe",
+        readMoreVisible: true,
+    },
+    {
+        slug: "social-media-safety",
+        title: "Social Media Safety",
+        description: "How to protect your social media accounts.",
+        icon: <Shield size={36} color="#ad46ff" />,
+        iconBackground: "#f3e8ff",
+        readMoreVisible: true,
+    },
+]
 
 /**
  * Home screen component displaying navigation options, trending scams, quick tips, and premium status.
@@ -205,71 +241,19 @@ export default function Home() {
                             <Sparkles size={24} color="#ad46ff" />
                             <Text style={styles.sectionTitle}>Quick Tips</Text>
                         </View>
-                        <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn")}>
-                            <Text style={styles.navMoreButtonText}>See More</Text>
+                        <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn/quick-tips")}>
+                            <Text style={styles.navMoreButtonText}>View All</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.quickTipsContent}>
-                        <View style={styles.quickTipsItem}>
-                            <TouchableOpacity style={styles.quickTipsItemContent} onPress={() => router.push("/learn/suspicious-calls")}>
-                                <Text style={styles.quickTipsItemTitle}>Suspicious Calls</Text>
-                                <Text style={styles.quickTipsItemDescription}>How to identify and block scam callers</Text>
-                                <View style={styles.quickTipsItemButton}>
-                                    <Text style={styles.quickTipsItemButtonText}>Read More</Text>
-                                    <ChevronRight size={16} color="#ad46ff" />
-                                </View>
-                            </TouchableOpacity>
-                            <View style={[styles.quickTipsItemIcon, { backgroundColor: "#ffedd4" }]}>
-                                <Phone size={36} color="#fb2c36" />
-                            </View>
-                        </View>
-
-                        <View style={styles.quickTipsItem}>
-                            <TouchableOpacity style={styles.quickTipsItemContent} onPress={() => router.push("/learn/safely-buying-crypto")}>
-                                <Text style={styles.quickTipsItemTitle}>Safely Buying Crypto</Text>
-                                <Text style={styles.quickTipsItemDescription}>Avoid common cryptocurrency scams.</Text>
-                                <View style={styles.quickTipsItemButton}>
-                                    <Text style={styles.quickTipsItemButtonText}>Read More</Text>
-                                    <ChevronRight size={16} color="#ad46ff" />
-                                </View>
-                            </TouchableOpacity>
-                            <View style={[styles.quickTipsItemIcon, { backgroundColor: "#fef3c6" }]}>
-                                <Coins size={36} color="#efb100" />
-                            </View>
-                        </View>
-
-                        <View style={styles.quickTipsItem}>
-                            <TouchableOpacity style={styles.quickTipsItemContent} onPress={() => router.push("/learn/email-verification")}>
-                                <Text style={styles.quickTipsItemTitle}>Email Verification</Text>
-                                <Text style={styles.quickTipsItemDescription}>How to check if an email is legitimate.</Text>
-                                <View style={styles.quickTipsItemButton}>
-                                    <Text style={styles.quickTipsItemButtonText}>Read More</Text>
-                                    <ChevronRight size={16} color="#ad46ff" />
-                                </View>
-                            </TouchableOpacity>
-                            <View style={[styles.quickTipsItemIcon, { backgroundColor: "#dff2fe" }]}>
-                                <Mail size={36} color="#2b7fff" />
-                            </View>
-                        </View>
-
-                        <View style={styles.quickTipsItem}>
-                            <TouchableOpacity style={styles.quickTipsItemContent} onPress={() => router.push("/learn/social-media-safety")}>
-                                <Text style={styles.quickTipsItemTitle}>Social Media Safety</Text>
-                                <Text style={styles.quickTipsItemDescription}>How to protect your social media accounts.</Text>
-                                <View style={styles.quickTipsItemButton}>
-                                    <Text style={styles.quickTipsItemButtonText}>Read More</Text>
-                                    <ChevronRight size={16} color="#ad46ff" />
-                                </View>
-                            </TouchableOpacity>
-                            <View style={[styles.quickTipsItemIcon, { backgroundColor: "#f3e8ff" }]}>
-                                <Shield size={36} color="#ad46ff" />
-                            </View>
-                        </View>
+                        {quickTips.map((quickTip) => (
+                            <QuickTipTile key={quickTip.slug} {...quickTip} />
+                        ))}
                     </View>
                 </View>
 
-                {/* Premium Banner Section - Shows different content based on subscription status */}
+                {/* Premium Banner Section */}
                 {isPremium ? (
                     <ImageBackground
                         source={require("@/assets/images/page-images/bg_horizontal.png")}
@@ -441,55 +425,6 @@ const styles = StyleSheet.create({
         display: "flex",
         flexDirection: "column",
         gap: 16,
-    },
-    quickTipsItem: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "white",
-        gap: 12,
-        borderRadius: 14,
-        padding: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    quickTipsItemContent: {
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        flexShrink: 1,
-        gap: 8,
-    },
-    quickTipsItemIcon: {
-        padding: 10,
-        borderRadius: 10,
-    },
-    quickTipsItemTitle: {
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 16,
-        color: "#1e2939",
-    },
-    quickTipsItemDescription: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "#1e2939",
-    },
-    quickTipsItemButton: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-    },
-    quickTipsItemButtonText: {
-        fontFamily: "Poppins-Light",
-        fontSize: 14,
-        color: "#ad46ff",
     },
     premiumBanner: {
         padding: 24,
