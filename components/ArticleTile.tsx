@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { Clock } from "lucide-react-native";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 

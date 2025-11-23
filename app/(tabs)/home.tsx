@@ -263,7 +263,7 @@ export default function Home() {
                             <Image source={require("@/assets/images/page-images/monologo.png")} style={styles.premiumBannerIcon} />
                             <Text style={styles.premiumBannerTitle}>Scamly Premium</Text>
                         </View>
-                        <Text style={styles.premiumBannerDescription}>Thank you for choosing Scamly Premium.</Text>
+                        <Text style={styles.premiumBannerDescription}>Thank you for choosing Scamly Premium. Your account can be managed through our online portal.</Text>
                     </ImageBackground>
                 ) : (
                     <ImageBackground

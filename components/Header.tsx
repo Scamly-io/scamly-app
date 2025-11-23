@@ -6,9 +6,10 @@ type HeaderProps = {
     title?: string;
     imageUrl?: ImageSourcePropType;
     subtitle?: string;
+    basicHeader?: boolean;
 }
 
-export default function Header({ title, imageUrl, subtitle }: HeaderProps) {
+export default function Header({ title, imageUrl, subtitle, basicHeader = false }: HeaderProps) {
 
     return (
         <LinearGradient
@@ -19,13 +20,21 @@ export default function Header({ title, imageUrl, subtitle }: HeaderProps) {
             style={styles.headerContainer}
         >
             <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
-                <View style={styles.headerContent}>
-                    <View style={styles.headerTitleContainer}>
-                        <Text style={styles.headerTitle}>{title}</Text>
-                        <Text style={styles.headerSubtitle}>{subtitle}</Text>
+                {basicHeader ? (
+                    <View style={styles.headerContent}>
+                        <View style={styles.basicHeaderTitleContainer}>
+                            <Text style={styles.headerTitle}>{title}</Text>
+                        </View>
                     </View>
-                    <Image source={imageUrl} style={styles.headerImage} />
-                </View>
+                ) : (
+                    <View style={styles.headerContent}>
+                        <View style={styles.headerTitleContainer}>
+                            <Text style={styles.headerTitle}>{title}</Text>
+                            <Text style={styles.headerSubtitle}>{subtitle}</Text>
+                        </View>
+                        <Image source={imageUrl} style={styles.headerImage} />
+                    </View>
+                )}
             </SafeAreaView>
         </LinearGradient>
     )
@@ -51,6 +60,11 @@ const styles = StyleSheet.create({
         flexDirection: "column",
         alignItems: "flex-start",
         maxWidth: "75%",
+    },
+    basicHeaderTitleContainer: {
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
     },
     headerTitle: {
         fontSize: 32,

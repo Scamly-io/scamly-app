@@ -20,25 +20,25 @@ const featuredArticle = {
 const articleTiles = [
     {
         id: "1234567890",
-        slug: "how-to-avoid-scams",
-        title: "How to Avoid Scams",
-        description: "Learn how to avoid scams and protect yourself from fraud.",
+        slug: "investment-scams",
+        title: "Investment Scams",
+        description: "Learn how to avoid investment scams and protect yourself from fraud.",
         length: 5800,
         image: "https://scamly-article-images.s3.ap-southeast-2.amazonaws.com/pexels-alesiakozik-6770775.jpg",
     },
     {
         id: "1234567891",
-        slug: "how-to-identify-scams",
-        title: "How to Identify Scams",
-        description: "Learn how to identify scams and protect yourself from fraud.",
+        slug: "identifying-scam-emails",
+        title: "Identifying Scam Emails",
+        description: "Learn how to identify scam emails and protect yourself from fraud.",
         length: 3200,
         image: "https://scamly-article-images.s3.ap-southeast-2.amazonaws.com/istockphoto-1455658894-1024x1024.jpg",
     },
     {
         id: "1234567892",
-        slug: "how-to-report-scams",
-        title: "How to Report Scams",
-        description: "Learn how to report scams and protect yourself from fraud.",
+        slug: "private-online-profiles",
+        title: "Private Online Profiles",
+        description: "Learn how to create private online profiles and protect yourself from fraud.",
         length: 8700,
         image: "https://scamly-article-images.s3.ap-southeast-2.amazonaws.com/pexels-jakubzerdzicki-33497885.jpg",
     },
@@ -88,7 +88,7 @@ export default function Learn() {
             headerProps={{
                 title: "Learning Center",
                 imageUrl: require("@/assets/images/page-images/books.png"),
-                subtitle: "Stay informed, stay protected."
+                subtitle: "Stay informed, stay aware, stay safe."
             }}
             contentContainerStyle={{ flexGrow: 1 }}
         >
@@ -135,7 +135,7 @@ export default function Learn() {
                             <Clock size={16} color="white" />
                             <Text style={styles.featuredArticleReadTimeText}>{calculateReadTime(featuredArticle.length)} min read</Text>
                         </View>
-                        <TouchableOpacity style={styles.featuredArticleReadButton}>
+                        <TouchableOpacity style={styles.featuredArticleReadButton} onPress={() => router.push(`/learn/${featuredArticle.slug}`)}>
                             <Text style={styles.featuredArticleReadButtonText}>Read now</Text>
                             <ChevronRight size={16} color="white" />
                         </TouchableOpacity>
