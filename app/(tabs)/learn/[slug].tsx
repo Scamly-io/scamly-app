@@ -3,27 +3,36 @@ import { supabase } from "@/utils/supabase";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, LogBox, ScrollView, StyleSheet, View } from "react-native";
 import Markdown from "react-native-markdown-display";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+/**
+ * Suppress the key prop warning from react-native-markdown-display's internal FitImage component
+ * This is a known issue in the library where it spreads props containing a key
+ * It does not affect the functionality and the content still renders correctly.
+ */
+LogBox.ignoreLogs([
+    'A props object containing a "key" prop is being spread into JSX',
+]);
+
 type Article = {
     content: string;
-    views: number;
+    id: string;
 }
 
 export default function ArticleDetail() {
     const [article, setArticle] = useState<Article | null>(null);
     const [ loading, setLoading ] = useState<boolean>(true);
 
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { slug } = useLocalSearchParams<{ slug: string }>();
 
     useEffect(() => {
         async function fetchArticle() {
             const { data: article, error: articleError } = await supabase
                 .from("articles")
-                .select("views, content")
-                .eq("slug", id)
+                .select("id, content")
+                .eq("slug", slug)
                 .single();
             
             if (articleError || !article) {
@@ -44,11 +53,15 @@ export default function ArticleDetail() {
             setArticle(article);
             setLoading(false);
 
-            // Also need to update the read counter. RLS currently doesn't allow this.
+            try {
+                await supabase.rpc("increment_article_views", { article_id: article.id });
+            } catch (error) {
+                console.error("Error incrementing article views:", error);
+            }
         }
 
         fetchArticle();
-    }, [])
+    }, [slug])
 
     if (loading) {
         return (
@@ -89,19 +102,6 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
     },
-    title: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 24,
-        color: "#1e2939",
-        marginBottom: 16,
-    },
-    image: {
-        width: "100%",
-        height: 200,
-        resizeMode: "cover",
-        borderRadius: 14,
-        marginTop: 16,
-    },
     content: {
         fontFamily: "Poppins-Regular",
         fontSize: 16,
@@ -115,7 +115,7 @@ const markdownStyles = {
         fontFamily: "Poppins-Regular",
         fontSize: 16,
         color: "#1e2939",
-        marginTop: 16,
+        marginBottom: 16,
     },
     heading1: {
         fontFamily: "Poppins-Bold",
@@ -163,3 +163,4 @@ const markdownStyles = {
         fontFamily: "Poppins-Bold",
     }
 }
+

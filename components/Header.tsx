@@ -3,7 +3,7 @@ import { Image, ImageSourcePropType, StyleSheet, Text, View } from "react-native
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type HeaderProps = {
-    title?: string;
+    title: string;
     imageUrl?: ImageSourcePropType;
     subtitle?: string;
     basicHeader?: boolean;
@@ -21,7 +21,7 @@ export default function Header({ title, imageUrl, subtitle, basicHeader = false 
         >
             <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
                 {basicHeader ? (
-                    <View style={styles.headerContent}>
+                    <View style={styles.basicHeaderContent}>
                         <View style={styles.basicHeaderTitleContainer}>
                             <Text style={styles.headerTitle}>{title}</Text>
                         </View>
@@ -54,6 +54,12 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
+        marginBottom: 10,
+    },
+    basicHeaderContent: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
         marginBottom: 10,
     },
     headerTitleContainer: {

@@ -1,17 +1,39 @@
 import { router } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
+import * as Icons from "lucide-react-native";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 type QuickTipsTileProps = {
     slug: string;
     title: string;
     description: string;
-    icon: React.ReactNode;
+    icon: string;
+    iconColour: string;
     iconBackground: string;
     readMoreVisible: boolean;
 }
 
-export default function QuickTipTile({ slug, title, description, icon, iconBackground, readMoreVisible }: QuickTipsTileProps) {
+type DynamicIconProps = {
+    name: string;
+    color: string;
+    size: number;
+}
+
+// Helper function to allow the icons to be pulled from the database
+function DynamicIcon({name, size = 24, color}: DynamicIconProps) {
+
+    // If the name is not capitalised then it wont render
+    const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+
+    const IconComponent = (Icons as Record<string, any>)[formattedName];
+
+    if (!IconComponent) {
+        return <Icons.HelpCircle size={size} color={color} />;
+    }
+
+    return <IconComponent size={size} color={color} />;
+}
+
+export default function QuickTipTile({ slug, title, description, icon, iconColour, iconBackground, readMoreVisible }: QuickTipsTileProps) {
     return (
         <TouchableOpacity style={styles.quickTipsItem} onPress={() => router.push(`/learn/${slug}`)}>
             <View style={styles.quickTipsItemContent}>
@@ -20,12 +42,12 @@ export default function QuickTipTile({ slug, title, description, icon, iconBackg
                 {readMoreVisible && (
                     <View style={styles.quickTipsItemButton}>
                         <Text style={styles.quickTipsItemButtonText}>Read More</Text>
-                        <ChevronRight size={16} color="#ad46ff" />
+                        <Icons.ChevronRight size={16} color="#ad46ff" />
                     </View>
                 )}
             </View>
             <View style={[styles.quickTipsItemIcon, { backgroundColor: iconBackground }]}>
-                {icon}
+                <DynamicIcon name={icon} size={24} color={iconColour} />
             </View>
         </TouchableOpacity>
     )

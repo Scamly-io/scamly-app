@@ -373,9 +373,9 @@ export default function Scan() {
                 <View style={{ marginTop: 24 }}>
                     <Text style={styles.disclaimerTitle}>Disclaimer</Text>
                     <Text style={styles.disclaimerText}>
-                    This tool uses AI to analyze text messages, emails, social media posts, and other online content for potential signs of scams or fraud. 
-                    While we strive to provide accurate and helpful assessments, the results are generated automatically and may not always reflect the full context or intent of the content. 
-                    Always use your own judgment and verify suspicious messages or accounts through official sources before taking any action.{"\n\n"}
+                        This tool uses AI to analyze text messages, emails, social media posts, and other online content for potential signs of scams or fraud. 
+                        While we strive to provide accurate and helpful assessments, the results are generated automatically and may not always reflect the full context or intent of the content. 
+                        Always use your own judgment and verify suspicious messages or accounts through official sources before taking any action.{"\n\n"}
                         We appreciate your feedback on this tool. Please email
                         <Text style={{ color: "#0058FA" }}> feedback@scamly.io </Text>
                         to submit any feedback you may have.

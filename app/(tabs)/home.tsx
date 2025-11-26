@@ -3,7 +3,7 @@ import QuickTipTile from "@/components/QuickTipTile";
 import { supabase } from "@/utils/supabase";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { ChevronRight, Coins, LogOut, Mail, Phone, Shield, Sparkles, TrendingUp } from "lucide-react-native";
+import { ChevronRight, LogOut, Sparkles, TrendingUp } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,7 +13,8 @@ const quickTips = [
         slug: "suspicious-calls",
         title: "Suspicious Calls",
         description: "How to identify and block scam callers",
-        icon: <Phone size={36} color="#fb2c36" />,
+        icon: "phone",
+        iconColour: "#fb2c36",
         iconBackground: "#ffedd4",
         readMoreVisible: true,
     },
@@ -21,7 +22,8 @@ const quickTips = [
         slug: "safely-buying-crypto",
         title: "Safely Buying Crypto",
         description: "Avoid common cryptocurrency scams.",
-        icon: <Coins size={36} color="#efb100" />,
+        icon: "coins",
+        iconColour: "#efb100",
         iconBackground: "#fef3c6",
         readMoreVisible: true,
     },
@@ -29,7 +31,8 @@ const quickTips = [
         slug: "email-verification",
         title: "Email Verification",
         description: "How to check if an email is legitimate.",
-        icon: <Mail size={36} color="#2b7fff" />,
+        icon: "mail",
+        iconColour: "#2b7fff",
         iconBackground: "#dff2fe",
         readMoreVisible: true,
     },
@@ -37,7 +40,8 @@ const quickTips = [
         slug: "social-media-safety",
         title: "Social Media Safety",
         description: "How to protect your social media accounts.",
-        icon: <Shield size={36} color="#ad46ff" />,
+        icon: "shield",
+        iconColour: "#ad46ff",
         iconBackground: "#f3e8ff",
         readMoreVisible: true,
     },

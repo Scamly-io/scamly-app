@@ -1,66 +1,62 @@
-import ArticleTile from "@/components/ArticleTile";
 import GradientBackground from "@/components/GradientBackground";
 import Header from "@/components/Header";
+import QuickTipTile from "@/components/QuickTipTile";
 import { supabase } from "@/utils/supabase";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-type Article = {
+type QuickTip = {
     id: string;
     slug: string;
     title: string;
     description: string;
-    image: string; // Primary article image
-    content: string;
-    length?: number; // Content length in characters
+    icon: string;
+    iconColour: string;
+    iconBackground: string;
 }
 
-export default function AllArticles() {
-    const [articles, setArticles] = useState<Article[]>([]);
+export default function AllQuickTips() {
+    const [quickTips, setQuickTips] = useState<QuickTip[]>([]);
     const [pageLoading, setPageLoading] = useState<boolean>(true);
 
-    function calculateReadTime(length: number): number {
-        return Math.max(1, Math.round(length / 1500)); // 1500 characters per minute (200-250 words per minute) 
-    }
-
     useEffect(() => {
-        async function fetchArticles() {
-            const { data: articles, error: articlesError } = await supabase
+        async function fetchQuickTips() {
+            const { data: quickTips, error: quickTipsError } = await supabase
                 .from("articles")
-                .select("id, slug, title, description, primary_image, content")
-                .eq("quick_tip", false)
+                .select("id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour")
+                .eq("quick_tip", true)
                 .order("views", { ascending: false })
 
-            if (articlesError || !articles) {
-                console.error("Error fetching articles:", articlesError);
-                Alert.alert("Error", "Failed to fetch the current articles.");
+            if (quickTipsError || !quickTips) {
+                console.error("Error fetching quick tips:", quickTipsError);
+                Alert.alert("Error", "Failed to fetch the current quick tips.");
                 return;
             }
 
-            setArticles(articles.map((article: any) => ({
-                id: article.id,
-                slug: article.slug,
-                title: article.title,
-                description: article.description,
-                image: article.primary_image,
-                content: article.content,
-                length: article.content.length,
+            setQuickTips(quickTips.map((quickTip: any) => ({
+                id: quickTip.id,
+                slug: quickTip.slug,
+                title: quickTip.title,
+                description: quickTip.description,
+                icon: quickTip.quick_tip_icon,
+                iconColour: quickTip.quick_tip_icon_colour,
+                iconBackground: quickTip.quick_tip_icon_background_colour,
             })));
 
             setPageLoading(false);
         }
 
-        fetchArticles();
+        fetchQuickTips();
     }, []);
 
     if (pageLoading) {
         return (
             <GradientBackground>
                 <Header
-                    title="All Articles"
+                    title="Quick Tips"
                     basicHeader={true}
                 />
                 <SafeAreaView edges={[ "left", "right" ]} style={styles.container}>
@@ -73,7 +69,7 @@ export default function AllArticles() {
     return (
         <GradientBackground>
             <Header
-                title="All Articles"
+                title="All Quick Tips"
                 basicHeader={true}
             />
             <SafeAreaView edges={[ "left", "right" ]} style={styles.container}>
@@ -82,20 +78,13 @@ export default function AllArticles() {
                         <ChevronLeft size={24} color="#2b7fff" />
                         <Text style={styles.backButtonText}>Back</Text>
                     </TouchableOpacity>
-                    <Text style={styles.infoHeaderTitle}>{articles.length} Articles</Text>
+                    <Text style={styles.infoHeaderTitle}>{quickTips.length} Quick Tips</Text>
                 </View>
 
                 <ScrollView style={styles.scrollView}>
                     <View style={styles.listContainer}>
-                        {articles.map((article) => (
-                            <ArticleTile
-                                key={article.id}
-                                title={article.title}
-                                description={article.description}
-                                readTime={calculateReadTime(article.length)}
-                                image={article.image}
-                                slug={article.slug}
-                            />
+                        {quickTips.map((quickTip) => (
+                            <QuickTipTile key={quickTip.id} {...quickTip} />
                         ))}
                     </View>
                 </ScrollView>
