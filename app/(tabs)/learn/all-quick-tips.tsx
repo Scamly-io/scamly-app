@@ -5,7 +5,7 @@ import { supabase } from "@/utils/supabase";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type QuickTip = {
@@ -13,15 +13,22 @@ type QuickTip = {
     slug: string;
     title: string;
     description: string;
-    icon: string;
-    iconColour: string;
-    iconBackground: string;
+    icon: string; // Lucide React Native icon name
+    iconColour: string; // Icon color
+    iconBackground: string; // Icon background color
 }
 
+/**
+ * All Quick Tips screen component displaying a scrollable list of all quick tip articles.
+ * Quick tips are ordered by view count (most popular first).
+ */
 export default function AllQuickTips() {
+    // All quick tips to display
     const [quickTips, setQuickTips] = useState<QuickTip[]>([]);
+    // Loading state while fetching quick tips
     const [pageLoading, setPageLoading] = useState<boolean>(true);
 
+    // Fetch all quick tips on component mount
     useEffect(() => {
         async function fetchQuickTips() {
             const { data: quickTips, error: quickTipsError } = await supabase

@@ -10,14 +10,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 type Chat = {
     id: string;
-    created_at: string;
-    last_message: string | null;
+    created_at: string; // Timestamp when the chat was created
+    last_message: string | null; // Most recent message in the chat
 }
 
+/**
+ * Chat index screen component displaying a list of all user's chat conversations.
+ * Allows users to create new chats, view existing chats, and delete chats.
+ */
 export default function ChatIndex() {
+    // List of all user's chat conversations
     const [chats, setChats] = useState<Chat[]>([]);
+    // Loading state while fetching chats
     const [loading, setLoading] = useState(true);
 
+    // Fetches all chat conversations for the current user
     const fetchChats = async () => {
         setLoading(true);
         
@@ -44,9 +51,11 @@ export default function ChatIndex() {
         setLoading(false);
     }
 
+    // Fetch chats on mount and subscribe to real-time updates
     useEffect(() => {
         fetchChats();
 
+        // Subscribe to real-time updates for chat changes
         const channel = supabase
             .channel("chats-changes")
             .on(
@@ -67,12 +76,14 @@ export default function ChatIndex() {
         };
     }, []);
 
+    // Refetch chats when screen comes into focus
     useFocusEffect(
         React.useCallback(() => {
             fetchChats();
         }, [])
     );
 
+    // Creates a new chat conversation and navigates to it
     async function createNewChat() {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
@@ -96,6 +107,7 @@ export default function ChatIndex() {
         setChats([...chats, data]);
         router.push(`/chat/${data.id}`);
 
+        // Create OpenAI conversation ID for the new chat (non-blocking)
         try {
             fetch("https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/create-cid", {
                 method: "POST",
@@ -108,6 +120,7 @@ export default function ChatIndex() {
         }
     }
 
+    // Deletes a chat conversation after user confirmation
     async function deleteChat(chatId: string) {
         Alert.alert("Delete Chat", "Are you sure you want to delete this chat? This action cannot be undone.",
             [
@@ -133,7 +146,7 @@ export default function ChatIndex() {
                                 .delete()
                                 .eq("id", chatId)
 
-                            //BROKEN LOGIC    
+                            // BROKEN LOGIC - needs fixing
                             if (delChatError) {
                                 console.error("Error deleting chat:", delChatError);
                                 return;

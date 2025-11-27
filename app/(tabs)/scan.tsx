@@ -11,27 +11,40 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 type ScanResults = {
     is_scam: boolean;
-    risk_level: "low" | "medium" | "high";
+    risk_level: "low" | "medium" | "high"; 
     confidence: number;
     detections: {
         category: string;
-        description: string;
-        severity: "low" | "medium" | "high";
+        description: string; 
+        severity: "low" | "medium" | "high"; 
     }[];
-    scan_successful: boolean;
+    scan_successful: boolean; 
     scan_failure_reason: string | null;
 }
 
+/**
+ * Scan screen component allowing users to upload and scan images for potential scams.
+ * Users can upload screenshots of texts, emails, or online media to get AI-powered scam detection results.
+ */
 export default function Scan() {
+    // Selected image from the user's device
     const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+    // Public URL of the uploaded image in S3
     const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
-    const [showModal, setShowModal] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    // Whether to show the "how to use" modal
+    const [showModal, setShowModal] = useState<boolean>(false);
+    // Loading state during image upload and scan processing
+    const [loading, setLoading] = useState<boolean>(false);
+    // Error message if something goes wrong
+    const [error, setError] = useState<string | null>(null);
+    // Scan results from the AI analysis
     const [results, setResults] = useState<ScanResults | null>(null)
+    // Aspect ratio of the uploaded image for proper display
     const [aspectRatio, setAspectRatio] = useState<number>(1);
+    // Current authenticated user's ID
     const [userId, setUserId] = useState<string | null>(null);
 
+    // Verify user authentication on component mount
     useEffect(() => {
         async function checkUserExists() {
             const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -58,6 +71,7 @@ export default function Scan() {
         return result;
     }
 
+    // Converts the image URI to a Blob for upload, with compression to prevent timeouts
     async function convertImageToBlob(imageUri: string): Promise<Blob> {
         const result = await ImageManipulator.manipulateAsync(
             imageUri,
@@ -73,11 +87,12 @@ export default function Scan() {
         return blob;
     }
 
+    // Uploads the image to both main and temporary S3 buckets using presigned URLs
     async function uploadImageToS3(imageBlob: Blob, fileName: string) {
         let mainUploadUrl = "";
         let tempUploadUrl = "";
 
-        // Get presigned upload URLs
+        // Get presigned upload URLs for both main and temporary buckets
         const response = await fetch('https://0i3wpw1lxk.execute-api.ap-southeast-2.amazonaws.com/dev/upload', {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -88,7 +103,7 @@ export default function Scan() {
         mainUploadUrl = data.upload_url_main;
         tempUploadUrl = data.upload_url_temp;
 
-        // Async upload images to main and temp buckets
+        // Upload images to both main and temp buckets in parallel
         const [ uploadMainResponse, uploadTempResponse ] = await Promise.all([
             fetch(mainUploadUrl, {
                 method: "PUT",
@@ -107,6 +122,7 @@ export default function Scan() {
         }
     }
 
+    // Sends the image URL to the AI scanning service for analysis
     async function scanImage(imageUrl: string, userId: string) {
         const response = await fetch('https://ab16q62v9b.execute-api.ap-southeast-2.amazonaws.com/dev/scan', { // This may timeout if the image is too large.
             method: "POST",
@@ -128,6 +144,7 @@ export default function Scan() {
         setResults(data);
     }
 
+    // Handles the complete scan workflow: image processing, upload, and AI analysis
     async function handleScan() {
         if (!image) return;
         if (!userId) return;
@@ -135,6 +152,7 @@ export default function Scan() {
         setResults(null);
         setLoading(true);
 
+        // Generate a unique filename for the uploaded image
         const scrubbedFileName = image?.fileName.split(".")[0] || makeId(12);
         const cleanFileName = `${scrubbedFileName}_${Date.now()}.jpeg`;
         const publicUrl = `https://temp-scamly-ai-images.s3.ap-southeast-2.amazonaws.com/${cleanFileName}`;
@@ -162,6 +180,7 @@ export default function Scan() {
         } 
     }
 
+    // Opens the device's image picker and handles image selection
     async function pickImage() {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -180,11 +199,13 @@ export default function Scan() {
 
         setImage(result.assets[0]);
 
+        // Calculate aspect ratio for proper image display
         Image.getSize(result.assets[0].uri!, (width, height) => {
             setAspectRatio(width / height);
         });
     }
 
+    // Returns gradient colors based on the risk level
     function getRiskColour(riskLevel) {
         switch (riskLevel) {
             case "low": return ["#10b981", "#00bc7d"];
@@ -193,6 +214,7 @@ export default function Scan() {
         }
     }
 
+    // Returns the appropriate icon component based on detection severity
     function getSeverityIcon(severity) {
         switch (severity) {
             case "low": return <TriangleAlert size={24} color="#10B981" />;

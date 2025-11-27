@@ -1,76 +1,54 @@
+import ArticleTile from "@/components/ArticleTile";
 import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
 import QuickTipTile from "@/components/QuickTipTile";
 import { supabase } from "@/utils/supabase";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { ChevronRight, LogOut, Sparkles, TrendingUp } from "lucide-react-native";
+import { LogOut, Sparkles, TrendingUp } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const quickTips = [
-    {
-        slug: "suspicious-calls",
-        title: "Suspicious Calls",
-        description: "How to identify and block scam callers",
-        icon: "phone",
-        iconColour: "#fb2c36",
-        iconBackground: "#ffedd4",
-        readMoreVisible: true,
-    },
-    {
-        slug: "safely-buying-crypto",
-        title: "Safely Buying Crypto",
-        description: "Avoid common cryptocurrency scams.",
-        icon: "coins",
-        iconColour: "#efb100",
-        iconBackground: "#fef3c6",
-        readMoreVisible: true,
-    },
-    {
-        slug: "email-verification",
-        title: "Email Verification",
-        description: "How to check if an email is legitimate.",
-        icon: "mail",
-        iconColour: "#2b7fff",
-        iconBackground: "#dff2fe",
-        readMoreVisible: true,
-    },
-    {
-        slug: "social-media-safety",
-        title: "Social Media Safety",
-        description: "How to protect your social media accounts.",
-        icon: "shield",
-        iconColour: "#ad46ff",
-        iconBackground: "#f3e8ff",
-        readMoreVisible: true,
-    },
-]
+type Article = {
+    id: string;
+    slug: string;
+    title: string;
+    description: string;
+    image?: string; // Primary article image
+    content?: string;
+    length?: number; // Content length in characters
+    quick_tip?: boolean;
+    rank?: number; // Search query rank
+    icon?: string; // Lucide React Native icon name (QUICK TIP ONLY)
+    iconColour?: string; // QUICK TIP ONLY
+    iconBackground?: string; // QUICK TIP ONLY
+}
 
 /**
- * Home screen component displaying navigation options, trending scams, quick tips, and premium status.
+ * Home screen component displaying navigation options, trending articles, quick tips, and premium status.
  * Allows a user to sign out and navigate to the login screen.
  */
 export default function Home() {
-
     // Users display name (used in the header)
     const [userName, setUserName] = useState<string | null>(null);
-    // Trending scam articles
-    const [article, setArticle] = useState<any>(null);
+    // Trending articles
+    const [trendingArticles, setTrendingArticles] = useState<Article[]>([]);
+    // Quick tips articles
+    const [quickTips, setQuickTips] = useState<Article[]>([]);
     // Loading state while fetching initial page data
     const [loading, setLoading] = useState<boolean>(true);
     // Premium subscription status
     const [isPremium, setIsPremium] = useState<boolean>(true);
 
-    // Fetch user profile and trending scams on component mount
+    function calculateReadTime(length: number): number {
+        return Math.max(1, Math.round(length / 1500)); // 1500 characters per minute (200-250 words per minute) 
+    }
+
+    // Fetch user profile and trending articles on component mount
     useEffect(() => {
         async function fetchPageData() {
-            /**
-             * Fetch authenticated user and their profile data
-             * @param {void}
-             * @throws {Error} If there is an error fetching user
-             * @returns {void}
-             */
+
+            // Fetch the user's profile data.
             async function getUser() {
                 const { data: { user }, error: userError } = await supabase.auth.getUser();
     
@@ -106,41 +84,62 @@ export default function Home() {
                 setUserName(`, ${profileData.first_name}`); 
             }
     
-            /**
-             * Fetch top 2 trending scam articles ordered by view count
-             * 
-             * @param {void}
-             * @throws {Error} If there is an error fetching articles
-             * @returns {void}
-             */
-            async function getTrendingScams() {
-                const { data: articles, error: articlesError } = await supabase
+            // Fetch the top 2 trending articles ordered by view count.
+            async function getTrendingArticles() {
+                const { data: trendingArticles, error: trendingArticlesError } = await supabase
                     .from("articles")
-                    .select("id, title, primary_image, description, slug")
+                    .select("id, title, primary_image, description, slug, content")
                     .order("views", { ascending: false })
+                    .eq("quick_tip", false)
                     .limit(2)
                 
-                if (!articles || articlesError) {
-                    console.error("Error fetching articles:", articlesError);
-                    Alert.alert("Error", "We couldn't find any latest trending scams to show you.");
+                if (!trendingArticles || trendingArticlesError) {
+                    console.error("Error fetching trending articles:", trendingArticlesError);
+                    Alert.alert("Error", "We couldn't find any latest trending articles to show you.");
                 } else {
-                    setArticle(articles);
+                    setTrendingArticles(trendingArticles.map((article: any) => ({
+                        id: article.id,
+                        slug: article.slug,
+                        title: article.title,
+                        description: article.description,
+                        image: article.primary_image,
+                        length: article.content.length,
+                    })));
                 }
             }
-    
-            await Promise.all([getUser(), getTrendingScams()])
+
+            // Fetch the top 3 quick tips articles ordered by view count.
+            async function getQuickTips() {
+                const { data: quickTips, error: quickTipsError } = await supabase
+                    .from("articles")
+                    .select("id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour")
+                    .eq("quick_tip", true)
+                    .order("views", { ascending: false })
+                    .limit(3)
+                
+                if (!quickTips || quickTipsError) {
+                    console.error("Error fetching quick tips:", quickTipsError);
+                    Alert.alert("Error", "We couldn't find any latest quick tips to show you.");
+                } else {
+                    setQuickTips(quickTips.map((quickTip: any) => ({
+                        id: quickTip.id,
+                        slug: quickTip.slug,
+                        title: quickTip.title,
+                        description: quickTip.description,
+                        icon: quickTip.quick_tip_icon,
+                        iconColour: quickTip.quick_tip_icon_colour,
+                        iconBackground: quickTip.quick_tip_icon_background_colour,
+                    })));
+                }
+            }
+
+            await Promise.all([getUser(), getTrendingArticles(), getQuickTips()])
             setLoading(false);
         }
         fetchPageData();
     }, [])
 
-    /**
-     * Handle user sign out and redirect to login screen
-     * 
-     * @param {void}
-     * @throws {Error} If there is an error signing out
-     * @returns {void}
-     */
+    // Handles the user signing out and redirects to the login page.
     async function handleSignOut() {
         try {
             await supabase.auth.signOut();
@@ -149,15 +148,6 @@ export default function Home() {
             console.error("Error signing user out:", err);
             Alert.alert("Error", "There was an error signing you out. Please try again.");
         }
-    }
-
-    // Show loading indicator while fetching initial data
-    if (loading) {
-        return (
-            <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
-                <ActivityIndicator size="large" color="#ad46ff" />
-            </SafeAreaView>
-        );
     }
 
     return (
@@ -210,31 +200,34 @@ export default function Home() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Trending Scams Section */}
+                {/* Trending Articles Section */}
                 <View style={styles.sectionContainer}>
                     <View style={styles.sectionHeaderContainer}>
                         <View style={styles.sectionTitleContainer}>
                             <TrendingUp size={24} color="#ad46ff" />
-                            <Text style={styles.sectionTitle}>Trending Scams</Text>
+                            <Text style={styles.sectionTitle}>Trending Articles</Text>
                         </View>
                         <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn")}>
                             <Text style={styles.navMoreButtonText}>View All</Text>
                         </TouchableOpacity>
                     </View>
-                    <View style={styles.trendingScamsContent}>
-                        {article && article.map((article: any) => (
-                            <TouchableOpacity key={article.id} style={styles.trendingScamItem} onPress={() => router.push(`/learn/${article.slug}`)}>
-                                <Image source={{ uri: article.primary_image }} style={styles.trendingScamImage} />
-                                <View style={styles.trendingScamDetails}>
-                                    <Text style={styles.trendingScamTitle}>{article.title}</Text>
-                                    <Text style={styles.trendingScamDescription}>{article.description}</Text>
-                                    <View style={styles.learnMoreButton}>
-                                        <Text style={styles.learnMoreButtonText}>Learn More</Text>
-                                        <ChevronRight size={16} color="#ad46ff" />
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
+                    <View style={styles.trendingArticlesContent}>
+                        { loading ? (
+                            <ActivityIndicator size="large" color="#2b7fff" />
+                        ) : (
+                            <>
+                            { trendingArticles.map((trendingArticle: any) => (
+                                <ArticleTile 
+                                    key={trendingArticle.id}
+                                    title={trendingArticle.title}
+                                    description={trendingArticle.description}
+                                    readTime={calculateReadTime(trendingArticle.length)}
+                                    image={trendingArticle.image}
+                                    slug={trendingArticle.slug}
+                                />
+                            ))}
+                            </>
+                        )}
                     </View>
                 </View>
 
@@ -245,14 +238,22 @@ export default function Home() {
                             <Sparkles size={24} color="#ad46ff" />
                             <Text style={styles.sectionTitle}>Quick Tips</Text>
                         </View>
-                        <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn/quick-tips")}>
+                        <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn/all-quick-tips")}>
                             <Text style={styles.navMoreButtonText}>View All</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.quickTipsContent}>
-                        {quickTips.map((quickTip) => (
-                            <QuickTipTile key={quickTip.slug} {...quickTip} />
+                        {quickTips.map((quickTip: any) => (
+                            <QuickTipTile key={quickTip.id}
+                                slug={quickTip.slug}
+                                title={quickTip.title}
+                                description={quickTip.description}
+                                icon={quickTip.icon}
+                                iconColour={quickTip.iconColour}
+                                iconBackground={quickTip.iconBackground}
+                                readMoreVisible={false}
+                            />
                         ))}
                     </View>
                 </View>
@@ -368,26 +369,25 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: "#ad46ff",
     },
-    trendingScamsContent: {
+    trendingArticlesContent: {
         display: "flex",
-        flexDirection: "row",
-        justifyContent: "space-between",
+        flexDirection: "column",
         gap: 16,
     },
-    trendingScamItem: {
+    trendingArticleItem: {
         flexBasis: "45%",
         flexGrow: 1,
         alignItems: "center",
         justifyContent: "center",
     },
-    trendingScamImage: {
+    trendingArticleImage: {
         width: "100%",
         height: 150,
         resizeMode: "cover",
         borderTopLeftRadius: 14,
         borderTopRightRadius: 14,
     },
-    trendingScamDetails: {
+    trendingArticleDetails: {
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-start",
@@ -404,12 +404,12 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 4,
     },
-    trendingScamTitle: {
+    trendingArticleTitle: {
         fontFamily: "Poppins-SemiBold",
         fontSize: 16,
         color: "#1e2939",
     },
-    trendingScamDescription: {
+    trendingArticleDescription: {
         fontFamily: "Poppins-Regular",
         fontSize: 14,
         color: "#1e2939",

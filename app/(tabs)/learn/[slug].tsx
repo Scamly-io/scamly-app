@@ -21,12 +21,19 @@ type Article = {
     id: string;
 }
 
+/**
+ * Article detail screen component displaying the full content of an article.
+ * Fetches article by slug and renders markdown content. Increments view count on load.
+ */
 export default function ArticleDetail() {
+    // Article content and metadata
     const [article, setArticle] = useState<Article | null>(null);
+    // Loading state while fetching article data
     const [ loading, setLoading ] = useState<boolean>(true);
 
     const { slug } = useLocalSearchParams<{ slug: string }>();
 
+    // Fetch article content and increment view count on component mount
     useEffect(() => {
         async function fetchArticle() {
             const { data: article, error: articleError } = await supabase
@@ -53,6 +60,7 @@ export default function ArticleDetail() {
             setArticle(article);
             setLoading(false);
 
+            // Increment the article's view count (non-blocking)
             try {
                 await supabase.rpc("increment_article_views", { article_id: article.id });
             } catch (error) {

@@ -18,14 +18,22 @@ type Article = {
     length?: number; // Content length in characters
 }
 
+/**
+ * All Articles screen component displaying a scrollable list of all non-quick-tip articles.
+ * Articles are ordered by view count (most popular first).
+ */
 export default function AllArticles() {
+    // All articles to display
     const [articles, setArticles] = useState<Article[]>([]);
+    // Loading state while fetching articles
     const [pageLoading, setPageLoading] = useState<boolean>(true);
 
+    // Calculates estimated reading time based on content length
     function calculateReadTime(length: number): number {
         return Math.max(1, Math.round(length / 1500)); // 1500 characters per minute (200-250 words per minute) 
     }
 
+    // Fetch all articles on component mount
     useEffect(() => {
         async function fetchArticles() {
             const { data: articles, error: articlesError } = await supabase

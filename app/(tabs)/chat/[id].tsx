@@ -9,23 +9,33 @@ import uuid from "react-native-uuid";
 
 type Message = {
     id: string;
-    role: "user" | "assistant" | "system";
-    content: string;
-    created_at: string;
+    role: "user" | "assistant" | "system"; // Message sender role
+    content: string; // Message text content
+    created_at: string; // Timestamp when message was created
 };
 
+/**
+ * Chat detail screen component displaying a conversation with the AI assistant.
+ * Allows users to send messages and receive AI responses in real-time.
+ */
 export default function ChatDetail() {
 
 
     const { id: chatId } = useLocalSearchParams<{ id: string }>();
+    // All messages in the current chat conversation
     const [messages, setMessages] = useState<Message[]>([]);
+    // Timestamp when the chat was created
     const [createdAt, setCreatedAt] = useState("");
+    // Loading state while fetching chat data
     const [loading, setLoading] = useState(true);
+    // Current user input text
     const [input, setInput] = useState("");
+    // OpenAI conversation ID for maintaining context
     const [conversationId, setConversationId] = useState("");
 
     const flatListRef = useRef<FlatList>(null);
 
+    // Fetch chat messages, conversation ID, and creation date on component mount
     useEffect(() => {
         const fetchMessages = async () => {
             if (!chatId) return;
@@ -48,6 +58,7 @@ export default function ChatDetail() {
         fetchMessages();
     }, [chatId]);
 
+    // Memoized message bubble component for performance
     const MessageBubble = memo(function MessageBubble({ item }: { item: Message }) {
         const isUser = item.role === "user";
         return (
@@ -59,19 +70,19 @@ export default function ChatDetail() {
         );
     });
 
-    //with an inverted FlatList and maintainVisibleContentPosition, the latest messages stay anchored to the input without manual scrolling.
+    // With an inverted FlatList and maintainVisibleContentPosition, the latest messages stay anchored to the input without manual scrolling
 
-    //Keep hooks (like useCallback) before any early returns to preserve hook order
+    // Keep hooks (like useCallback) before any early returns to preserve hook order
     const renderItem = useCallback(({ item }: { item: Message }) => (
         <MessageBubble item={item} />
     ), []);
 
-    //Render newest at bottom with inverted list by reversing data for display
+    // Render newest at bottom with inverted list by reversing data for display
     const invertedData = useMemo(() => {
         return [...messages].reverse();
     }, [messages]);
 
-    //This looks weird but it just requires the current typing message to be replaced with the error message
+    // Replaces the typing indicator message with an error message
     function displayErrorMessage(typingMessage: Message) {
         setMessages((prev) => {
             return prev.map(msg => 
@@ -82,9 +93,11 @@ export default function ChatDetail() {
         });
     }
 
+    // Handles sending a user message and receiving AI response
     async function processMessage () {
         const content = input;
 
+        // Create user message object
         const userMessage = {
             id: uuid.v4().toString(),
             role: "user",
@@ -92,6 +105,7 @@ export default function ChatDetail() {
             created_at: new Date().toISOString()
         }
 
+        // Create typing indicator message
         const typingMessage = {
             id: uuid.v4().toString(),
             role: "assistant",
@@ -116,7 +130,7 @@ export default function ChatDetail() {
 
             const data = await res.json();
             
-            //Replace the "typing" message with the actual response
+            // Replace the "typing" message with the actual AI response
             setMessages((prev) => {
                 return prev.map(msg => 
                     msg.id === typingMessage.id 

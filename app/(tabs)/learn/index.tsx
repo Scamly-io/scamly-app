@@ -25,19 +25,30 @@ type Article = {
     iconBackground?: string; // QUICK TIP ONLY
 }
 
+/**
+ * Learning Center screen component displaying featured articles, trending content, and quick tips.
+ * Allows users to search for articles and navigate to detailed article views.
+ */
 export default function Learn() {
-    const [searchInput, setSearchInput] = useState("");
+    // User's search input text
+    const [searchInput, setSearchInput] = useState<string>("");
+    // Articles matching the search query
     const [searchResults, setSearchResults] = useState<Article[]>([]);
-    const [searchLoading, setSearchLoading] = useState(false);
+    // Loading state during article search
+    const [searchLoading, setSearchLoading] = useState<boolean>(false);
+    // Loading state while fetching initial page data
     const [pageLoading, setPageLoading] = useState<boolean>(true);
+    // Featured article displayed prominently at the top
     const [featuredArticle, setFeaturedArticle] = useState<Article | null>(null);
+    // Trending articles ordered by view count
     const [trendingArticles, setTrendingArticles] = useState<Article[]>([]);
+    // Quick tips articles
     const [quickTips, setQuickTips] = useState<Article[]>([]);
 
-    // Fetch page data on mount
+    // Fetch featured article, trending articles, and quick tips on component mount
     useEffect(() => {
-        // Handles the fetch for featured article, trending articles, and quick tips
         async function fetchPageData() {
+            // Fetch the top viewed article to display as the featured article
             async function getFeaturedArticle() {
                 const { data: featuredArticle, error: featuredArticleError } = await supabase
                     .from("articles")
@@ -48,7 +59,7 @@ export default function Learn() {
 
                 if (featuredArticleError || !featuredArticle) {
                     console.error("Error fetching featured article:", featuredArticleError);
-                    // Silently log the error and just don't display the featured article.
+                    // Silently log the error and just don't display the featured article
                     return;
                 }
 
@@ -61,6 +72,7 @@ export default function Learn() {
                 });
             }
 
+            // Fetch the top 3 trending articles (excluding the featured one)
             async function getTrendingArticles() {
                 const { data: trendingArticles, error: trendingArticlesError } = await supabase
                     .from("articles")
@@ -85,6 +97,7 @@ export default function Learn() {
                 })));
             }
 
+            // Fetch the top 4 quick tips ordered by view count
             async function getQuickTips() {
                 const { data: quickTips, error: quickTipsError } = await supabase
                     .from("articles")
@@ -117,10 +130,12 @@ export default function Learn() {
         fetchPageData();
     }, []);
 
+    // Calculates estimated reading time based on content length
     function calculateReadTime(length: number): number {
         return Math.max(1, Math.round(length / 1500)); // 1500 characters per minute (200-250 words per minute) 
     }
 
+    // Handles article search using Supabase full-text search
     async function handleSearch() {
         if (!searchInput.trim()) return;
 

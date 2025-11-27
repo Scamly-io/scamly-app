@@ -5,14 +5,25 @@ import { useState } from "react";
 import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+/**
+ * Info Search screen component allowing users to search for company contact information.
+ * Users can search by company name to find website, local phone, and international phone numbers.
+ */
 export default function PhoneSearch() {
+    // User's search input text
     const [searchInput, setSearchInput] = useState("");
+    // Whether to display search results
     const [showResults, setShowResults] = useState(false);
+    // Loading state during search API call
     const [isLoading, setIsLoading] = useState(false);
+    // Company information returned from the search
     const [resultData, setResultData] = useState(null);
+    // Error message if search fails
     const [error, setError] = useState(null);
+    // Whether to show the "how to use" modal
     const [showModal, setShowModal] = useState(false);
 
+    // Handles the company search API call and displays results
     async function handleSearch() {
         if (!searchInput.trim()) return;
 
@@ -30,7 +41,7 @@ export default function PhoneSearch() {
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error) //Change this to UX friendly error message
+                throw new Error(result.error); // Change this to UX friendly error message
             }
 
             setResultData(result);
@@ -43,6 +54,7 @@ export default function PhoneSearch() {
         }
     }
 
+    // Extract company data from the search results
     const company = resultData?.data || null;
 
     return (
@@ -56,7 +68,6 @@ export default function PhoneSearch() {
         >
             <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
                     <View style={styles.searchContainer}>
-                        { /* Need to add a modal "tip" on how to use the search */ }
                         <TouchableOpacity onPress={() => setShowModal(true)}>
                             <Text style={styles.howToUseText}>How to use this feature</Text>
                         </TouchableOpacity>
