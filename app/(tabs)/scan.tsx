@@ -1,11 +1,12 @@
 import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
 import HalfGradientDivider from "@/components/HalfGradientDivider";
 import { supabase } from "@/utils/supabase";
+import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from "expo-linear-gradient";
-import { Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
+import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,6 +23,40 @@ type ScanResults = {
     scan_failure_reason: string | null;
 }
 
+function getUserBillingPeriod(createdAt: string | Date) {
+    const created = new Date(createdAt);
+    const now = new Date();
+  
+    // Build period start in UTC
+    let periodStart = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        created.getUTCMonth(),
+        created.getUTCDate(),
+        0, 0, 0, 0
+    ));
+  
+    // Go back one month if the user has not reached the anniversary yet.
+    if (periodStart > now) {
+        periodStart = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            created.getUTCMonth() - 1,
+            created.getUTCDate(),
+            0, 0, 0, 0
+        ));
+    }
+  
+    const nextPeriodStart = new Date(Date.UTC(
+        periodStart.getUTCFullYear(),
+        periodStart.getUTCMonth() + 1,
+        periodStart.getUTCDate(),
+        0, 0, 0, 0
+    ));
+  
+    return { periodStart, nextPeriodStart };
+}
+
+const FREE_USER_SCAN_QUOTA = 4; // 4 monthly scans
+
 /**
  * Scan screen component allowing users to upload and scan images for potential scams.
  * Users can upload screenshots of texts, emails, or online media to get AI-powered scam detection results.
@@ -35,6 +70,8 @@ export default function Scan() {
     const [showModal, setShowModal] = useState<boolean>(false);
     // Loading state during image upload and scan processing
     const [loading, setLoading] = useState<boolean>(false);
+    // Loading state for the page
+    const [pageLoading, setPageLoading] = useState<boolean>(true);
     // Error message if something goes wrong
     const [error, setError] = useState<string | null>(null);
     // Scan results from the AI analysis
@@ -43,22 +80,79 @@ export default function Scan() {
     const [aspectRatio, setAspectRatio] = useState<number>(1);
     // Current authenticated user's ID
     const [userId, setUserId] = useState<string | null>(null);
+    // Whether a free user has reached their scan quota (disables the scan button)
+    const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
+    // The date of the next scan quota reset
+    const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
 
-    // Verify user authentication on component mount
-    useEffect(() => {
-        async function checkUserExists() {
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
+    /**
+     * Handles the page mount logic for the scan screen.
+     * 1. Checks if the user exists and fetches their profile.
+     * 2. Handles the scan quota logic for free users.
+     * @returns {Promise<void>}
+     */
+    async function handlePageMount() {
+        setPageLoading(true);
 
-            if (userError || !user) {
-                console.error("No user:", userError);
+        // Check if the user exists.
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+            console.error("No user:", userError);
+            Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+            return;
+        }
+
+        setUserId(user.id);
+
+        // Handle the scan quota logic for free users.
+        const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("subscription_plan, created_at")
+            .eq("id", user.id)
+            .single();
+
+        if (profileError) {
+            console.error("Error fetching user profile:", profileError);
+            Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+            return;
+        }
+
+        if (profile.subscription_plan === "free") {
+            const { periodStart, nextPeriodStart } = getUserBillingPeriod(profile.created_at);
+
+            const { count, error: countError } = await supabase
+                .from("scans")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", user.id)
+                .gte("created_at", periodStart.toISOString())
+                .lt("created_at", nextPeriodStart.toISOString());
+
+            if (countError) {
+                console.error("Error fetching scan count:", countError);
                 Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
                 return;
             }
 
-            setUserId(user.id);
+            if (count >= FREE_USER_SCAN_QUOTA) {
+                setScanQuotaReached(true);
+                setScanQuotaResetDate(nextPeriodStart.toLocaleDateString());
+            }
         }
-        checkUserExists();
+        setPageLoading(false);
+    }
+
+    // Called when the page first mounts
+    useEffect(() => {
+        handlePageMount();
     }, []);
+
+    // Called when the page comes into focus (after mount)
+    useFocusEffect(
+        React.useCallback(() => {
+            handlePageMount();
+        }, [])
+    );
 
     // This is just used as a fallback incase the image.fileName errors. It generates a random string of given length
     function makeId(length: number): string {
@@ -130,12 +224,11 @@ export default function Scan() {
             body: JSON.stringify({ 
                 imageUrl,
                 userId
-            
             })
         })
 
         if (!response.ok) {
-            throw new Error("Failed to scan image");
+            throw new Error("Failed to scan image, status code: " + response.status);
         }
 
         const json = await response.json();
@@ -223,6 +316,8 @@ export default function Scan() {
         }
     }
 
+    const scanButtonDisabled = !image || loading || !userId || scanQuotaReached;
+
     return (
         <CollapsibleHeaderScreen
             headerProps={{
@@ -233,200 +328,231 @@ export default function Scan() {
             contentContainerStyle={{ flexGrow: 1 }}
         >
             <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
-                <View style={styles.elevatedBoxContainer}>
-                    <View style={styles.uploadBoxContent}>
-                        {image ? (
-                            <View style={styles.uploadedImageContainer}>
-                                <Image source={{ uri: image.uri }} style={[styles.uploadedImage, { aspectRatio: aspectRatio }]} resizeMode="contain" />
-                                <TouchableOpacity 
-                                    onPress={() => {
-                                        setImage(null);
-                                        setResults(null);
-                                }}>
-                                    <Text style={styles.clearButtonText}>Clear</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <>
-                                <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
-                                    <Text style={styles.howToUseText}>How to use this feature?</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.uploadBoxIconContainer} onPress={pickImage}>
-                                    <Upload size={36} color="#7C3AED" />
-                                </TouchableOpacity>
-                                <Text style={styles.uploadBoxTitle}>Upload a Screenshot</Text>
-                            </>
-
-                        )}
+                { pageLoading ? (
+                    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+                        <ActivityIndicator size="large" color="#ad46ff" />
                     </View>
-                </View>
-
-                <TouchableOpacity 
-                    disabled={!image || loading || !userId} 
-                    style={{ marginTop: 16, opacity: image && !loading && userId ? 1 : 0.5 }} // Opacity of 1 if the image is selected, its not loading, and the user exists
-                    onPress={handleScan}>
-                    <LinearGradient
-                        colors={["#5426F8", "#CF68FF"]}
-                        start={{ x: 0, y: 0.5 }}
-                        end={{ x: 1, y: 0.5 }}
-                        style={styles.scanButtonGradient}
-                        disabled={!image || loading || !userId}
-                    >
-                        <Text style={styles.scanButtonText}>
-                            {
-                                loading ? (
-                                    <ActivityIndicator size="small" color="white" />
-                                ) : "Scan"
-                            }
-
-                        </Text>
-                    </LinearGradient>
-                </TouchableOpacity>
-
-                {results ? (
+                ) : (
                     <>
-                        <View style={styles.scanResultsDividerContainer}>
-                            <HalfGradientDivider />
-                            <View style={styles.scanResultsTitleContainer}>
-                                <Shield size={18} color="#7C3AED" />
-                                <Text style={styles.scanResultsTitle}>Scan Results</Text>
+                        { scanQuotaReached && (
+                            <View style={styles.elevatedBoxContainer}>
+                                <Text style={styles.scanQuotaReachedText}>You've reached the maximum number of scans for a free tier account this month.</Text>
+                                <Text style={styles.scanQuotaReachedSubText}>Your quota will reset on {scanQuotaResetDate}.</Text>
                             </View>
-                            <HalfGradientDivider />
-                        </View>
-
-                        <View style={styles.shadowContainer}>
-                            <LinearGradient
-                                colors={getRiskColour(results.risk_level)}
-                                start={{ x: 0, y: 0.5 }}
-                                end={{ x: 1, y: 0.5 }}
-                                style={styles.confidenceContainer}
-                            >
-                                <View style={styles.scamResultHeader}>
-                                    <View style={styles.scamResultTitleContainer}>
-                                        {results.is_scam ? <TriangleAlert size={28} color="white" /> : <Shield size={28} color="white" />}
-                                        <Text style={styles.scamResultTitle}>
-                                            {results.is_scam ? "Likely a Scam" : "Looks Safe"}
-                                        </Text>
-                                    </View>
-                                    <Text style={styles.scamResultPercentage}>{results.confidence}%</Text>
-                                </View>
-                                <View style={styles.scamResultDetails}>
-                                    <Text style={styles.scamResultDetailText}>
-                                        {results.risk_level.charAt(0).toUpperCase() + results.risk_level.slice(1)} risk detected
-                                    </Text>
-                                    <Text style={styles.scamResultDetailText}>Confidence</Text>
-                                </View>
-
-                                {results.is_scam ? (
-                                    <View style={styles.scamWarningContainer}>
-                                        <Text style={styles.scamWarningText}>⚠️ Do not respond or click any links. Report and delete this message immediately.</Text>
-                                    </View>
-                                ): (
-                                    <View style={styles.scamWarningContainer}>
-                                        <Text style={styles.scamWarningText}>This looks safe. But always be cautious and verify the sender before responding or clicking any links.</Text>
-                                    </View>
-                                )}
-                            </LinearGradient>
-                        </View>
-                        
+                        )}
 
                         <View style={styles.elevatedBoxContainer}>
-                            <View style={styles.keyDetectionsHeader}>
-                                <Text style={styles.keyDetectionsTitle}>Key Detections</Text>
-                                <View style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 12 }}>
-                                    <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
-                                        {getSeverityIcon("high")}
-                                        <Text>High risk</Text>
+                            <View style={styles.uploadBoxContent}>
+                                {image ? (
+                                    <View style={styles.uploadedImageContainer}>
+                                        <Image source={{ uri: image.uri }} style={[styles.uploadedImage, { aspectRatio: aspectRatio }]} resizeMode="contain" />
+                                        <TouchableOpacity 
+                                            onPress={() => {
+                                                setImage(null);
+                                                setResults(null);
+                                        }}>
+                                            <Text style={styles.clearButtonText}>Clear</Text>
+                                        </TouchableOpacity>
                                     </View>
-                                    <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
-                                        {getSeverityIcon("medium")}
-                                        <Text>Medium risk</Text>
-                                    </View>
-                                    <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
-                                        {getSeverityIcon("low")}
-                                        <Text>Low risk</Text>
-                                    </View>  
-                                </View>
+                                ) : (
+                                    <>
+                                        <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
+                                            <Text style={styles.howToUseText}>How to use this feature?</Text>
+                                        </TouchableOpacity>
+                                        <View style={styles.uploadPlaceholder}>
+                                            <TouchableOpacity
+                                                style={styles.uploadBoxIconContainer}
+                                                onPress={() => {
+                                                    if (scanQuotaReached) return;
+                                                    pickImage();
+                                                }}
+                                                disabled={scanQuotaReached}
+                                            >
+                                                <Upload size={36} color="#7C3AED" />
+                                            </TouchableOpacity>
+                                            <Text style={styles.uploadBoxTitle}>Upload a Screenshot</Text>
+                                            {scanQuotaReached && (
+                                                <View style={styles.uploadBoxOverlay}>
+                                                    <Lock size={32} color="white" />
+                                                </View>
+                                            )}
+                                        </View>
+                                    </>
+
+                                )}
                             </View>
-                            {results.detections.map((detection, index) => (
-                                <View style={styles.keyDetectionsItem} key={index}>
-                                    {getSeverityIcon(detection.severity)}
-                                    <Text style={styles.keyDetectionsText}>{detection.description}</Text>
-                                </View>
-                            ))}
                         </View>
 
-                        <View style={styles.shadowContainer}>
-                            <LinearGradient 
-                                colors={["#eff6ff", "#eef2ff"]}
+                        <TouchableOpacity 
+                            disabled={scanButtonDisabled} 
+                            style={{ marginTop: 16, opacity: scanButtonDisabled ? 0.5 : 1 }} // Opacity of 1 if the image is selected, its not loading, and the user exists
+                            onPress={handleScan}>
+                            <LinearGradient
+                                colors={["#5426F8", "#CF68FF"]}
                                 start={{ x: 0, y: 0.5 }}
                                 end={{ x: 1, y: 0.5 }}
-                                style={styles.tipsContainer}
+                                style={styles.scanButtonGradient}
+                                disabled={scanButtonDisabled}
                             >
-                                <View style={styles.tipsHeader}>
-                                    <Shield size={24} color="#2563EB" />
-                                    <Text style={styles.tipsTitle}>Stay Safe</Text>
-                                </View>
-                                <View style={styles.tipsContent}>
-                                    <View style={styles.tipsItem}>
-                                        <Text style={styles.tipDecorator}>•</Text>
-                                        <Text style={styles.tipText}>Never share passwords or financial information via text or email.</Text>
-                                    </View>
-                                    <View style={styles.tipsItem}>
-                                        <Text style={styles.tipDecorator}>•</Text>
-                                        <Text style={styles.tipText}>Verfiy the sender through official channels like an organisation's known phone number.</Text>
-                                    </View>
-                                    <View style={styles.tipsItem}>
-                                        <Text style={styles.tipDecorator}>•</Text>
-                                        <Text style={styles.tipText}>Be wary of urgent requests or threats.</Text>
-                                    </View>
-                                    <View style={styles.tipsItem}>
-                                        <Text style={styles.tipDecorator}>•</Text>
-                                        <Text style={styles.tipText}>Check URL details carefully before clicking any links.</Text>
-                                    </View>
-                                </View>
+                                <Text style={styles.scanButtonText}>
+                                    {
+                                        loading ? (
+                                            <ActivityIndicator size="small" color="white" />
+                                        ) : "Scan"
+                                    }
+
+                                </Text>
                             </LinearGradient>
+                        </TouchableOpacity>
+
+                        {results ? (
+                            <>
+                                <View style={styles.scanResultsDividerContainer}>
+                                    <HalfGradientDivider />
+                                    <View style={styles.scanResultsTitleContainer}>
+                                        <Shield size={18} color="#7C3AED" />
+                                        <Text style={styles.scanResultsTitle}>Scan Results</Text>
+                                    </View>
+                                    <HalfGradientDivider />
+                                </View>
+
+                                <View style={styles.shadowContainer}>
+                                    <LinearGradient
+                                        colors={getRiskColour(results.risk_level)}
+                                        start={{ x: 0, y: 0.5 }}
+                                        end={{ x: 1, y: 0.5 }}
+                                        style={styles.confidenceContainer}
+                                    >
+                                        <View style={styles.scamResultHeader}>
+                                            <View style={styles.scamResultTitleContainer}>
+                                                {results.is_scam ? <TriangleAlert size={28} color="white" /> : <Shield size={28} color="white" />}
+                                                <Text style={styles.scamResultTitle}>
+                                                    {results.is_scam ? "Likely a Scam" : "Looks Safe"}
+                                                </Text>
+                                            </View>
+                                            <Text style={styles.scamResultPercentage}>{results.confidence}%</Text>
+                                        </View>
+                                        <View style={styles.scamResultDetails}>
+                                            <Text style={styles.scamResultDetailText}>
+                                                {results.risk_level.charAt(0).toUpperCase() + results.risk_level.slice(1)} risk detected
+                                            </Text>
+                                            <Text style={styles.scamResultDetailText}>Confidence</Text>
+                                        </View>
+
+                                        {results.is_scam ? (
+                                            <View style={styles.scamWarningContainer}>
+                                                <Text style={styles.scamWarningText}>⚠️ Do not respond or click any links. Report and delete this message immediately.</Text>
+                                            </View>
+                                        ): (
+                                            <View style={styles.scamWarningContainer}>
+                                                <Text style={styles.scamWarningText}>This looks safe. But always be cautious and verify the sender before responding or clicking any links.</Text>
+                                            </View>
+                                        )}
+                                    </LinearGradient>
+                                </View>
+                                
+
+                                <View style={styles.elevatedBoxContainer}>
+                                    <View style={styles.keyDetectionsHeader}>
+                                        <Text style={styles.keyDetectionsTitle}>Key Detections</Text>
+                                        <View style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 12 }}>
+                                            <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                                                {getSeverityIcon("high")}
+                                                <Text>High risk</Text>
+                                            </View>
+                                            <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                                                {getSeverityIcon("medium")}
+                                                <Text>Medium risk</Text>
+                                            </View>
+                                            <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                                                {getSeverityIcon("low")}
+                                                <Text>Low risk</Text>
+                                            </View>  
+                                        </View>
+                                    </View>
+                                    {results.detections.map((detection, index) => (
+                                        <View style={styles.keyDetectionsItem} key={index}>
+                                            {getSeverityIcon(detection.severity)}
+                                            <Text style={styles.keyDetectionsText}>{detection.description}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+
+                                <View style={styles.shadowContainer}>
+                                    <LinearGradient 
+                                        colors={["#eff6ff", "#eef2ff"]}
+                                        start={{ x: 0, y: 0.5 }}
+                                        end={{ x: 1, y: 0.5 }}
+                                        style={styles.tipsContainer}
+                                    >
+                                        <View style={styles.tipsHeader}>
+                                            <Shield size={24} color="#2563EB" />
+                                            <Text style={styles.tipsTitle}>Stay Safe</Text>
+                                        </View>
+                                        <View style={styles.tipsContent}>
+                                            <View style={styles.tipsItem}>
+                                                <Text style={styles.tipDecorator}>•</Text>
+                                                <Text style={styles.tipText}>Never share passwords or financial information via text or email.</Text>
+                                            </View>
+                                            <View style={styles.tipsItem}>
+                                                <Text style={styles.tipDecorator}>•</Text>
+                                                <Text style={styles.tipText}>Verfiy the sender through official channels like an organisation's known phone number.</Text>
+                                            </View>
+                                            <View style={styles.tipsItem}>
+                                                <Text style={styles.tipDecorator}>•</Text>
+                                                <Text style={styles.tipText}>Be wary of urgent requests or threats.</Text>
+                                            </View>
+                                            <View style={styles.tipsItem}>
+                                                <Text style={styles.tipDecorator}>•</Text>
+                                                <Text style={styles.tipText}>Check URL details carefully before clicking any links.</Text>
+                                            </View>
+                                        </View>
+                                    </LinearGradient>
+                                </View>
+                            </>
+                        ) : (
+                            <></>
+                        )}
+
+                        <View style={{ marginTop: 24 }}>
+                            <Text style={styles.disclaimerTitle}>Disclaimer</Text>
+                            <Text style={styles.disclaimerText}>
+                                This tool uses AI to analyze text messages, emails, social media posts, and other online content for potential signs of scams or fraud. 
+                                While we strive to provide accurate and helpful assessments, the results are generated automatically and may not always reflect the full context or intent of the content. 
+                                Always use your own judgment and verify suspicious messages or accounts through official sources before taking any action.{"\n\n"}
+                                We appreciate your feedback on this tool. Please email
+                                <Text style={{ color: "#0058FA" }}> feedback@scamly.io </Text>
+                                to submit any feedback you may have.
+                            </Text>
                         </View>
+
+                        <Modal
+                            animationType="fade"
+                            transparent={true}
+                            visible={showModal}
+                            onRequestClose={() => setShowModal(false)}
+                        >
+                            <View style={styles.modalOverlay}>
+                                <View style={styles.modalContainer}>
+                                    <Text style={styles.modalTitle}>💡 Tip</Text>
+                                    <Text style={styles.modalText}>
+                                        To get the most accurate scan results, make sure your screenshot clearly shows the key details:
+                                        {"\n\n"}- Include the main message or section you want the AI to analyze.
+                                        {"\n"}- If relevant, capture contact details (email addresses, phone numbers, etc.) in the same image.
+                                        {"\n"}- For long messages or emails, focus on the most suspicious or important parts instead of the entire thread.
+                                        {"\n"}- Ensrure the text is easy to read, avoiding blurry or cropped images.
+                                        {"\n\n"}Clear, well-framed screenshots help the AI identify potential scam signals more effectively.
+                                    </Text>
+                                    <Pressable onPress={() => setShowModal(false)} style={styles.closeButton}>
+                                        <Text style={styles.closeButtonText}>Got it</Text>
+                                    </Pressable>
+                                </View>
+                            </View>
+                        </Modal>
                     </>
-                ) : (
-                    <></>
                 )}
 
-                <View style={{ marginTop: 24 }}>
-                    <Text style={styles.disclaimerTitle}>Disclaimer</Text>
-                    <Text style={styles.disclaimerText}>
-                        This tool uses AI to analyze text messages, emails, social media posts, and other online content for potential signs of scams or fraud. 
-                        While we strive to provide accurate and helpful assessments, the results are generated automatically and may not always reflect the full context or intent of the content. 
-                        Always use your own judgment and verify suspicious messages or accounts through official sources before taking any action.{"\n\n"}
-                        We appreciate your feedback on this tool. Please email
-                        <Text style={{ color: "#0058FA" }}> feedback@scamly.io </Text>
-                        to submit any feedback you may have.
-                    </Text>
-                </View>
 
-                <Modal
-                    animationType="fade"
-                    transparent={true}
-                    visible={showModal}
-                    onRequestClose={() => setShowModal(false)}
-                >
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.modalContainer}>
-                            <Text style={styles.modalTitle}>💡 Tip</Text>
-                            <Text style={styles.modalText}>
-                                To get the most accurate scan results, make sure your screenshot clearly shows the key details:
-                                {"\n\n"}- Include the main message or section you want the AI to analyze.
-                                {"\n"}- If relevant, capture contact details (email addresses, phone numbers, etc.) in the same image.
-                                {"\n"}- For long messages or emails, focus on the most suspicious or important parts instead of the entire thread.
-                                {"\n"}- Ensrure the text is easy to read, avoiding blurry or cropped images.
-                                {"\n\n"}Clear, well-framed screenshots help the AI identify potential scam signals more effectively.
-                            </Text>
-                            <Pressable onPress={() => setShowModal(false)} style={styles.closeButton}>
-                                <Text style={styles.closeButtonText}>Got it</Text>
-                            </Pressable>
-                        </View>
-                    </View>
-                </Modal>
             </SafeAreaView>
         </CollapsibleHeaderScreen>
     )
@@ -458,11 +584,31 @@ const styles = StyleSheet.create({
         shadowRadius: 20,
         elevation: 8,
     },
+    scanQuotaReachedText: {
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 16,
+        color: "#ff6467",
+        textAlign: "center",
+    },
+    scanQuotaReachedSubText: {
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        color: "#374151",
+        textAlign: "center",
+    },
     uploadBoxContent: {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         gap: 12,
+    },
+    uploadPlaceholder: {
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        position: "relative",
     },
     uploadedImageContainer: {
         width: "100%",
@@ -488,6 +634,28 @@ const styles = StyleSheet.create({
         backgroundColor: "#E0E7FF",
         borderRadius: 14,
         padding: 20,
+    },
+    uploadBoxOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: 14,
+        backgroundColor: "rgba(0, 0, 0, 0.65)",
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: 16,
+        gap: 8,
+        zIndex: 5,
+    },
+    uploadBoxOverlayText: {
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 16,
+        color: "white",
+        textAlign: "center",
+    },
+    uploadBoxOverlaySubText: {
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        color: "white",
+        textAlign: "center",
     },
     uploadBoxTitle: {
         fontFamily: "Poppins-SemiBold",

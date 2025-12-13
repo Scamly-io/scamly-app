@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
-import { Trash2 } from "lucide-react-native";
+import { Lock, Trash2 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,6 +23,37 @@ export default function ChatIndex() {
     const [chats, setChats] = useState<Chat[]>([]);
     // Loading state while fetching chats
     const [loading, setLoading] = useState(true);
+    // Subscription plan state
+    const [planLoading, setPlanLoading] = useState(true);
+    const [isFreePlan, setIsFreePlan] = useState(false);
+
+    const fetchSubscriptionPlan = async () => {
+        setPlanLoading(true);
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+            console.error("No user:", userError);
+            Alert.alert("Error", "No user found");
+            setPlanLoading(false);
+            return null;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("subscription_plan")
+            .eq("id", user.id)
+            .single();
+
+        if (profileError) {
+            console.error("Error fetching user profile:", profileError);
+            Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+            setPlanLoading(false);
+            return null;
+        }
+
+        setIsFreePlan(profile.subscription_plan === "free");
+        setPlanLoading(false);
+        return profile.subscription_plan;
+    }
 
     // Fetches all chat conversations for the current user
     const fetchChats = async () => {
@@ -53,7 +84,7 @@ export default function ChatIndex() {
 
     // Fetch chats on mount and subscribe to real-time updates
     useEffect(() => {
-        fetchChats();
+        fetchSubscriptionPlan().then(() => fetchChats());
 
         // Subscribe to real-time updates for chat changes
         const channel = supabase
@@ -79,12 +110,16 @@ export default function ChatIndex() {
     // Refetch chats when screen comes into focus
     useFocusEffect(
         React.useCallback(() => {
-            fetchChats();
+            fetchSubscriptionPlan().then(() => fetchChats());
         }, [])
     );
 
     // Creates a new chat conversation and navigates to it
     async function createNewChat() {
+        if (isFreePlan) {
+            Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
+            return;
+        }
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
             console.error("No user:", userError);
@@ -122,6 +157,10 @@ export default function ChatIndex() {
 
     // Deletes a chat conversation after user confirmation
     async function deleteChat(chatId: string) {
+        if (isFreePlan) {
+            Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
+            return;
+        }
         Alert.alert("Delete Chat", "Are you sure you want to delete this chat? This action cannot be undone.",
             [
                 {
@@ -177,14 +216,18 @@ export default function ChatIndex() {
                 <View style={styles.content}>
                     <View style={styles.titleContainer}>
                         <Text style={styles.title}>Chats</Text>
-                        <TouchableOpacity onPress={createNewChat} style={styles.createChatButton}>
+                        <TouchableOpacity
+                            onPress={createNewChat}
+                            style={[styles.createChatButton, isFreePlan ? { opacity: 0.5 } : null]}
+                            disabled={isFreePlan}
+                        >
                             <Text style={styles.createChatButtonText}>New</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.separator} />
 
-                    { loading ? (
+                    { loading || planLoading ? (
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator size="large" color="#5426F8" />
                         </View>
@@ -197,8 +240,8 @@ export default function ChatIndex() {
                             renderItem={({ item }) => (
                                 <>
                                     <View style={styles.chatItem}>
-                                        <Link href={`/chat/${item.id}`} asChild>
-                                            <Pressable style={styles.chatPressable}>
+                                        {isFreePlan ? (
+                                            <Pressable style={styles.chatPressable} disabled>
                                                 <Text style={styles.chatDate}>
                                                     {item.created_at.split("T")[0]}
                                                 </Text>
@@ -206,10 +249,22 @@ export default function ChatIndex() {
                                                     {item.last_message || "No messages yet"}
                                                 </Text>
                                             </Pressable>
-                                        </Link>
+                                        ) : (
+                                            <Link href={`/chat/${item.id}`} asChild>
+                                                <Pressable style={styles.chatPressable}>
+                                                    <Text style={styles.chatDate}>
+                                                        {item.created_at.split("T")[0]}
+                                                    </Text>
+                                                    <Text style={styles.chatMessage} numberOfLines={1}>
+                                                        {item.last_message || "No messages yet"}
+                                                    </Text>
+                                                </Pressable>
+                                            </Link>
+                                        )}
                                         <TouchableOpacity
                                             onPress={() => deleteChat(item.id)}
-                                            style={styles.deleteButton}
+                                            style={[styles.deleteButton, isFreePlan ? { opacity: 0.5 } : null]}
+                                            disabled={isFreePlan}
                                         >
                                             <Trash2 size={20} color="white" />
                                         </TouchableOpacity>
@@ -219,6 +274,13 @@ export default function ChatIndex() {
                                 
                             )}
                         />
+                    )}
+                    {isFreePlan && !planLoading && (
+                        <View style={styles.lockOverlay}>
+                            <Lock size={40} color="white" />
+                            <Text style={styles.lockOverlayTitle}>The AI Chat feature is for paid plans only.</Text>
+                            <Text style={styles.lockOverlayText}>Upgrade to utilise Scamly's advanced AI model designed specifically for discussing scams and fraud.</Text>
+                        </View>
                     )}
                     
                 </View>
@@ -308,6 +370,27 @@ const styles = StyleSheet.create({
     },
     flatListContent: {
         flexGrow: 1,
+    },
+    lockOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: "rgba(0,0,0,0.6)",
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        paddingHorizontal: 24,
+    },
+    lockOverlayTitle: {
+        color: "white",
+        fontFamily: "Poppins-Bold",
+        fontSize: 18,
+        textAlign: "center",
+    },
+    lockOverlayText: {
+        color: "white",
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        textAlign: "center",
     },
 
 })

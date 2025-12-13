@@ -3,7 +3,7 @@ import GradientBackgound from "@/components/GradientBackground";
 import { supabase } from "@/utils/supabase";
 import { useLocalSearchParams } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
 
@@ -32,13 +32,49 @@ export default function ChatDetail() {
     const [input, setInput] = useState("");
     // OpenAI conversation ID for maintaining context
     const [conversationId, setConversationId] = useState("");
+    // Subscription plan state
+    const [planLoading, setPlanLoading] = useState(true);
+    const [isFreePlan, setIsFreePlan] = useState(false);
 
     const flatListRef = useRef<FlatList>(null);
+
+    // Fetch subscription plan on mount
+    useEffect(() => {
+        const fetchSubscriptionPlan = async () => {
+            setPlanLoading(true);
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            if (userError || !user) {
+                console.error("No user:", userError);
+                Alert.alert("Error", "No user found");
+                setPlanLoading(false);
+                return;
+            }
+
+            const { data: profile, error: profileError } = await supabase
+                .from("profiles")
+                .select("subscription_plan")
+                .eq("id", user.id)
+                .single();
+
+            if (profileError) {
+                console.error("Error fetching user profile:", profileError);
+                Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+                setPlanLoading(false);
+                return;
+            }
+
+            setIsFreePlan(profile.subscription_plan === "free");
+            setPlanLoading(false);
+        }
+
+        fetchSubscriptionPlan();
+    }, []);
 
     // Fetch chat messages, conversation ID, and creation date on component mount
     useEffect(() => {
         const fetchMessages = async () => {
             if (!chatId) return;
+            if (isFreePlan || planLoading) return;
             
             setLoading(true);
 
@@ -56,7 +92,7 @@ export default function ChatDetail() {
         }
 
         fetchMessages();
-    }, [chatId]);
+    }, [chatId, isFreePlan, planLoading]);
 
     // Memoized message bubble component for performance
     const MessageBubble = memo(function MessageBubble({ item }: { item: Message }) {
@@ -95,6 +131,10 @@ export default function ChatDetail() {
 
     // Handles sending a user message and receiving AI response
     async function processMessage () {
+        if (isFreePlan) {
+            Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
+            return;
+        }
         const content = input;
 
         // Create user message object
@@ -144,7 +184,7 @@ export default function ChatDetail() {
         }
     }
 
-    if (loading) {
+    if (loading || planLoading) {
         return (
             <>
                 <ChatHeader date={createdAt} />
@@ -160,46 +200,55 @@ export default function ChatDetail() {
     return (
         <GradientBackgound>
             <ChatHeader date={createdAt} />
-            <KeyboardAvoidingView
-                style={{ flex: 1 }}
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                //Keep zero offset because header sits outside this view
-                keyboardVerticalOffset={-20}
-            >
+            {isFreePlan ? (
                 <SafeAreaView edges={["bottom", "left", "right"]} style={styles.mainContainer}>
-                    <View style={{ flex: 1 }}>
-                        <FlatList
-                            ref={flatListRef}
-                            data={invertedData}
-                            keyExtractor={(item) => item.id.toString()}
-                            renderItem={renderItem}
-                            inverted
-                            keyboardShouldPersistTaps="handled"
-                            maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 20 }}
-                            contentContainerStyle={{ paddingVertical: 8 }}
-                            removeClippedSubviews
-                            initialNumToRender={20}
-                            maxToRenderPerBatch={20}
-                            windowSize={7}
-                            updateCellsBatchingPeriod={50}
-                        />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Type a message"
-                            placeholderTextColor="#171924"
-                            returnKeyType="send"
-                            value={input}
-                            onChangeText={setInput}
-                            blurOnSubmit={false}
-                            multiline={false}
-                            onSubmitEditing={processMessage}
-                        />
+                    <View style={[styles.mainContainer, styles.lockContainer]}>
+                        <Text style={styles.lockTitle}>AI Chat is for paid plans</Text>
+                        <Text style={styles.lockText}>Upgrade to continue this conversation.</Text>
                     </View>
                 </SafeAreaView>
-            </KeyboardAvoidingView>
+            ) : (
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    //Keep zero offset because header sits outside this view
+                    keyboardVerticalOffset={-20}
+                >
+                    <SafeAreaView edges={["bottom", "left", "right"]} style={styles.mainContainer}>
+                        <View style={{ flex: 1 }}>
+                            <FlatList
+                                ref={flatListRef}
+                                data={invertedData}
+                                keyExtractor={(item) => item.id.toString()}
+                                renderItem={renderItem}
+                                inverted
+                                keyboardShouldPersistTaps="handled"
+                                maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 20 }}
+                                contentContainerStyle={{ paddingVertical: 8 }}
+                                removeClippedSubviews
+                                initialNumToRender={20}
+                                maxToRenderPerBatch={20}
+                                windowSize={7}
+                                updateCellsBatchingPeriod={50}
+                            />
+                        </View>
+
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Type a message"
+                                placeholderTextColor="#171924"
+                                returnKeyType="send"
+                                value={input}
+                                onChangeText={setInput}
+                                blurOnSubmit={false}
+                                multiline={false}
+                                onSubmitEditing={processMessage}
+                            />
+                        </View>
+                    </SafeAreaView>
+                </KeyboardAvoidingView>
+            )}
         </GradientBackgound>
     )
 }
@@ -251,5 +300,22 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         marginRight: 8,
         fontFamily: "Poppins-Regular",
+    },
+    lockContainer: {
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+    },
+    lockTitle: {
+        fontFamily: "Poppins-Bold",
+        fontSize: 18,
+        color: "#1F2937",
+        textAlign: "center",
+    },
+    lockText: {
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        color: "#4B5563",
+        textAlign: "center",
     }
 })

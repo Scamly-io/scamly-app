@@ -30,7 +30,7 @@ type Article = {
  */
 export default function Home() {
     // Users display name (used in the header)
-    const [userName, setUserName] = useState<string | null>(null);
+    const [userName, setUserName] = useState<string | null>("");
     // Trending articles
     const [trendingArticles, setTrendingArticles] = useState<Article[]>([]);
     // Quick tips articles
@@ -38,7 +38,7 @@ export default function Home() {
     // Loading state while fetching initial page data
     const [loading, setLoading] = useState<boolean>(true);
     // Premium subscription status
-    const [isPremium, setIsPremium] = useState<boolean>(true);
+    const [isPremium, setIsPremium] = useState<boolean>(false);
 
     function calculateReadTime(length: number): number {
         return Math.max(1, Math.round(length / 1500)); // 1500 characters per minute (200-250 words per minute) 
@@ -70,13 +70,18 @@ export default function Home() {
                 
                 const { data: profileData, error: profileError } = await supabase
                     .from("profiles")
-                    .select("first_name")
+                    .select("first_name, subscription_plan")
                     .eq("id", user.id)
                     .single();
     
                 if (profileError || !profileData) {
                     console.error("Error fetching profile:", profileError);
                     setUserName("")
+                }
+
+                // subscription_plan will only be one of "free", "premium-monthly", or "premium-yearly"
+                if (profileData.subscription_plan !== "free") {
+                    setIsPremium(true);
                 }
     
                 // Include the "," in userName to separate from the "Hi" in the header.

@@ -1,8 +1,9 @@
 import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
+import { supabase } from "@/utils/supabase";
 import { LinearGradient } from "expo-linear-gradient";
-import { ExternalLink, Globe, Phone } from "lucide-react-native";
-import { useState } from "react";
-import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ExternalLink, Globe, Lock, Phone } from "lucide-react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, Linking, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 /**
@@ -22,9 +23,47 @@ export default function PhoneSearch() {
     const [error, setError] = useState(null);
     // Whether to show the "how to use" modal
     const [showModal, setShowModal] = useState(false);
+    // Subscription plan state
+    const [planLoading, setPlanLoading] = useState(true);
+    const [isFreePlan, setIsFreePlan] = useState(false);
+
+    useEffect(() => {
+        const fetchSubscriptionPlan = async () => {
+            setPlanLoading(true);
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            if (userError || !user) {
+                console.error("No user:", userError);
+                Alert.alert("Error", "No user found");
+                setPlanLoading(false);
+                return;
+            }
+
+            const { data: profile, error: profileError } = await supabase
+                .from("profiles")
+                .select("subscription_plan")
+                .eq("id", user.id)
+                .single();
+
+            if (profileError) {
+                console.error("Error fetching user profile:", profileError);
+                Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+                setPlanLoading(false);
+                return;
+            }
+
+            setIsFreePlan(profile.subscription_plan === "free");
+            setPlanLoading(false);
+        }
+
+        fetchSubscriptionPlan();
+    }, []);
 
     // Handles the company search API call and displays results
     async function handleSearch() {
+        if (isFreePlan) {
+            Alert.alert("Upgrade required", "Info Search is available on paid plans.");
+            return;
+        }
         if (!searchInput.trim()) return;
 
         setIsLoading(true);
@@ -79,23 +118,36 @@ export default function PhoneSearch() {
                             value={searchInput}
                             onChangeText={setSearchInput}
                             onSubmitEditing={handleSearch}
+                            editable={!isFreePlan}
+                            selectTextOnFocus={!isFreePlan}
                         />
-                        <TouchableOpacity onPress={handleSearch} style={{ opacity: searchInput.trim() ? 1 : 0.5 }}>
+                        <TouchableOpacity
+                            onPress={handleSearch}
+                            style={{ opacity: searchInput.trim() && !isFreePlan ? 1 : 0.5 }}
+                            disabled={isFreePlan}
+                        >
                             <LinearGradient
                                 colors={["#5426F8", "#CF68FF"]}
                                 start={{ x: 0, y: 0.5 }}
                                 end={{ x: 1, y: 0.5 }}
                                 style={styles.searchButtonGradient}
-                                disabled={!searchInput.trim()}
+                                disabled={!searchInput.trim() || isFreePlan}
                             >
                                 <Text style={styles.searchButtonText}>Search</Text>
                             </LinearGradient>
                         </TouchableOpacity>
+                        {isFreePlan && !planLoading && (
+                            <View style={styles.lockOverlay}>
+                                <Lock size={32} color="white" />
+                                <Text style={styles.lockOverlayTitle}>The Info Search feature is for paid plans only.</Text>
+                                <Text style={styles.lockOverlayText}>Upgrade to utilise Scamly's global company contact information search tool.</Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Results */}
                     <View style={styles.elevatedBoxContainer}>
-                        {isLoading ? (
+                        {isLoading || planLoading ? (
                             <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
                                 <ActivityIndicator size="large" color="#5426F8" />
                             </View>
@@ -282,6 +334,27 @@ const styles = StyleSheet.create({
         color: "white",
         fontFamily: "Poppins-SemiBold",
         fontSize: 16,
+    },
+    lockOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: "rgba(0,0,0,0.6)",
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingHorizontal: 16,
+    },
+    lockOverlayTitle: {
+        color: "white",
+        fontFamily: "Poppins-Bold",
+        fontSize: 16,
+        textAlign: "center",
+    },
+    lockOverlayText: {
+        color: "white",
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        textAlign: "center",
     },
     elevatedBoxContainer: {
         marginTop: 30,
