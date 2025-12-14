@@ -25,7 +25,10 @@ export default function PhoneSearch() {
     const [showModal, setShowModal] = useState(false);
     // Subscription plan state
     const [planLoading, setPlanLoading] = useState(true);
-    const [isFreePlan, setIsFreePlan] = useState(false);
+    // Free plan state
+    const [isFreePlan, setIsFreePlan] = useState<Boolean>(false);
+    // Current user ID
+    const [userId, setUserId] = useState<String>("");
 
     useEffect(() => {
         const fetchSubscriptionPlan = async () => {
@@ -37,6 +40,8 @@ export default function PhoneSearch() {
                 setPlanLoading(false);
                 return;
             }
+
+            setUserId(user.id);
 
             const { data: profile, error: profileError } = await supabase
                 .from("profiles")
@@ -74,7 +79,7 @@ export default function PhoneSearch() {
             const response = await fetch('https://1tee7jgtpg.execute-api.ap-southeast-2.amazonaws.com/dev/search', {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyName: searchInput.trim() })
+                body: JSON.stringify({ companyName: searchInput.trim(), userId })
             });
 
             const result = await response.json();

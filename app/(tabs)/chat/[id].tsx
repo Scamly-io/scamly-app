@@ -19,22 +19,23 @@ type Message = {
  * Allows users to send messages and receive AI responses in real-time.
  */
 export default function ChatDetail() {
-
-
     const { id: chatId } = useLocalSearchParams<{ id: string }>();
     // All messages in the current chat conversation
     const [messages, setMessages] = useState<Message[]>([]);
     // Timestamp when the chat was created
-    const [createdAt, setCreatedAt] = useState("");
+    const [createdAt, setCreatedAt] = useState<String>("");
     // Loading state while fetching chat data
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState<Boolean>(true);
     // Current user input text
-    const [input, setInput] = useState("");
+    const [input, setInput] = useState<String>("");
     // OpenAI conversation ID for maintaining context
-    const [conversationId, setConversationId] = useState("");
+    const [conversationId, setConversationId] = useState<String>("");
     // Subscription plan state
-    const [planLoading, setPlanLoading] = useState(true);
-    const [isFreePlan, setIsFreePlan] = useState(false);
+    const [planLoading, setPlanLoading] = useState<Boolean>(true);
+    // Free plan state
+    const [isFreePlan, setIsFreePlan] = useState<Boolean>(false);
+    // Current user ID
+    const [userId, setUserId] = useState<String>("");
 
     const flatListRef = useRef<FlatList>(null);
 
@@ -49,6 +50,8 @@ export default function ChatDetail() {
                 setPlanLoading(false);
                 return;
             }
+
+            setUserId(user.id);
 
             const { data: profile, error: profileError } = await supabase
                 .from("profiles")
@@ -107,12 +110,10 @@ export default function ChatDetail() {
     });
 
     // With an inverted FlatList and maintainVisibleContentPosition, the latest messages stay anchored to the input without manual scrolling
-
     // Keep hooks (like useCallback) before any early returns to preserve hook order
     const renderItem = useCallback(({ item }: { item: Message }) => (
         <MessageBubble item={item} />
     ), []);
-
     // Render newest at bottom with inverted list by reversing data for display
     const invertedData = useMemo(() => {
         return [...messages].reverse();
@@ -160,7 +161,7 @@ export default function ChatDetail() {
             const res = await fetch(`https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/get-ai-response`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ content, chatId, conversationId })
+                body: JSON.stringify({ content, chatId, conversationId, userId })
             });
 
             if (!res.ok) {
