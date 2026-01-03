@@ -1,6 +1,7 @@
 import GradientBackground from "@/components/GradientBackground";
 import Header from "@/components/Header";
 import QuickTipTile from "@/components/QuickTipTile";
+import { getIsPremium } from "@/utils/access";
 import { supabase } from "@/utils/supabase";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
@@ -16,6 +17,7 @@ type QuickTip = {
     icon: string; // Lucide React Native icon name
     iconColour: string; // Icon color
     iconBackground: string; // Icon background color
+    free_access?: boolean;
 }
 
 /**
@@ -27,13 +29,18 @@ export default function AllQuickTips() {
     const [quickTips, setQuickTips] = useState<QuickTip[]>([]);
     // Loading state while fetching quick tips
     const [pageLoading, setPageLoading] = useState<boolean>(true);
+    // Premium subscription status
+    const [isPremium, setIsPremium] = useState<boolean>(false);
 
     // Fetch all quick tips on component mount
     useEffect(() => {
         async function fetchQuickTips() {
+            const premium = await getIsPremium();
+            setIsPremium(premium);
+
             const { data: quickTips, error: quickTipsError } = await supabase
                 .from("articles")
-                .select("id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour")
+                .select("id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour, free_access")
                 .eq("quick_tip", true)
                 .order("views", { ascending: false })
 
@@ -51,6 +58,7 @@ export default function AllQuickTips() {
                 icon: quickTip.quick_tip_icon,
                 iconColour: quickTip.quick_tip_icon_colour,
                 iconBackground: quickTip.quick_tip_icon_background_colour,
+                free_access: quickTip.free_access,
             })));
 
             setPageLoading(false);
@@ -81,7 +89,7 @@ export default function AllQuickTips() {
             />
             <SafeAreaView edges={[ "left", "right" ]} style={styles.container}>
                 <View style={styles.infoHeaderContainer}>
-                    <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => router.replace("/learn")}>
                         <ChevronLeft size={24} color="#2b7fff" />
                         <Text style={styles.backButtonText}>Back</Text>
                     </TouchableOpacity>
@@ -91,7 +99,27 @@ export default function AllQuickTips() {
                 <ScrollView style={styles.scrollView}>
                     <View style={styles.listContainer}>
                         {quickTips.map((quickTip) => (
-                            <QuickTipTile key={quickTip.id} {...quickTip} />
+                            <QuickTipTile
+                                key={quickTip.id}
+                                slug={quickTip.slug}
+                                title={quickTip.title}
+                                icon={quickTip.icon}
+                                iconColour={quickTip.iconColour}
+                                iconBackground={quickTip.iconBackground}
+                                readMoreVisible={true}
+                                locked={!isPremium && quickTip.free_access === false}
+                                onPress={() => {
+                                    const locked = !isPremium && quickTip.free_access === false;
+                                    if (locked) {
+                                        Alert.alert(
+                                            "Premium required",
+                                            "This article is only available to Scamly Premium users."
+                                        );
+                                        return;
+                                    }
+                                    router.push(`/learn/${quickTip.slug}`);
+                                }}
+                            />
                         ))}
                     </View>
                 </ScrollView>

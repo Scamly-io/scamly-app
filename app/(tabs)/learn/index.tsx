@@ -2,6 +2,7 @@ import ArticleTile from "@/components/ArticleTile";
 import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
 import HalfGradientDivider from "@/components/HalfGradientDivider";
 import QuickTipTile from "@/components/QuickTipTile";
+import { getIsPremium } from "@/utils/access";
 import { supabase } from "@/utils/supabase";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -44,18 +45,29 @@ export default function Learn() {
     const [trendingArticles, setTrendingArticles] = useState<Article[]>([]);
     // Quick tips articles
     const [quickTips, setQuickTips] = useState<Article[]>([]);
+    // Premium subscription status
+    const [isPremium, setIsPremium] = useState<boolean>(false);
 
     // Fetch featured article, trending articles, and quick tips on component mount
     useEffect(() => {
         async function fetchPageData() {
+            const premium = await getIsPremium();
+            setIsPremium(premium);
+
             // Fetch the top viewed article to display as the featured article
             async function getFeaturedArticle() {
-                const { data: featuredArticle, error: featuredArticleError } = await supabase
+                let query = supabase
                     .from("articles")
                     .select("id, slug, title, description, content")
                     .order("views", { ascending: false })
                     .limit(1)
-                    .single();
+                    .eq("quick_tip", false);
+
+                if (!premium) {
+                    query = query.eq("free_access", true);
+                }
+
+                const { data: featuredArticle, error: featuredArticleError } = await query.single();
 
                 if (featuredArticleError || !featuredArticle) {
                     console.error("Error fetching featured article:", featuredArticleError);
@@ -74,12 +86,18 @@ export default function Learn() {
 
             // Fetch the top 3 trending articles (excluding the featured one)
             async function getTrendingArticles() {
-                const { data: trendingArticles, error: trendingArticlesError } = await supabase
+                let query = supabase
                     .from("articles")
                     .select("id, slug, title, description, primary_image, content")
                     .order("views", { ascending: false })
                     .eq("quick_tip", false)
-                    .range(1, 3)
+                    .range(1, 3);
+
+                if (!premium) {
+                    query = query.eq("free_access", true);
+                }
+
+                const { data: trendingArticles, error: trendingArticlesError } = await query;
 
                 if (trendingArticlesError || !trendingArticles) {
                     console.error("Error fetching trending articles:", trendingArticlesError);
@@ -99,12 +117,18 @@ export default function Learn() {
 
             // Fetch the top 4 quick tips ordered by view count
             async function getQuickTips() {
-                const { data: quickTips, error: quickTipsError } = await supabase
+                let query = supabase
                     .from("articles")
                     .select("id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour")
                     .eq("quick_tip", true)
                     .order("views", { ascending: false })
-                    .range(0, 3)
+                    .range(0, 3);
+
+                if (!premium) {
+                    query = query.eq("free_access", true);
+                }
+
+                const { data: quickTips, error: quickTipsError } = await query;
 
                 if (quickTipsError || !quickTips) {
                     console.error("Error fetching quick tips:", quickTipsError);
@@ -137,6 +161,10 @@ export default function Learn() {
 
     // Handles article search using Supabase full-text search
     async function handleSearch() {
+        if (!isPremium) {
+            Alert.alert("Premium required", "Search is only available to Scamly Premium users.");
+            return;
+        }
         if (!searchInput.trim()) return;
 
         setSearchLoading(true);
@@ -201,83 +229,92 @@ export default function Learn() {
         >
             <SafeAreaView edges={[ "left", "right" ]} style={styles.container}>
 
-                <View style={styles.searchContainer}>
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search articles, guides, and tips..."
-                        placeholderTextColor="#171924"
-                        value={searchInput}
-                        onChangeText={setSearchInput}
-                        onSubmitEditing={handleSearch}
-                        returnKeyType="search"
-                    />
+                {isPremium ? (
+                    <View style={styles.searchContainer}>
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search articles, guides, and tips..."
+                            placeholderTextColor="#171924"
+                            value={searchInput}
+                            onChangeText={setSearchInput}
+                            onSubmitEditing={handleSearch}
+                            returnKeyType="search"
+                        />
 
-                    <HalfGradientDivider />
-                    
-                    {searchLoading ? (
-                        <View>
-                            <ActivityIndicator size="large" color="#ad46ff" />
-                        </View>
-                    ) : null}
-
-                    {searchResults.length > 0 ? (
-                        <>
-                            <View style={styles.listContainer}>
-                                {searchResults.filter((result) => result.quick_tip).map((result) => (
-                                    <QuickTipTile 
-                                        key={result.id}
-                                        slug={result.slug}
-                                        title={result.title}
-                                        description={result.description}
-                                        icon={result.icon}
-                                        iconColour={result.iconColour}
-                                        iconBackground={result.iconBackground}
-                                        readMoreVisible={false}
-                                    />
-                                ))}
-                                
-                                {searchResults.filter((result) => !result.quick_tip).map((result) => (
-                                    <ArticleTile 
-                                        key={result.id}
-                                        title={result.title}
-                                        description={result.description}
-                                        readTime={calculateReadTime(result.length)}
-                                        image={result.image}
-                                        slug={result.slug}
-                                    />
-                                ))}    
+                        <HalfGradientDivider />
+                        
+                        {searchLoading ? (
+                            <View>
+                                <ActivityIndicator size="large" color="#ad46ff" />
                             </View>
-                            <HalfGradientDivider />
-                        </>
-                    ) : null}
-                </View>
+                        ) : null}
 
-
-
-                <LinearGradient
-                    colors={["#2b7fff", "#ad46ff", "#f6339a"]}
-                    locations={[0, 0.5, 1]}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 1, y: 0.5 }}
-                    style={styles.featuredArticle}
-                >
-                    <View style={styles.featuredTag}>
-                        <Sparkles size={16} color="white" />
-                        <Text style={styles.featuredTagText}>Featured</Text>
+                        {searchResults.length > 0 ? (
+                            <>
+                                <View style={styles.listContainer}>
+                                    {searchResults.filter((result) => result.quick_tip).map((result) => (
+                                        <QuickTipTile 
+                                            key={result.id}
+                                            slug={result.slug}
+                                            title={result.title}
+                                            description={result.description}
+                                            icon={result.icon}
+                                            iconColour={result.iconColour}
+                                            iconBackground={result.iconBackground}
+                                            readMoreVisible={false}
+                                        />
+                                    ))}
+                                    
+                                    {searchResults.filter((result) => !result.quick_tip).map((result) => (
+                                        <ArticleTile 
+                                            key={result.id}
+                                            title={result.title}
+                                            description={result.description}
+                                            readTime={calculateReadTime(result.length)}
+                                            image={result.image}
+                                            slug={result.slug}
+                                        />
+                                    ))}    
+                                </View>
+                                <HalfGradientDivider />
+                            </>
+                        ) : null}
                     </View>
-                    <Text style={styles.featuredArticleTitle}>{featuredArticle.title}</Text>
-                    <Text style={styles.featuredArticleDescription}>{featuredArticle.description}</Text>
-                    <View style={styles.featuredArticleDetails}>
-                        <View style={styles.featuredArticleReadTime}>
-                            <Clock size={16} color="white" />
-                            <Text style={styles.featuredArticleReadTimeText}>{calculateReadTime(featuredArticle.length)} min read</Text>
+                ) : null}
+
+
+
+                {featuredArticle ? (
+                    <LinearGradient
+                        colors={["#2b7fff", "#ad46ff", "#f6339a"]}
+                        locations={[0, 0.5, 1]}
+                        start={{ x: 0, y: 0.5 }}
+                        end={{ x: 1, y: 0.5 }}
+                        style={styles.featuredArticle}
+                    >
+                        <View style={styles.featuredTag}>
+                            <Sparkles size={16} color="white" />
+                            <Text style={styles.featuredTagText}>Featured</Text>
                         </View>
-                        <TouchableOpacity style={styles.featuredArticleReadButton} onPress={() => router.push(`/learn/${featuredArticle.slug}`)}>
-                            <Text style={styles.featuredArticleReadButtonText}>Read now</Text>
-                            <ChevronRight size={16} color="white" />
-                        </TouchableOpacity>
-                    </View>
-                </LinearGradient>
+                        <Text style={styles.featuredArticleTitle}>{featuredArticle.title}</Text>
+                        <Text style={styles.featuredArticleDescription}>{featuredArticle.description}</Text>
+                        <View style={styles.featuredArticleDetails}>
+                            <View style={styles.featuredArticleReadTime}>
+                                <Clock size={16} color="white" />
+                                <Text style={styles.featuredArticleReadTimeText}>
+                                    {calculateReadTime(featuredArticle.length)} min read
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                style={styles.featuredArticleReadButton}
+                                onPress={() => router.push(`/learn/${featuredArticle.slug}`)}
+                            >
+                                <Text style={styles.featuredArticleReadButtonText}>Read now</Text>
+                                <ChevronRight size={16} color="white" />
+                            </TouchableOpacity>
+                        </View>
+                    </LinearGradient>
+                ) : null}
 
                 {/* Trending Now Section */}
                 <View style={styles.sectionContainer}>

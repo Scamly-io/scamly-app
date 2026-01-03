@@ -1,4 +1,5 @@
 import GradientBackground from "@/components/GradientBackground";
+import { getIsPremium } from "@/utils/access";
 import { supabase } from "@/utils/supabase";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -36,9 +37,11 @@ export default function ArticleDetail() {
     // Fetch article content and increment view count on component mount
     useEffect(() => {
         async function fetchArticle() {
+            const premium = await getIsPremium();
+
             const { data: article, error: articleError } = await supabase
                 .from("articles")
-                .select("id, content")
+                .select("id, content, free_access")
                 .eq("slug", slug)
                 .single();
             
@@ -50,11 +53,17 @@ export default function ArticleDetail() {
                             text: "Back",
                             style: "destructive",
                             onPress: () => {
-                                router.back();
+                                router.replace("/learn");
                             }
                         }
                     ]
                 );
+                return;
+            }
+
+            if (!premium && article.free_access === false) {
+                router.replace("/learn");
+                return;
             }
 
             setArticle(article);
@@ -76,7 +85,7 @@ export default function ArticleDetail() {
             <>
                 <StatusBar style="dark" />
                 <GradientBackground>
-                    <SafeAreaView edges={[ "left", "right" ]} style={styles.container}>
+                    <SafeAreaView edges={[ "left", "right" ]} style={[styles.container, { flex: 1 }]}>
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator size="large" color="#ad46ff" />
                         </View>

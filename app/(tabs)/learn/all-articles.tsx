@@ -1,6 +1,7 @@
 import ArticleTile from "@/components/ArticleTile";
 import GradientBackground from "@/components/GradientBackground";
 import Header from "@/components/Header";
+import { getIsPremium } from "@/utils/access";
 import { supabase } from "@/utils/supabase";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
@@ -16,6 +17,7 @@ type Article = {
     image: string; // Primary article image
     content: string;
     length?: number; // Content length in characters
+    free_access?: boolean;
 }
 
 /**
@@ -27,6 +29,8 @@ export default function AllArticles() {
     const [articles, setArticles] = useState<Article[]>([]);
     // Loading state while fetching articles
     const [pageLoading, setPageLoading] = useState<boolean>(true);
+    // Premium subscription status
+    const [isPremium, setIsPremium] = useState<boolean>(false);
 
     // Calculates estimated reading time based on content length
     function calculateReadTime(length: number): number {
@@ -36,9 +40,12 @@ export default function AllArticles() {
     // Fetch all articles on component mount
     useEffect(() => {
         async function fetchArticles() {
+            const premium = await getIsPremium();
+            setIsPremium(premium);
+
             const { data: articles, error: articlesError } = await supabase
                 .from("articles")
-                .select("id, slug, title, description, primary_image, content")
+                .select("id, slug, title, description, primary_image, content, free_access")
                 .eq("quick_tip", false)
                 .order("views", { ascending: false })
 
@@ -56,6 +63,7 @@ export default function AllArticles() {
                 image: article.primary_image,
                 content: article.content,
                 length: article.content.length,
+                free_access: article.free_access,
             })));
 
             setPageLoading(false);
@@ -86,7 +94,7 @@ export default function AllArticles() {
             />
             <SafeAreaView edges={[ "left", "right" ]} style={styles.container}>
                 <View style={styles.infoHeaderContainer}>
-                    <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => router.replace("/learn")}>
                         <ChevronLeft size={24} color="#2b7fff" />
                         <Text style={styles.backButtonText}>Back</Text>
                     </TouchableOpacity>
@@ -103,6 +111,18 @@ export default function AllArticles() {
                                 readTime={calculateReadTime(article.length)}
                                 image={article.image}
                                 slug={article.slug}
+                                locked={!isPremium && article.free_access === false}
+                                onPress={() => {
+                                    const locked = !isPremium && article.free_access === false;
+                                    if (locked) {
+                                        Alert.alert(
+                                            "Premium required",
+                                            "This article is only available to Scamly Premium users."
+                                        );
+                                        return;
+                                    }
+                                    router.push(`/learn/${article.slug}`);
+                                }}
                             />
                         ))}
                     </View>

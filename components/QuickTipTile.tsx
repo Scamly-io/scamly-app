@@ -5,11 +5,12 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 type QuickTipsTileProps = {
     slug: string;
     title: string;
-    description: string;
     icon: string;
     iconColour: string;
     iconBackground: string;
     readMoreVisible: boolean;
+    locked?: boolean;
+    onPress?: () => void;
 }
 
 type DynamicIconProps = {
@@ -20,11 +21,7 @@ type DynamicIconProps = {
 
 // Helper function to allow the icons to be pulled from the database
 function DynamicIcon({name, size = 24, color}: DynamicIconProps) {
-
-    // If the name is not capitalised then it wont render
-    const formattedName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-
-    const IconComponent = (Icons as Record<string, any>)[formattedName];
+    const IconComponent = (Icons as Record<string, any>)[name];
 
     if (!IconComponent) {
         return <Icons.HelpCircle size={size} color={color} />;
@@ -33,12 +30,24 @@ function DynamicIcon({name, size = 24, color}: DynamicIconProps) {
     return <IconComponent size={size} color={color} />;
 }
 
-export default function QuickTipTile({ slug, title, description, icon, iconColour, iconBackground, readMoreVisible }: QuickTipsTileProps) {
+export default function QuickTipTile({
+    slug,
+    title,
+    icon,
+    iconColour,
+    iconBackground,
+    readMoreVisible,
+    locked = false,
+    onPress,
+}: QuickTipsTileProps) {
     return (
-        <TouchableOpacity style={styles.quickTipsItem} onPress={() => router.push(`/learn/${slug}`)}>
+        <TouchableOpacity
+            style={[styles.quickTipsItem, locked ? styles.locked : null]}
+            onPress={onPress ?? (() => router.push(`/learn/${slug}`))}
+            activeOpacity={0.8}
+        >
             <View style={styles.quickTipsItemContent}>
                 <Text style={styles.quickTipsItemTitle}>{title}</Text>
-                <Text style={styles.quickTipsItemDescription}>{description}</Text>
                 {readMoreVisible && (
                     <View style={styles.quickTipsItemButton}>
                         <Text style={styles.quickTipsItemButtonText}>Read More</Text>
@@ -68,6 +77,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.15,
         shadowRadius: 4,
         elevation: 4,
+    },
+    locked: {
+        opacity: 0.45,
     },
     quickTipsItemContent: {
         display: "flex",

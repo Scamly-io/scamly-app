@@ -49,7 +49,7 @@ export default function Home() {
         async function fetchPageData() {
 
             // Fetch the user's profile data.
-            async function getUser() {
+            async function getUser(): Promise<boolean> {
                 const { data: { user }, error: userError } = await supabase.auth.getUser();
     
                 if (userError || !user) {
@@ -66,6 +66,7 @@ export default function Home() {
                             }
                         ]
                     );
+                    return false;
                 }
                 
                 const { data: profileData, error: profileError } = await supabase
@@ -77,26 +78,33 @@ export default function Home() {
                 if (profileError || !profileData) {
                     console.error("Error fetching profile:", profileError);
                     setUserName("")
+                    return false;
                 }
 
                 // subscription_plan will only be one of "free", "premium-monthly", or "premium-yearly"
-                if (profileData.subscription_plan !== "free") {
-                    setIsPremium(true);
-                }
+                const premium = profileData.subscription_plan !== "free";
+                setIsPremium(premium);
     
                 // Include the "," in userName to separate from the "Hi" in the header.
                 // This way if the name collection fails, the user will just see "Hi" rather than "Hi, "
                 setUserName(`, ${profileData.first_name}`); 
+                return premium;
             }
     
             // Fetch the top 2 trending articles ordered by view count.
-            async function getTrendingArticles() {
-                const { data: trendingArticles, error: trendingArticlesError } = await supabase
+            async function getTrendingArticles(premium: boolean) {
+                let query = supabase
                     .from("articles")
                     .select("id, title, primary_image, description, slug, content")
                     .order("views", { ascending: false })
                     .eq("quick_tip", false)
-                    .limit(2)
+                    .limit(2);
+
+                if (!premium) {
+                    query = query.eq("free_access", true);
+                }
+
+                const { data: trendingArticles, error: trendingArticlesError } = await query;
                 
                 if (!trendingArticles || trendingArticlesError) {
                     console.error("Error fetching trending articles:", trendingArticlesError);
@@ -114,13 +122,19 @@ export default function Home() {
             }
 
             // Fetch the top 3 quick tips articles ordered by view count.
-            async function getQuickTips() {
-                const { data: quickTips, error: quickTipsError } = await supabase
+            async function getQuickTips(premium: boolean) {
+                let query = supabase
                     .from("articles")
                     .select("id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour")
                     .eq("quick_tip", true)
                     .order("views", { ascending: false })
-                    .limit(3)
+                    .limit(3);
+
+                if (!premium) {
+                    query = query.eq("free_access", true);
+                }
+
+                const { data: quickTips, error: quickTipsError } = await query;
                 
                 if (!quickTips || quickTipsError) {
                     console.error("Error fetching quick tips:", quickTipsError);
@@ -138,7 +152,8 @@ export default function Home() {
                 }
             }
 
-            await Promise.all([getUser(), getTrendingArticles(), getQuickTips()])
+            const premium = await getUser();
+            await Promise.all([getTrendingArticles(premium), getQuickTips(premium)])
             setLoading(false);
         }
         fetchPageData();
@@ -212,7 +227,7 @@ export default function Home() {
                             <TrendingUp size={24} color="#ad46ff" />
                             <Text style={styles.sectionTitle}>Trending Articles</Text>
                         </View>
-                        <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn")}>
+                        <TouchableOpacity style={styles.navMoreButton} onPress={() => router.push("/learn/all-articles")}>
                             <Text style={styles.navMoreButtonText}>View All</Text>
                         </TouchableOpacity>
                     </View>

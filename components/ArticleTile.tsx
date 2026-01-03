@@ -8,11 +8,25 @@ type ArticleTileProps = {
     readTime: number;
     image: string;
     slug: string;
+    locked?: boolean;
+    onPress?: () => void;
 }
 
-export default function ArticleTile({ title, description, readTime, image, slug }: ArticleTileProps) {
+export default function ArticleTile({
+    title,
+    description,
+    readTime,
+    image,
+    slug,
+    locked = false,
+    onPress,
+}: ArticleTileProps) {
     return (
-        <TouchableOpacity style={styles.container} onPress={() => router.push(`/learn/${slug}`)}>
+        <TouchableOpacity
+            style={[styles.container, locked ? styles.locked : null]}
+            onPress={onPress ?? (() => router.push(`/learn/${slug}`))}
+            activeOpacity={0.8}
+        >
             <Image source={{ uri: image }} style={styles.image} />
             <View style={styles.detailsContainer}>
                 <Text style={styles.title}>{title}</Text>
@@ -31,6 +45,9 @@ const styles = StyleSheet.create({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+    },
+    locked: {
+        opacity: 0.45,
     },
     image: {
         width: "100%",
