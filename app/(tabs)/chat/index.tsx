@@ -1,543 +1,507 @@
-import GradientBackgound from "@/components/GradientBackground";
-import Header from "@/components/Header";
+import Button from "@/components/Button";
+import Card from "@/components/Card";
+import ThemedBackground from "@/components/ThemedBackground";
+import { useTheme } from "@/theme";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
-import { Clock3, Lock, Plus, Trash2 } from "lucide-react-native";
+import { Clock3, Lock, Plus, Trash2, MessageCircle } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Animated, { FadeIn, FadeInDown, FadeInRight } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type Chat = {
-    id: string;
-    created_at: string; // Timestamp when the chat was created
-    last_message: string | null; // Most recent message in the chat
-}
+  id: string;
+  created_at: string;
+  last_message: string | null;
+};
 
-/**
- * Chat index screen component displaying a list of all user's chat conversations.
- * Allows users to create new chats, view existing chats, and delete chats.
- */
 export default function ChatIndex() {
-    // List of all user's chat conversations
-    const [chats, setChats] = useState<Chat[]>([]);
-    // Loading state while fetching chats
-    const [loading, setLoading] = useState(true);
-    // Subscription plan state
-    const [planLoading, setPlanLoading] = useState(true);
-    const [isFreePlan, setIsFreePlan] = useState(false);
+  const { colors, radius, shadows, isDark } = useTheme();
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [isFreePlan, setIsFreePlan] = useState(false);
 
-    const formatDate = (iso?: string) => {
-        if (!iso) return "";
-        const date = new Date(iso);
-        return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const formatDate = (iso?: string) => {
+    if (!iso) return "";
+    const date = new Date(iso);
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const formatTime = (iso?: string) => {
+    if (!iso) return "";
+    const date = new Date(iso);
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  };
+
+  const fetchSubscriptionPlan = async () => {
+    setPlanLoading(true);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("No user:", userError);
+      Alert.alert("Error", "No user found");
+      setPlanLoading(false);
+      return null;
     }
 
-    const formatTime = (iso?: string) => {
-        if (!iso) return "";
-        const date = new Date(iso);
-        return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("subscription_plan")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError) {
+      console.error("Error fetching user profile:", profileError);
+      Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+      setPlanLoading(false);
+      return null;
     }
 
-    const fetchSubscriptionPlan = async () => {
-        setPlanLoading(true);
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            console.error("No user:", userError);
-            Alert.alert("Error", "No user found");
-            setPlanLoading(false);
-            return null;
-        }
+    setIsFreePlan(profile.subscription_plan === "free");
+    setPlanLoading(false);
+    return profile.subscription_plan;
+  };
 
-        const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("subscription_plan")
-            .eq("id", user.id)
-            .single();
+  const fetchChats = async () => {
+    setLoading(true);
 
-        if (profileError) {
-            console.error("Error fetching user profile:", profileError);
-            Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
-            setPlanLoading(false);
-            return null;
-        }
-
-        setIsFreePlan(profile.subscription_plan === "free");
-        setPlanLoading(false);
-        return profile.subscription_plan;
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("No user:", userError);
+      Alert.alert("Error", "No user found");
+      setLoading(false);
+      return;
     }
 
-    // Fetches all chat conversations for the current user
-    const fetchChats = async () => {
-        setLoading(true);
-        
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            console.error("No user:", userError);
-            Alert.alert("Error", "No user found");
-            setLoading(false);
-            return;
-        }
+    const { data, error } = await supabase
+      .from("chats")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
 
-        const { data, error } = await supabase
-            .from("chats")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
-        
-        if (error) {
-            console.error("Error fetching chats:", error);
-        } else {
-            setChats(data || []);
-        }
-
-        setLoading(false);
+    if (error) {
+      console.error("Error fetching chats:", error);
+    } else {
+      setChats(data || []);
     }
 
-    // Fetch chats on mount and subscribe to real-time updates
-    useEffect(() => {
-        fetchSubscriptionPlan().then(() => fetchChats());
+    setLoading(false);
+  };
 
-        // Subscribe to real-time updates for chat changes
-        const channel = supabase
-            .channel("chats-changes")
-            .on(
-                "postgres_changes",
-                { event: "UPDATE", schema: "public", table: "chats" },
-                (payload) => {
-                    setChats((prev) =>
-                        prev.map((chat) =>
-                            chat.id === payload.new.id ? { ...chat, ...payload.new } : chat
-                        )
-                    );
-                }
-            )
-            .subscribe();
+  useEffect(() => {
+    fetchSubscriptionPlan().then(() => fetchChats());
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, []);
-
-    // Refetch chats when screen comes into focus
-    useFocusEffect(
-        React.useCallback(() => {
-            fetchSubscriptionPlan().then(() => fetchChats());
-        }, [])
-    );
-
-    const sortedChats = useMemo(() => {
-        return [...chats].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    }, [chats]);
-
-    // Creates a new chat conversation and navigates to it
-    async function createNewChat() {
-        if (isFreePlan) {
-            Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
-            return;
-        }
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            console.error("No user:", userError);
-            Alert.alert("Error", "No user found");
-            return;
-        }
-        
-        const { data, error } = await supabase
-            .from("chats")
-            .insert([{ user_id: user.id }])
-            .select()
-            .single();
-
-        if (error) {
-            console.error("Error creating chat:", error);
-            Alert.alert("Error", "Could not create new chat");
-            return null;
-        }
-
-        setChats([...chats, data]);
-        router.push(`/chat/${data.id}`);
-
-        // Create OpenAI conversation ID for the new chat (non-blocking)
-        try {
-            fetch("https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/create-cid", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chatId: data.id })
-            });
-        } catch (error) {
-            console.error("Error creating conversation ID:", error);
-            Alert.alert("Error", "There was an error creating your new chat. Please exit and try again.");
-        }
-    }
-
-    // Deletes a chat conversation after user confirmation
-    async function deleteChat(chatId: string) {
-        if (isFreePlan) {
-            Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
-            return;
-        }
-        Alert.alert("Delete Chat", "Are you sure you want to delete this chat? This action cannot be undone.",
-            [
-                {
-                    text: "Cancel",
-                    style: "cancel"
-                },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
-
-                            const res = await fetch("https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/delete-cid", {
-                                method: "DELETE",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ chatId: chatId })
-                            })
-
-                            const { error: delChatError } = await supabase
-                                .from("chats")
-                                .delete()
-                                .eq("id", chatId)
-
-                            // BROKEN LOGIC - needs fixing
-                            if (delChatError) {
-                                console.error("Error deleting chat:", delChatError);
-                                return;
-                            }
-                            if (!res.ok) {
-                                console.error("Error deleting conversation ID:", res.statusText);
-                                return;
-                            }
-
-                        } catch (error) {
-                            console.error("Uncaught chat:", error);
-                            Alert.alert("Error", "Could not delete chat");
-                        }
-                    }
-                }
-            ]
+    const channel = supabase
+      .channel("chats-changes")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chats" }, (payload) => {
+        setChats((prev) =>
+          prev.map((chat) => (chat.id === payload.new.id ? { ...chat, ...payload.new } : chat))
         );
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchSubscriptionPlan().then(() => fetchChats());
+    }, [])
+  );
+
+  const sortedChats = useMemo(() => {
+    return [...chats].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [chats]);
+
+  async function createNewChat() {
+    if (isFreePlan) {
+      Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
+      return;
+    }
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("No user:", userError);
+      Alert.alert("Error", "No user found");
+      return;
     }
 
-    return (
-        <GradientBackgound>
-            <Header 
-                title="AI Chat" 
-                imageUrl={require("@/assets/images/page-images/chat.png")} 
-                subtitle="Discuss scams, fraud, and cyber crime." 
-            />
-            <SafeAreaView edges={[ "left", "right", "bottom" ]} style={styles.container}>
-                <View style={styles.content}>
-                    <View style={styles.titleContainer}>
-                        <View>
-                            <Text style={styles.title}>Your conversations</Text>
-                            <Text style={styles.subtitle}>Pick up where you left off or start fresh.</Text>
-                        </View>
-                        <TouchableOpacity
-                            onPress={createNewChat}
-                            style={[styles.createChatButton, isFreePlan ? { opacity: 0.5 } : null]}
-                            disabled={isFreePlan}
-                        >
-                            <Plus size={18} color="white" />
-                            <Text style={styles.createChatButtonText}>New chat</Text>
-                        </TouchableOpacity>
-                    </View>
+    const { data, error } = await supabase
+      .from("chats")
+      .insert([{ user_id: user.id }])
+      .select()
+      .single();
 
-                    <View style={styles.separator} />
+    if (error) {
+      console.error("Error creating chat:", error);
+      Alert.alert("Error", "Could not create new chat");
+      return null;
+    }
 
-                    { loading || planLoading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color="#5426F8" />
-                        </View>
-                    ) : sortedChats.length === 0 ? (
-                        <View style={styles.emptyState}>
-                            <View style={styles.emptyBadge}>
-                                <Clock3 size={16} color="#2563EB" />
-                                <Text style={styles.emptyBadgeText}>No conversations yet</Text>
-                            </View>
-                            <Text style={styles.emptyTitle}>Start a new discussion</Text>
-                            <Text style={styles.emptyCopy}>Ask Scamly about scams, fraud, or cyber crime to get tailored guidance.</Text>
-                            <TouchableOpacity
-                                onPress={createNewChat}
-                                style={[styles.createChatButtonLarge, isFreePlan ? { opacity: 0.5 } : null]}
-                                disabled={isFreePlan}
-                            >
-                                <Plus size={18} color="white" />
-                                <Text style={styles.createChatButtonText}>Start chatting</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <FlatList
-                            data={sortedChats}
-                            keyExtractor={(item) => item.id}
-                            style={styles.flatList}
-                            contentContainerStyle={styles.flatListContent}
-                            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-                            renderItem={({ item }) => (
-                                <View style={styles.card}>
-                                    {isFreePlan ? (
-                                        <Pressable style={styles.cardBody} disabled>
-                                            <View style={styles.cardHeader}>
-                                                <Text style={styles.chatDate}>{formatDate(item.created_at)}</Text>
-                                                <View style={styles.pill}>
-                                                    <Text style={styles.pillText}>Saved</Text>
-                                                </View>
-                                            </View>
-                                            <Text style={styles.chatMessage} numberOfLines={2}>
-                                                {item.last_message || "No messages yet"}
-                                            </Text>
-                                            <View style={styles.cardFooter}>
-                                                <View style={styles.timestampRow}>
-                                                    <Clock3 size={14} color="#6B7280" />
-                                                    <Text style={styles.chatTime}>{formatTime(item.created_at)}</Text>
-                                                </View>
-                                            </View>
-                                        </Pressable>
-                                    ) : (
-                                        <Link href={`/chat/${item.id}`} asChild>
-                                            <Pressable style={styles.cardBody}>
-                                                <View style={styles.cardHeader}>
-                                                    <Text style={styles.chatDate}>{formatDate(item.created_at)}</Text>
-                                                    <View style={styles.pill}>
-                                                        <Text style={styles.pillText}>Saved</Text>
-                                                    </View>
-                                                </View>
-                                                <Text style={styles.chatMessage} numberOfLines={2}>
-                                                    {item.last_message || "No messages yet"}
-                                                </Text>
-                                                <View style={styles.cardFooter}>
-                                                    <View style={styles.timestampRow}>
-                                                        <Clock3 size={14} color="#6B7280" />
-                                                        <Text style={styles.chatTime}>{formatTime(item.created_at)}</Text>
-                                                    </View>
-                                                </View>
-                                            </Pressable>
-                                        </Link>
-                                    )}
-                                    <TouchableOpacity
-                                        onPress={() => deleteChat(item.id)}
-                                        style={[styles.deleteButton, isFreePlan ? { opacity: 0.5 } : null]}
-                                        disabled={isFreePlan}
-                                    >
-                                        <Trash2 size={18} color="white" />
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        />
-                    )}
-                    {isFreePlan && !planLoading && (
-                        <View style={styles.lockOverlay}>
-                            <Lock size={40} color="white" />
-                            <Text style={styles.lockOverlayTitle}>The AI Chat feature is for paid plans only.</Text>
-                            <Text style={styles.lockOverlayText}>Upgrade to utilise Scamly's advanced AI model designed specifically for discussing scams and fraud.</Text>
-                        </View>
-                    )}
-                    
+    setChats([...chats, data]);
+    router.push(`/chat/${data.id}`);
+
+    try {
+      fetch("https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/create-cid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId: data.id }),
+      });
+    } catch (error) {
+      console.error("Error creating conversation ID:", error);
+      Alert.alert(
+        "Error",
+        "There was an error creating your new chat. Please exit and try again."
+      );
+    }
+  }
+
+  async function deleteChat(chatId: string) {
+    if (isFreePlan) {
+      Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
+      return;
+    }
+    Alert.alert("Delete Chat", "Are you sure you want to delete this chat?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setChats((prevChats) => prevChats.filter((chat) => chat.id !== chatId));
+
+            await fetch(
+              "https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/delete-cid",
+              {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chatId: chatId }),
+              }
+            );
+
+            await supabase.from("chats").delete().eq("id", chatId);
+          } catch (error) {
+            console.error("Error deleting chat:", error);
+            Alert.alert("Error", "Could not delete chat");
+          }
+        },
+      },
+    ]);
+  }
+
+  return (
+    <ThemedBackground>
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        {/* Header */}
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>AI Chat</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+              Discuss scams, fraud, and cyber crime
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={createNewChat}
+            style={[
+              styles.newChatButton,
+              {
+                backgroundColor: colors.accent,
+                borderRadius: radius.full,
+                opacity: isFreePlan ? 0.5 : 1,
+              },
+            ]}
+            disabled={isFreePlan}
+          >
+            <Plus size={20} color={colors.textInverse} />
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Content */}
+        <View style={styles.content}>
+          {loading || planLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.accent} />
+            </View>
+          ) : sortedChats.length === 0 ? (
+            <Animated.View entering={FadeIn.duration(400)}>
+              <Card style={styles.emptyState} pressable={false}>
+                <View
+                  style={[styles.emptyIconContainer, { backgroundColor: colors.accentMuted }]}
+                >
+                  <MessageCircle size={32} color={colors.accent} />
                 </View>
-            </SafeAreaView>
-        </GradientBackgound>
-    )
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                  No conversations yet
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                  Start a new chat to get tailored guidance on scams and fraud
+                </Text>
+                <Button
+                  onPress={createNewChat}
+                  disabled={isFreePlan}
+                  icon={<Plus size={18} color={colors.textInverse} />}
+                  style={{ marginTop: 8 }}
+                >
+                  Start chatting
+                </Button>
+              </Card>
+            </Animated.View>
+          ) : (
+            <FlatList
+              data={sortedChats}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+              renderItem={({ item, index }) => (
+                <Animated.View entering={FadeInRight.duration(300).delay(index * 50)}>
+                  <Card style={styles.chatCard}>
+                    {isFreePlan ? (
+                      <View style={styles.chatCardBody}>
+                        <View style={styles.chatCardHeader}>
+                          <Text style={[styles.chatDate, { color: colors.textPrimary }]}>
+                            {formatDate(item.created_at)}
+                          </Text>
+                          <View
+                            style={[styles.chatPill, { backgroundColor: colors.accentMuted }]}
+                          >
+                            <Text style={[styles.chatPillText, { color: colors.accent }]}>
+                              Saved
+                            </Text>
+                          </View>
+                        </View>
+                        <Text
+                          style={[styles.chatMessage, { color: colors.textSecondary }]}
+                          numberOfLines={2}
+                        >
+                          {item.last_message || "No messages yet"}
+                        </Text>
+                        <View style={styles.chatCardFooter}>
+                          <Clock3 size={14} color={colors.textTertiary} />
+                          <Text style={[styles.chatTime, { color: colors.textTertiary }]}>
+                            {formatTime(item.created_at)}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <Link href={`/chat/${item.id}`} asChild>
+                        <Pressable style={styles.chatCardBody}>
+                          <View style={styles.chatCardHeader}>
+                            <Text style={[styles.chatDate, { color: colors.textPrimary }]}>
+                              {formatDate(item.created_at)}
+                            </Text>
+                            <View
+                              style={[styles.chatPill, { backgroundColor: colors.accentMuted }]}
+                            >
+                              <Text style={[styles.chatPillText, { color: colors.accent }]}>
+                                Saved
+                              </Text>
+                            </View>
+                          </View>
+                          <Text
+                            style={[styles.chatMessage, { color: colors.textSecondary }]}
+                            numberOfLines={2}
+                          >
+                            {item.last_message || "No messages yet"}
+                          </Text>
+                          <View style={styles.chatCardFooter}>
+                            <Clock3 size={14} color={colors.textTertiary} />
+                            <Text style={[styles.chatTime, { color: colors.textTertiary }]}>
+                              {formatTime(item.created_at)}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      </Link>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => deleteChat(item.id)}
+                      style={[
+                        styles.deleteButton,
+                        {
+                          backgroundColor: colors.errorMuted,
+                          borderRadius: radius.md,
+                          opacity: isFreePlan ? 0.5 : 1,
+                        },
+                      ]}
+                      disabled={isFreePlan}
+                    >
+                      <Trash2 size={18} color={colors.error} />
+                    </TouchableOpacity>
+                  </Card>
+                </Animated.View>
+              )}
+            />
+          )}
+
+          {/* Lock Overlay */}
+          {isFreePlan && !planLoading && (
+            <View style={[styles.lockOverlay, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
+              <Lock size={40} color="white" />
+              <Text style={styles.lockTitle}>AI Chat is for paid plans</Text>
+              <Text style={styles.lockSubtitle}>
+                Upgrade to utilise Scamly's advanced AI model for discussing scams and fraud
+              </Text>
+            </View>
+          )}
+        </View>
+      </SafeAreaView>
+    </ThemedBackground>
+  );
 }
 
 const styles = StyleSheet.create({
-    loadingContainer: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    container: {
-        flex: 1,
-        padding: 16,
-    },
-    content: {
-        flex: 1,
-        padding: 16,
-        backgroundColor: "rgba(255,255,255,0.85)",
-        borderRadius: 20,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-        elevation: 8,
-    },
-    titleContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        marginBottom: 12,
-    },
-    title: {
-        fontSize: 22,
-        fontFamily: "Poppins-Bold",
-        color: "#0F172A",
-    },
-    subtitle: {
-        fontSize: 14,
-        fontFamily: "Poppins-Regular",
-        color: "#475569",
-        marginTop: 4,
-    },
-    createChatButton: {
-        backgroundColor: "#2563EB",
-        borderRadius: 999,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    createChatButtonLarge: {
-        backgroundColor: "#2563EB",
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        marginTop: 12,
-    },
-    createChatButtonText: {
-        color: "white",
-        fontFamily: "Poppins-Bold",
-    },
-    separator: {
-        height: 1,
-        backgroundColor: "rgba(15, 23, 42, 0.08)",
-        marginBottom: 16,
-    },
-    flatList: {
-        flex: 1,
-    },
-    flatListContent: {
-        paddingBottom: 8,
-    },
-    card: {
-        backgroundColor: "white",
-        borderRadius: 16,
-        padding: 16,
-        shadowColor: "#0F172A",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
-        borderWidth: 1,
-        borderColor: "rgba(15, 23, 42, 0.06)",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-    },
-    cardBody: {
-        flex: 1,
-        gap: 8,
-    },
-    cardHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-    },
-    cardFooter: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-    },
-    chatDate: {
-        fontSize: 14,
-        fontFamily: "Poppins-SemiBold",
-        color: "#0F172A",
-    },
-    chatTime: {
-        fontSize: 13,
-        fontFamily: "Poppins-Regular",
-        color: "#6B7280",
-        marginLeft: 6,
-    },
-    chatMessage: {
-        color: "#1F2937",
-        fontFamily: "Poppins-Regular",
-        fontSize: 15,
-        lineHeight: 22,
-    },
-    timestampRow: {
-        flexDirection: "row",
-        alignItems: "center",
-    },
-    pill: {
-        backgroundColor: "rgba(37, 99, 235, 0.1)",
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 999,
-    },
-    pillText: {
-        color: "#1D4ED8",
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 12,
-    },
-    deleteButton: {
-        padding: 10,
-        backgroundColor: "#EF4444",
-        borderRadius: 12,
-    },
-    lockOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: "rgba(0,0,0,0.6)",
-        borderRadius: 20,
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        paddingHorizontal: 24,
-    },
-    lockOverlayTitle: {
-        color: "white",
-        fontFamily: "Poppins-Bold",
-        fontSize: 18,
-        textAlign: "center",
-    },
-    lockOverlayText: {
-        color: "white",
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        textAlign: "center",
-    },
-    emptyState: {
-        backgroundColor: "white",
-        borderRadius: 16,
-        padding: 20,
-        alignItems: "flex-start",
-        gap: 10,
-        borderWidth: 1,
-        borderColor: "rgba(37, 99, 235, 0.12)",
-        shadowColor: "#0F172A",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 3,
-    },
-    emptyBadge: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        backgroundColor: "rgba(37, 99, 235, 0.08)",
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 999,
-    },
-    emptyBadgeText: {
-        color: "#1D4ED8",
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 12,
-    },
-    emptyTitle: {
-        fontSize: 18,
-        fontFamily: "Poppins-Bold",
-        color: "#0F172A",
-    },
-    emptyCopy: {
-        fontSize: 14,
-        fontFamily: "Poppins-Regular",
-        color: "#475569",
-        lineHeight: 20,
-    },
-})
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  headerTitle: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 28,
+  },
+  headerSubtitle: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    marginTop: 2,
+  },
+  newChatButton: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    position: "relative",
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyState: {
+    alignItems: "center",
+    padding: 32,
+    gap: 12,
+  },
+  emptyIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 18,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: 16,
+  },
+  listContent: {
+    paddingBottom: 24,
+  },
+  chatCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  chatCardBody: {
+    flex: 1,
+    gap: 8,
+  },
+  chatCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  chatDate: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 14,
+  },
+  chatPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  chatPillText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 11,
+  },
+  chatMessage: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  chatCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  chatTime: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 12,
+  },
+  deleteButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    paddingHorizontal: 32,
+    borderRadius: 20,
+  },
+  lockTitle: {
+    color: "white",
+    fontFamily: "Poppins-Bold",
+    fontSize: 20,
+    textAlign: "center",
+  },
+  lockSubtitle: {
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+});

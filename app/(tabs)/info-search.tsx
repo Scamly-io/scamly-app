@@ -1,461 +1,574 @@
-import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
+import Button from "@/components/Button";
+import Card from "@/components/Card";
+import ThemedBackground from "@/components/ThemedBackground";
+import { useTheme } from "@/theme";
 import { supabase } from "@/utils/supabase";
-import { LinearGradient } from "expo-linear-gradient";
-import { ExternalLink, Globe, Lock, Phone } from "lucide-react-native";
+import { ExternalLink, Globe, Info, Lock, Phone, Search } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+    ActivityIndicator,
+    Alert,
+    Linking,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-/**
- * Info Search screen component allowing users to search for company contact information.
- * Users can search by company name to find website, local phone, and international phone numbers.
- */
 export default function PhoneSearch() {
-    // User's search input text
-    const [searchInput, setSearchInput] = useState("");
-    // Whether to display search results
-    const [showResults, setShowResults] = useState(false);
-    // Loading state during search API call
-    const [isLoading, setIsLoading] = useState(false);
-    // Company information returned from the search
-    const [resultData, setResultData] = useState(null);
-    // Error message if search fails
-    const [error, setError] = useState(null);
-    // Whether to show the "how to use" modal
-    const [showModal, setShowModal] = useState(false);
-    // Subscription plan state
-    const [planLoading, setPlanLoading] = useState(true);
-    // Free plan state
-    const [isFreePlan, setIsFreePlan] = useState<Boolean>(false);
-    // Current user ID
-    const [userId, setUserId] = useState<String>("");
+  const { colors, radius, shadows, isDark } = useTheme();
+  const [searchInput, setSearchInput] = useState("");
+  const [showResults, setShowResults] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [resultData, setResultData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [isFreePlan, setIsFreePlan] = useState<Boolean>(false);
+  const [userId, setUserId] = useState<String>("");
 
-    useEffect(() => {
-        const fetchSubscriptionPlan = async () => {
-            setPlanLoading(true);
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-            if (userError || !user) {
-                console.error("No user:", userError);
-                Alert.alert("Error", "No user found");
-                setPlanLoading(false);
-                return;
-            }
+  useEffect(() => {
+    const fetchSubscriptionPlan = async () => {
+      setPlanLoading(true);
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("No user:", userError);
+        Alert.alert("Error", "No user found");
+        setPlanLoading(false);
+        return;
+      }
 
-            setUserId(user.id);
+      setUserId(user.id);
 
-            const { data: profile, error: profileError } = await supabase
-                .from("profiles")
-                .select("subscription_plan")
-                .eq("id", user.id)
-                .single();
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("subscription_plan")
+        .eq("id", user.id)
+        .single();
 
-            if (profileError) {
-                console.error("Error fetching user profile:", profileError);
-                Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
-                setPlanLoading(false);
-                return;
-            }
+      if (profileError) {
+        console.error("Error fetching user profile:", profileError);
+        Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+        setPlanLoading(false);
+        return;
+      }
 
-            setIsFreePlan(profile.subscription_plan === "free");
-            setPlanLoading(false);
-        }
+      setIsFreePlan(profile.subscription_plan === "free");
+      setPlanLoading(false);
+    };
 
-        fetchSubscriptionPlan();
-    }, []);
+    fetchSubscriptionPlan();
+  }, []);
 
-    // Handles the company search API call and displays results
-    async function handleSearch() {
-        if (isFreePlan) {
-            Alert.alert("Upgrade required", "Info Search is available on paid plans.");
-            return;
-        }
-        if (!searchInput.trim()) return;
-
-        setIsLoading(true);
-        setError(null);
-        setShowResults(false);
-
-        try {
-            const response = await fetch('https://1tee7jgtpg.execute-api.ap-southeast-2.amazonaws.com/dev/search', {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyName: searchInput.trim(), userId })
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error); // Change this to UX friendly error message
-            }
-
-            setResultData(result);
-            setShowResults(true);
-        } catch (err) {
-            console.error("Error searching: ", err)
-            setError("Failed to fetch company information. Please try again later.")
-        } finally {
-            setIsLoading(false);
-        }
+  async function handleSearch() {
+    if (isFreePlan) {
+      Alert.alert("Upgrade required", "Info Search is available on paid plans.");
+      return;
     }
+    if (!searchInput.trim()) return;
 
-    // Extract company data from the search results
-    const company = resultData?.data || null;
+    setIsLoading(true);
+    setError(null);
+    setShowResults(false);
 
-    return (
-        <CollapsibleHeaderScreen
-            headerProps={{
-                title: "Info Search",
-                imageUrl: require("@/assets/images/page-images/phone-search.png"),
-                subtitle: "Find contact info for any organisation worldwide.",
-            }}
-            contentContainerStyle={{ flexGrow: 1 }}
+    try {
+      const response = await fetch(
+        "https://1tee7jgtpg.execute-api.ap-southeast-2.amazonaws.com/dev/search",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyName: searchInput.trim(), userId }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error);
+      }
+
+      setResultData(result);
+      setShowResults(true);
+    } catch (err) {
+      console.error("Error searching: ", err);
+      setError("Failed to fetch company information. Please try again later.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const company = resultData?.data || null;
+
+  return (
+    <ThemedBackground>
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
         >
-            <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
-                    <View style={styles.searchContainer}>
-                        <TouchableOpacity onPress={() => setShowModal(true)}>
-                            <Text style={styles.howToUseText}>How to use this feature</Text>
-                        </TouchableOpacity>
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="Enter a company name"
-                            placeholderTextColor="#171924"
-                            returnKeyType="search"
-                            value={searchInput}
-                            onChangeText={setSearchInput}
-                            onSubmitEditing={handleSearch}
-                            editable={!isFreePlan}
-                            selectTextOnFocus={!isFreePlan}
-                        />
-                        <TouchableOpacity
-                            onPress={handleSearch}
-                            style={{ opacity: searchInput.trim() && !isFreePlan ? 1 : 0.5 }}
-                            disabled={isFreePlan}
-                        >
-                            <LinearGradient
-                                colors={["#5426F8", "#CF68FF"]}
-                                start={{ x: 0, y: 0.5 }}
-                                end={{ x: 1, y: 0.5 }}
-                                style={styles.searchButtonGradient}
-                                disabled={!searchInput.trim() || isFreePlan}
-                            >
-                                <Text style={styles.searchButtonText}>Search</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                        {isFreePlan && !planLoading && (
-                            <View style={styles.lockOverlay}>
-                                <Lock size={32} color="white" />
-                                <Text style={styles.lockOverlayTitle}>The Info Search feature is for paid plans only.</Text>
-                                <Text style={styles.lockOverlayText}>Upgrade to utilise Scamly's global company contact information search tool.</Text>
-                            </View>
-                        )}
-                    </View>
+          {/* Header */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Info Search</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+              Find contact info for any organisation worldwide
+            </Text>
+          </Animated.View>
 
-                    {/* Results */}
-                    <View style={styles.elevatedBoxContainer}>
-                        {isLoading || planLoading ? (
-                            <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-                                <ActivityIndicator size="large" color="#5426F8" />
-                            </View>
-                        ) : error ? (
-                            <Text style={{ textAlign: "center", color: "red", fontFamily: "Poppins-Regular" }}>
-                                {error}
-                            </Text>
-                        ) : showResults && company ? (
-                            <>
-                                <Text style={styles.companyName}>{company.company_name}</Text>
-                                <View style={styles.separator} />
-                                <View style={styles.companyInfoContainer}>
+          {/* Search Card */}
+          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+            <Card style={styles.searchCard} pressable={false}>
+              <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
+                <Info size={16} color={colors.accent} />
+                <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                  How to use this feature
+                </Text>
+              </TouchableOpacity>
 
-                                    {/* Website */}
-                                    <View style={styles.companyInfoItem}>
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                            <Globe size={18} color="#8B5CF6" />
-                                            <View>
-                                                <Text style={styles.companyInfoItemTitle}>Website</Text>
-                                                <Text style={styles.companyInfoItemValue}>
-                                                    {company.website_domain !== "0"
-                                                        ? `www.${company.website_domain}`
-                                                        : "Not found"}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        {company.website_domain !== "0" && (
-                                            <TouchableOpacity
-                                                onPress={() =>
-                                                    Linking.openURL(`https://${company.website_domain}`)
-                                                }
-                                            >
-                                                <ExternalLink size={24} color="#9CA3AF" />
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
+              <View
+                style={[
+                  styles.searchInputContainer,
+                  {
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
+                    borderRadius: radius.lg,
+                  },
+                ]}
+              >
+                <Search size={20} color={colors.textTertiary} />
+                <TextInput
+                  style={[styles.searchInput, { color: colors.textPrimary }]}
+                  placeholder="Enter a company name"
+                  placeholderTextColor={colors.textTertiary}
+                  returnKeyType="search"
+                  value={searchInput}
+                  onChangeText={setSearchInput}
+                  onSubmitEditing={handleSearch}
+                  editable={!isFreePlan}
+                  selectTextOnFocus={!isFreePlan}
+                />
+              </View>
 
-                                    {/* Local Phone */}
-                                    <View style={styles.companyInfoItem}>
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                            <Phone size={18} color="#3B82F6" />
-                                            <View>
-                                                <Text style={styles.companyInfoItemTitle}>Local Phone</Text>
-                                                <Text style={styles.companyInfoItemValue}>
-                                                    {company.local_phone_number !== "0"
-                                                        ? company.local_phone_number
-                                                        : "Not found"}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    </View>
+              <Button
+                onPress={handleSearch}
+                disabled={!searchInput.trim() || !!isFreePlan}
+                loading={isLoading}
+                fullWidth
+              >
+                Search
+              </Button>
 
-                                    {/* International Phone */}
-                                    <View style={styles.companyInfoItem}>
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-                                            <Phone size={18} color="#EC4899" />
-                                            <View>
-                                                <Text style={styles.companyInfoItemTitle}>International</Text>
-                                                <Text style={styles.companyInfoItemValue}>
-                                                    {company.international_phone_number !== "0"
-                                                        ? company.international_phone_number
-                                                        : "Not found"}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        {company.international_phone_number !== "0" && (
-                                            <TouchableOpacity
-                                                onPress={() =>
-                                                    Linking.openURL(
-                                                        `tel:${company.international_phone_number}`
-                                                    )
-                                                }
-                                            >
-                                                <ExternalLink size={24} color="#9CA3AF" />
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                </View>
+              {isFreePlan && !planLoading && (
+                <View style={[styles.lockOverlay, { borderRadius: radius.xl }]}>
+                  <Lock size={28} color="white" />
+                  <Text style={styles.lockTitle}>Premium Feature</Text>
+                  <Text style={styles.lockSubtitle}>
+                    Upgrade to access the Info Search tool
+                  </Text>
+                </View>
+              )}
+            </Card>
+          </Animated.View>
 
-                                {!company.found_all_fields && (
-                                    <Text
-                                        style={{
-                                            color: "#D97706",
-                                            textAlign: "center",
-                                            marginTop: 10,
-                                            fontFamily: "Poppins-Regular",
-                                        }}
-                                    >
-                                        Some information could not be found:{" "}
-                                        {company.missing_fields.join(", ")}.
-                                    </Text>
-                                )}
-                            </>
-                        ) : (
-                            <Text style={{ textAlign: "center", fontFamily: "Poppins-Regular" }}>
-                                Your results will appear here.
-                            </Text>
-                        )}
-                    </View>
+          {/* Results Card */}
+          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+            <Card style={styles.resultsCard} pressable={false}>
+              {isLoading || planLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={colors.accent} />
+                </View>
+              ) : error ? (
+                <View style={styles.errorContainer}>
+                  <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+                </View>
+              ) : showResults && company ? (
+                <Animated.View entering={FadeIn.duration(300)}>
+                  <Text style={[styles.companyName, { color: colors.textPrimary }]}>
+                    {company.company_name}
+                  </Text>
 
-                    <View style={styles.disclaimerContainer}>
-                        <Text style={styles.disclaimerTitle}>Disclaimer</Text>
-                        <Text style={styles.disclaimerText}>
-                            This tool uses AI to help locate public company contact information. While we aim to provide accurate and up-to-date results, we cannot guarantee their completeness or accuracy. Please verify any phone numbers or contact details through official company sources before use.{"\n\n"}
-                            We appreciate your feedback on this tool. Please email
-                            <Text style={{ color: "#0058FA" }}> feedback@scamly.io </Text>
-                            to submit any feedback you may have.
-                        </Text>
-                    </View>
-                    <Modal
-                        animationType="fade"
-                        transparent={true}
-                        visible={showModal}
-                        onRequestClose={() => setShowModal(false)}
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                  <View style={styles.infoList}>
+                    {/* Website */}
+                    <View
+                      style={[
+                        styles.infoItem,
+                        { backgroundColor: colors.backgroundSecondary, borderRadius: radius.lg },
+                      ]}
                     >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.modalContainer}>
-                                <Text style={styles.modalTitle}>💡 Tip</Text>
-                                <Text style={styles.modalText}>
-                                    For the best results, try searching using the company’s full or most recognized name — and include a country if it’s an international brand.
-                                    {"\n\n"}✅ Example: "ANZ Bank Australia"
-                                    {"\n"}⚠️ Instead of: "ANZ"
-                                    {"\n\n"}This helps the tool find the correct official contact details.
-                                    {"\n\n"}Allow up to 30 seconds for the results to appear.
-                                </Text>
-                                <Pressable onPress={() => setShowModal(false)} style={styles.closeButton}>
-                                    <Text style={styles.closeButtonText}>Got it</Text>
-                                </Pressable>
-                            </View>
+                      <View style={styles.infoItemLeft}>
+                        <View
+                          style={[styles.infoIconContainer, { backgroundColor: colors.accentMuted }]}
+                        >
+                          <Globe size={18} color={colors.accent} />
                         </View>
-                    </Modal>
-            </SafeAreaView>
-        </CollapsibleHeaderScreen>
-    )
+                        <View>
+                          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                            Website
+                          </Text>
+                          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                            {company.website_domain !== "0"
+                              ? `www.${company.website_domain}`
+                              : "Not found"}
+                          </Text>
+                        </View>
+                      </View>
+                      {company.website_domain !== "0" && (
+                        <TouchableOpacity
+                          onPress={() => Linking.openURL(`https://${company.website_domain}`)}
+                          style={[styles.actionButton, { backgroundColor: colors.accentMuted }]}
+                        >
+                          <ExternalLink size={18} color={colors.accent} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {/* Local Phone */}
+                    <View
+                      style={[
+                        styles.infoItem,
+                        { backgroundColor: colors.backgroundSecondary, borderRadius: radius.lg },
+                      ]}
+                    >
+                      <View style={styles.infoItemLeft}>
+                        <View
+                          style={[styles.infoIconContainer, { backgroundColor: colors.accentMuted }]}
+                        >
+                          <Phone size={18} color={colors.accent} />
+                        </View>
+                        <View>
+                          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                            Local Phone
+                          </Text>
+                          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                            {company.local_phone_number !== "0"
+                              ? company.local_phone_number
+                              : "Not found"}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* International Phone */}
+                    <View
+                      style={[
+                        styles.infoItem,
+                        { backgroundColor: colors.backgroundSecondary, borderRadius: radius.lg },
+                      ]}
+                    >
+                      <View style={styles.infoItemLeft}>
+                        <View
+                          style={[styles.infoIconContainer, { backgroundColor: colors.accentMuted }]}
+                        >
+                          <Phone size={18} color={colors.accent} />
+                        </View>
+                        <View>
+                          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                            International
+                          </Text>
+                          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                            {company.international_phone_number !== "0"
+                              ? company.international_phone_number
+                              : "Not found"}
+                          </Text>
+                        </View>
+                      </View>
+                      {company.international_phone_number !== "0" && (
+                        <TouchableOpacity
+                          onPress={() =>
+                            Linking.openURL(`tel:${company.international_phone_number}`)
+                          }
+                          style={[styles.actionButton, { backgroundColor: colors.accentMuted }]}
+                        >
+                          <Phone size={18} color={colors.accent} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+
+                  {!company.found_all_fields && (
+                    <View
+                      style={[
+                        styles.warningBox,
+                        { backgroundColor: colors.warningMuted, borderRadius: radius.md },
+                      ]}
+                    >
+                      <Text style={[styles.warningText, { color: colors.warning }]}>
+                        Some information could not be found: {company.missing_fields.join(", ")}.
+                      </Text>
+                    </View>
+                  )}
+                </Animated.View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <View
+                    style={[styles.emptyIconContainer, { backgroundColor: colors.accentMuted }]}
+                  >
+                    <Search size={28} color={colors.accent} />
+                  </View>
+                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                    Your results will appear here
+                  </Text>
+                </View>
+              )}
+            </Card>
+          </Animated.View>
+
+          {/* Disclaimer */}
+          <View style={styles.disclaimer}>
+            <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>
+              Disclaimer
+            </Text>
+            <Text style={[styles.disclaimerText, { color: colors.textTertiary }]}>
+              This tool uses AI to locate public company contact information. Results may not
+              always be complete or accurate. Please verify through official sources before use.
+            </Text>
+          </View>
+        </ScrollView>
+
+        {/* How to Use Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showModal}
+          onRequestClose={() => setShowModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View
+              entering={FadeIn.duration(200)}
+              style={[
+                styles.modalContainer,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius["2xl"],
+                  ...shadows.xl,
+                },
+              ]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Tips</Text>
+              <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+                For the best results:{"\n\n"}• Use the company's full or most recognized name
+                {"\n"}• Include a country for international brands{"\n"}• Example: "ANZ Bank
+                Australia" instead of "ANZ"{"\n\n"}Allow up to 30 seconds for results.
+              </Text>
+              <Button onPress={() => setShowModal(false)}>Got it</Button>
+            </Animated.View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </ThemedBackground>
+  );
 }
 
 const styles = StyleSheet.create({
-    separator: {
-        height: 1,
-        backgroundColor: "#e5e7eb",
-        marginVertical: 8,
-    },
-    container: {
-        flex: 1,
-        paddingHorizontal: 16,
-    },
-    searchContainer: {
-        marginTop: 16,
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-        backgroundColor: "white",
-        borderRadius: 20,
-        padding: 16,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 20,
-        elevation: 8,
-    },
-    howToUseText: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 14,
-        color: "#00598a",
-        textAlign: "center",
-        textDecorationLine: "underline",
-    },
-    searchInput: {
-        borderWidth: 2,
-        borderColor: "#e0e0e0",
-        borderRadius: 14,
-        fontFamily: "Poppins-Regular",
-        height: 45,
-        paddingHorizontal: 16,
-    },
-    searchButtonGradient: {
-        height: 45,
-        borderRadius: 14,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    searchButtonText: {
-        color: "white",
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 16,
-    },
-    lockOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: "rgba(0,0,0,0.6)",
-        borderRadius: 20,
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        paddingHorizontal: 16,
-    },
-    lockOverlayTitle: {
-        color: "white",
-        fontFamily: "Poppins-Bold",
-        fontSize: 16,
-        textAlign: "center",
-    },
-    lockOverlayText: {
-        color: "white",
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        textAlign: "center",
-    },
-    elevatedBoxContainer: {
-        marginTop: 30,
-        backgroundColor: "white",
-        borderRadius: 20,
-        padding: 16,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 20,
-        elevation: 8,
-    },
-    companyName: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 22,
-        textAlign: "center",
-        color: "#1F2937",
-        marginVertical: 8
-    },
-    companyInfoContainer: {
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        marginTop: 12,
-    },
-    companyInfoItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 18,
-        backgroundColor: "#F3f4f6",
-        borderRadius: 14,
-    },
-    companyInfoItemTitle: {
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 16,
-        color: "#1F2937",
-    },
-    companyInfoItemValue: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 16,
-        color: "#1F2937",
-    },
-    disclaimerContainer: {
-        marginVertical: 36,
-    },
-    disclaimerTitle: {
-        fontFamily: "Poppins-SemiBold",
-    },
-    disclaimerText: {
-        fontFamily: "Poppins-ExtraLightItalic",
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.4)",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
-    },
-      modalContainer: {
-        backgroundColor: "white",
-        borderRadius: 20,
-        padding: 24,
-        width: "90%",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 20,
-        elevation: 10,
-    },
-      modalTitle: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 18,
-        marginBottom: 10,
-        color: "#1F2937",
-        textAlign: "center",
-    },
-      modalText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "#1F2937",
-        marginBottom: 20,
-        lineHeight: 20,
-    },
-      closeButton: {
-        backgroundColor: "#5426F8",
-        borderRadius: 12,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        alignSelf: "center",
-    },
-      closeButtonText: {
-        color: "white",
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 14,
-    },
+  safeArea: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  headerTitle: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 15,
+  },
+  searchCard: {
+    marginBottom: 20,
+    gap: 16,
+    position: "relative",
+  },
+  howToUseButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  howToUseText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+  },
+  searchInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    height: 52,
+    borderWidth: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: "Poppins-Regular",
+    fontSize: 15,
+  },
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingHorizontal: 24,
+  },
+  lockTitle: {
+    color: "white",
+    fontFamily: "Poppins-Bold",
+    fontSize: 18,
+  },
+  lockSubtitle: {
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  resultsCard: {
+    marginBottom: 24,
+    minHeight: 200,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: "center",
+  },
+  errorText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  companyName: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 22,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  divider: {
+    height: 1,
+    marginBottom: 16,
+  },
+  infoList: {
+    gap: 12,
+  },
+  infoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+  },
+  infoItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    flex: 1,
+  },
+  infoIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  infoLabel: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 12,
+  },
+  infoValue: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 15,
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  warningBox: {
+    padding: 14,
+    marginTop: 16,
+  },
+  warningText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 13,
+    textAlign: "center",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    gap: 16,
+  },
+  emptyIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 15,
+  },
+  disclaimer: {
+    marginTop: 8,
+  },
+  disclaimerTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  disclaimerText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContainer: {
+    width: "100%",
+    maxWidth: 340,
+    padding: 24,
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 20,
+    marginBottom: 16,
+  },
+  modalText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 24,
+    textAlign: "left",
+    width: "100%",
+  },
 });

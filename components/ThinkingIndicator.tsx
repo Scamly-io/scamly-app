@@ -1,61 +1,73 @@
-import { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { useTheme } from "@/theme";
+import { useEffect } from "react";
+import { StyleSheet, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 export default function ThinkingIndicator() {
-    const dot1 = useRef(new Animated.Value(0)).current;
-    const dot2 = useRef(new Animated.Value(0)).current;
-    const dot3 = useRef(new Animated.Value(0)).current;
+  const { colors } = useTheme();
+  const dot1 = useSharedValue(0.3);
+  const dot2 = useSharedValue(0.3);
+  const dot3 = useSharedValue(0.3);
 
-    const bounce = (animatedValue: Animated.Value, delay: number) => {
-        return Animated.loop(
-            Animated.sequence([
-                Animated.timing(animatedValue, { toValue: -4, duration: 220, delay, useNativeDriver: true }),
-                Animated.timing(animatedValue, { toValue: 0, duration: 220, useNativeDriver: true }),
-                Animated.delay(120),
-            ])
-        );
-    };
-
-    useEffect(() => {
-        const a1 = bounce(dot1, 0);
-        const a2 = bounce(dot2, 120);
-        const a3 = bounce(dot3, 240);
-        a1.start();
-        a2.start();
-        a3.start();
-        return () => {
-            a1.stop();
-            a2.stop();
-            a3.stop();
-        };
-    }, [dot1, dot2, dot3]);
-
-    return (
-        <View style={styles.container}>
-            <Animated.View style={[styles.dot, { transform: [{ translateY: dot1 }] }]} />
-            <Animated.View style={[styles.dot, { transform: [{ translateY: dot2 }] }]} />
-            <Animated.View style={[styles.dot, { transform: [{ translateY: dot3 }] }]} />
-        </View>
+  useEffect(() => {
+    const duration = 400;
+    dot1.value = withRepeat(
+      withTiming(1, { duration }),
+      -1,
+      true
     );
+    dot2.value = withDelay(
+      150,
+      withRepeat(withTiming(1, { duration }), -1, true)
+    );
+    dot3.value = withDelay(
+      300,
+      withRepeat(withTiming(1, { duration }), -1, true)
+    );
+  }, []);
+
+  const dot1Style = useAnimatedStyle(() => ({
+    opacity: dot1.value,
+    transform: [{ scale: 0.8 + dot1.value * 0.2 }],
+  }));
+
+  const dot2Style = useAnimatedStyle(() => ({
+    opacity: dot2.value,
+    transform: [{ scale: 0.8 + dot2.value * 0.2 }],
+  }));
+
+  const dot3Style = useAnimatedStyle(() => ({
+    opacity: dot3.value,
+    transform: [{ scale: 0.8 + dot3.value * 0.2 }],
+  }));
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.backgroundSecondary }]}>
+      <Animated.View style={[styles.dot, { backgroundColor: colors.accent }, dot1Style]} />
+      <Animated.View style={[styles.dot, { backgroundColor: colors.accent }, dot2Style]} />
+      <Animated.View style={[styles.dot, { backgroundColor: colors.accent }, dot3Style]} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        backgroundColor: "rgba(37, 99, 235, 0.08)",
-        borderColor: "rgba(37, 99, 235, 0.16)",
-        borderWidth: 1,
-        borderRadius: 14,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        alignSelf: "flex-start",
-        flexDirection: "row",
-        gap: 8,
-    },
-    dot: {
-        width: 8,
-        height: 8,
-        borderRadius: 999,
-        backgroundColor: "#1D4ED8",
-    },
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    gap: 6,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
 });
-

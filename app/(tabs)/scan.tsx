@@ -1,897 +1,863 @@
-import CollapsibleHeaderScreen from "@/components/CollapsibleHeaderScreen";
-import HalfGradientDivider from "@/components/HalfGradientDivider";
+import Button from "@/components/Button";
+import Card from "@/components/Card";
+import ThemedBackground from "@/components/ThemedBackground";
+import { useTheme } from "@/theme";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
-import { LinearGradient } from "expo-linear-gradient";
-import { Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
+import { CheckCircle, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+    ActivityIndicator,
+    Alert,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type ScanResults = {
-    is_scam: boolean;
-    risk_level: "low" | "medium" | "high"; 
-    confidence: number;
-    detections: {
-        category: string;
-        description: string; 
-        severity: "low" | "medium" | "high"; 
-    }[];
-    scan_successful: boolean; 
-    scan_failure_reason: string | null;
-}
+  is_scam: boolean;
+  risk_level: "low" | "medium" | "high";
+  confidence: number;
+  detections: {
+    category: string;
+    description: string;
+    severity: "low" | "medium" | "high";
+  }[];
+  scan_successful: boolean;
+  scan_failure_reason: string | null;
+};
 
 function getUserBillingPeriod(createdAt: string | Date) {
-    const created = new Date(createdAt);
-    const now = new Date();
-  
-    // Build period start in UTC
-    let periodStart = new Date(Date.UTC(
-        now.getUTCFullYear(),
-        created.getUTCMonth(),
-        created.getUTCDate(),
-        0, 0, 0, 0
-    ));
-  
-    // Go back one month if the user has not reached the anniversary yet.
-    if (periodStart > now) {
-        periodStart = new Date(Date.UTC(
-            now.getUTCFullYear(),
-            created.getUTCMonth() - 1,
-            created.getUTCDate(),
-            0, 0, 0, 0
-        ));
-    }
-  
-    const nextPeriodStart = new Date(Date.UTC(
-        periodStart.getUTCFullYear(),
-        periodStart.getUTCMonth() + 1,
-        periodStart.getUTCDate(),
-        0, 0, 0, 0
-    ));
-  
-    return { periodStart, nextPeriodStart };
+  const created = new Date(createdAt);
+  const now = new Date();
+
+  let periodStart = new Date(
+    Date.UTC(now.getUTCFullYear(), created.getUTCMonth(), created.getUTCDate(), 0, 0, 0, 0)
+  );
+
+  if (periodStart > now) {
+    periodStart = new Date(
+      Date.UTC(now.getUTCFullYear(), created.getUTCMonth() - 1, created.getUTCDate(), 0, 0, 0, 0)
+    );
+  }
+
+  const nextPeriodStart = new Date(
+    Date.UTC(
+      periodStart.getUTCFullYear(),
+      periodStart.getUTCMonth() + 1,
+      periodStart.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
+
+  return { periodStart, nextPeriodStart };
 }
 
-const FREE_USER_SCAN_QUOTA = 4; // 4 monthly scans
+const FREE_USER_SCAN_QUOTA = 4;
 
-/**
- * Scan screen component allowing users to upload and scan images for potential scams.
- * Users can upload screenshots of texts, emails, or online media to get AI-powered scam detection results.
- */
 export default function Scan() {
-    // Selected image from the user's device
-    const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
-    // Public URL of the uploaded image in S3
-    const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
-    // Whether to show the "how to use" modal
-    const [showModal, setShowModal] = useState<boolean>(false);
-    // Loading state during image upload and scan processing
-    const [loading, setLoading] = useState<boolean>(false);
-    // Loading state for the page
-    const [pageLoading, setPageLoading] = useState<boolean>(true);
-    // Error message if something goes wrong
-    const [error, setError] = useState<string | null>(null);
-    // Scan results from the AI analysis
-    const [results, setResults] = useState<ScanResults | null>(null)
-    // Aspect ratio of the uploaded image for proper display
-    const [aspectRatio, setAspectRatio] = useState<number>(1);
-    // Current authenticated user's ID
-    const [userId, setUserId] = useState<string | null>(null);
-    // Whether a free user has reached their scan quota (disables the scan button)
-    const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
-    // The date of the next scan quota reset
-    const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
+  const { colors, radius, shadows, isDark } = useTheme();
+  const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [pageLoading, setPageLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<ScanResults | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<number>(1);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
+  const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
 
-    /**
-     * Handles the page mount logic for the scan screen.
-     * 1. Checks if the user exists and fetches their profile.
-     * 2. Handles the scan quota logic for free users.
-     * @returns {Promise<void>}
-     */
-    async function handlePageMount() {
-        setPageLoading(true);
+  async function handlePageMount() {
+    setPageLoading(true);
 
-        // Check if the user exists.
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-        if (userError || !user) {
-            console.error("No user:", userError);
-            Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
-            return;
-        }
-
-        setUserId(user.id);
-
-        // Handle the scan quota logic for free users.
-        const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("subscription_plan, created_at")
-            .eq("id", user.id)
-            .single();
-
-        if (profileError) {
-            console.error("Error fetching user profile:", profileError);
-            Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
-            return;
-        }
-
-        if (profile.subscription_plan === "free") {
-            const { periodStart, nextPeriodStart } = getUserBillingPeriod(profile.created_at);
-
-            const { count, error: countError } = await supabase
-                .from("scans")
-                .select("*", { count: "exact", head: true })
-                .eq("user_id", user.id)
-                .gte("created_at", periodStart.toISOString())
-                .lt("created_at", nextPeriodStart.toISOString());
-
-            if (countError) {
-                console.error("Error fetching scan count:", countError);
-                Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
-                return;
-            }
-
-            if (count >= FREE_USER_SCAN_QUOTA) {
-                setScanQuotaReached(true);
-                setScanQuotaResetDate(nextPeriodStart.toLocaleDateString());
-            }
-        }
-        setPageLoading(false);
+    if (userError || !user) {
+      console.error("No user:", userError);
+      Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+      return;
     }
 
-    // Called when the page first mounts
-    useEffect(() => {
-        handlePageMount();
-    }, []);
+    setUserId(user.id);
 
-    // Called when the page comes into focus (after mount)
-    useFocusEffect(
-        React.useCallback(() => {
-            handlePageMount();
-        }, [])
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("subscription_plan, created_at")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError) {
+      console.error("Error fetching user profile:", profileError);
+      Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+      return;
+    }
+
+    if (profile.subscription_plan === "free") {
+      const { periodStart, nextPeriodStart } = getUserBillingPeriod(profile.created_at);
+
+      const { count, error: countError } = await supabase
+        .from("scans")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", periodStart.toISOString())
+        .lt("created_at", nextPeriodStart.toISOString());
+
+      if (countError) {
+        console.error("Error fetching scan count:", countError);
+        Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+        return;
+      }
+
+      if (count !== null && count >= FREE_USER_SCAN_QUOTA) {
+        setScanQuotaReached(true);
+        setScanQuotaResetDate(nextPeriodStart.toLocaleDateString());
+      }
+    }
+    setPageLoading(false);
+  }
+
+  useEffect(() => {
+    handlePageMount();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      handlePageMount();
+    }, [])
+  );
+
+  function makeId(length: number): string {
+    let result = "";
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+  }
+
+  async function convertImageToBlob(imageUri: string): Promise<Blob> {
+    const result = await ImageManipulator.manipulateAsync(imageUri, [], {
+      compress: 0.6,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+
+    const fileRequest = await fetch(result.uri);
+    const blob = await fileRequest.blob();
+    return blob;
+  }
+
+  async function uploadImageToS3(imageBlob: Blob, fileName: string) {
+    let mainUploadUrl = "";
+    let tempUploadUrl = "";
+
+    const response = await fetch(
+      "https://0i3wpw1lxk.execute-api.ap-southeast-2.amazonaws.com/dev/upload",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName }),
+      }
     );
 
-    // This is just used as a fallback incase the image.fileName errors. It generates a random string of given length
-    function makeId(length: number): string {
-        let result = '';
-        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        const charactersLength = characters.length;
-        for ( let i = 0; i < length; i++ ) {
-            result += characters.charAt(Math.floor(Math.random() * charactersLength));
-        }
-        return result;
+    const data = await response.json();
+    mainUploadUrl = data.upload_url_main;
+    tempUploadUrl = data.upload_url_temp;
+
+    const [uploadMainResponse, uploadTempResponse] = await Promise.all([
+      fetch(mainUploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg" },
+        body: imageBlob,
+      }),
+      fetch(tempUploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg" },
+        body: imageBlob,
+      }),
+    ]);
+
+    if (!uploadMainResponse.ok || !uploadTempResponse.ok) {
+      throw new Error("Failed to upload images to S3");
+    }
+  }
+
+  async function scanImage(imageUrl: string, userId: string) {
+    const response = await fetch(
+      "https://ab16q62v9b.execute-api.ap-southeast-2.amazonaws.com/dev/scan",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageUrl,
+          userId,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to scan image, status code: " + response.status);
     }
 
-    // Converts the image URI to a Blob for upload, with compression to prevent timeouts
-    async function convertImageToBlob(imageUri: string): Promise<Blob> {
-        const result = await ImageManipulator.manipulateAsync(
-            imageUri,
-            [],
-            {
-                compress: 0.6, // Compressed slightly as the AI model sometimes times out if the image is too large
-                format: ImageManipulator.SaveFormat.JPEG,
-            }
-        )
-        
-        const fileRequest = await fetch(result.uri);
-        const blob = await fileRequest.blob();
-        return blob;
+    const json = await response.json();
+    const data: ScanResults = typeof json === "string" ? JSON.parse(json) : json;
+
+    setResults(data);
+  }
+
+  async function handleScan() {
+    if (!image) return;
+    if (!userId) return;
+
+    setResults(null);
+    setLoading(true);
+
+    const scrubbedFileName = image?.fileName?.split(".")[0] || makeId(12);
+    const cleanFileName = `${scrubbedFileName}_${Date.now()}.jpeg`;
+    const publicUrl = `https://temp-scamly-ai-images.s3.ap-southeast-2.amazonaws.com/${cleanFileName}`;
+    setPublicImageUrl(publicUrl);
+
+    const imageBlob = await convertImageToBlob(image.uri!);
+
+    try {
+      await uploadImageToS3(imageBlob, cleanFileName);
+    } catch (err) {
+      console.error("Error getting presigned upload URL: ", err);
+      Alert.alert("Error", "Your image failed to upload to the AI agent. Please try again later");
+      setLoading(false);
+      return;
     }
 
-    // Uploads the image to both main and temporary S3 buckets using presigned URLs
-    async function uploadImageToS3(imageBlob: Blob, fileName: string) {
-        let mainUploadUrl = "";
-        let tempUploadUrl = "";
+    try {
+      await scanImage(publicUrl, userId);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error scanning image: ", err);
+      Alert.alert("Error", "We failed to scan your image. Please try again later");
+      setLoading(false);
+      return;
+    }
+  }
 
-        // Get presigned upload URLs for both main and temporary buckets
-        const response = await fetch('https://0i3wpw1lxk.execute-api.ap-southeast-2.amazonaws.com/dev/upload', {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ fileName })
-        })
+  async function pickImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-        const data = await response.json();
-        mainUploadUrl = data.upload_url_main;
-        tempUploadUrl = data.upload_url_temp;
-
-        // Upload images to both main and temp buckets in parallel
-        const [ uploadMainResponse, uploadTempResponse ] = await Promise.all([
-            fetch(mainUploadUrl, {
-                method: "PUT",
-                headers: { "Content-Type": "image/jpeg" },
-                body: imageBlob,
-            }),
-            fetch(tempUploadUrl, {
-                method: "PUT",
-                headers: { "Content-Type": "image/jpeg" },
-                body: imageBlob,
-            }),
-        ]);
-
-        if (!uploadMainResponse.ok || !uploadTempResponse.ok) {
-            throw new Error("Failed to upload images to S3");
-        }
+    if (status !== "granted") {
+      Alert.alert("Error", "We need permission to access your photos to upload images.");
+      return;
     }
 
-    // Sends the image URL to the AI scanning service for analysis
-    async function scanImage(imageUrl: string, userId: string) {
-        const response = await fetch('https://ab16q62v9b.execute-api.ap-southeast-2.amazonaws.com/dev/scan', { // This may timeout if the image is too large.
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                imageUrl,
-                userId
-            })
-        })
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 1,
+    });
 
-        if (!response.ok) {
-            throw new Error("Failed to scan image, status code: " + response.status);
-        }
+    if (result.canceled) return;
 
-        const json = await response.json();
-        const data: ScanResults = typeof json === "string" ? JSON.parse(json) : json;
+    setImage(result.assets[0]);
 
-        setResults(data);
+    Image.getSize(result.assets[0].uri!, (width, height) => {
+      setAspectRatio(width / height);
+    });
+  }
+
+  function getRiskColor(riskLevel: string) {
+    switch (riskLevel) {
+      case "low":
+        return colors.success;
+      case "medium":
+        return colors.warning;
+      case "high":
+        return colors.error;
+      default:
+        return colors.textSecondary;
     }
+  }
 
-    // Handles the complete scan workflow: image processing, upload, and AI analysis
-    async function handleScan() {
-        if (!image) return;
-        if (!userId) return;
-
-        setResults(null);
-        setLoading(true);
-
-        // Generate a unique filename for the uploaded image
-        const scrubbedFileName = image?.fileName.split(".")[0] || makeId(12);
-        const cleanFileName = `${scrubbedFileName}_${Date.now()}.jpeg`;
-        const publicUrl = `https://temp-scamly-ai-images.s3.ap-southeast-2.amazonaws.com/${cleanFileName}`;
-        setPublicImageUrl(publicUrl);
-
-        const imageBlob = await convertImageToBlob(image.uri!);
-
-        try {
-            await uploadImageToS3(imageBlob, cleanFileName);
-        } catch (err) {
-            console.error("Error getting presigned upload URL: ", err);
-            Alert.alert("Error", "Your image failed to upload to the AI agent. Please try again later");
-            setLoading(false);
-            return;
-        }
-
-        try {
-            await scanImage(publicUrl, userId);
-            setLoading(false);
-        } catch (err) {
-            console.error("Error scanning image: ", err);
-            Alert.alert("Error", "We failed to scan your image. Please try again later");
-            setLoading(false);
-            return;
-        } 
+  function getRiskBgColor(riskLevel: string) {
+    switch (riskLevel) {
+      case "low":
+        return colors.successMuted;
+      case "medium":
+        return colors.warningMuted;
+      case "high":
+        return colors.errorMuted;
+      default:
+        return colors.backgroundSecondary;
     }
+  }
 
-    // Opens the device's image picker and handles image selection
-    async function pickImage() {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (status !== 'granted') {
-            Alert.alert("Error", "We need permission to access your photos to upload images.");
-            return;
-        }
-
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: false,
-            quality: 1,
-        });
-
-        if (result.canceled) return;
-
-        setImage(result.assets[0]);
-
-        // Calculate aspect ratio for proper image display
-        Image.getSize(result.assets[0].uri!, (width, height) => {
-            setAspectRatio(width / height);
-        });
+  function getSeverityIcon(severity: string) {
+    switch (severity) {
+      case "low":
+        return <TriangleAlert size={20} color={colors.success} />;
+      case "medium":
+        return <TriangleAlert size={20} color={colors.warning} />;
+      case "high":
+        return <XCircle size={20} color={colors.error} />;
+      default:
+        return null;
     }
+  }
 
-    // Returns gradient colors based on the risk level
-    function getRiskColour(riskLevel) {
-        switch (riskLevel) {
-            case "low": return ["#10b981", "#00bc7d"];
-            case "medium": return ["#f59e0b", "#ff8904"];
-            case "high": return ["#fb2c36", "#ff6900"];
-        }
-    }
+  const scanButtonDisabled = !image || loading || !userId || scanQuotaReached;
 
-    // Returns the appropriate icon component based on detection severity
-    function getSeverityIcon(severity) {
-        switch (severity) {
-            case "low": return <TriangleAlert size={24} color="#10B981" />;
-            case "medium": return <TriangleAlert size={24} color="#F59E0B" />;
-            case "high": return <XCircle size={24} color="#EF4444" />;
-        }
-    }
-
-    const scanButtonDisabled = !image || loading || !userId || scanQuotaReached;
-
-    return (
-        <CollapsibleHeaderScreen
-            headerProps={{
-                title: "Scanner",
-                imageUrl: require("@/assets/images/page-images/ai.png"),
-                subtitle: "Scan texts, emails, or online media for scams.",
-            }}
-            contentContainerStyle={{ flexGrow: 1 }}
+  return (
+    <ThemedBackground>
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-            <SafeAreaView edges={["bottom", "left", "right"]} style={styles.container}>
-                { pageLoading ? (
-                    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-                        <ActivityIndicator size="large" color="#ad46ff" />
+          {/* Header */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Scanner</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+              Scan texts, emails, or online media for scams
+            </Text>
+          </Animated.View>
+
+          {pageLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.accent} />
+            </View>
+          ) : (
+            <>
+              {/* Quota Warning */}
+              {scanQuotaReached && (
+                <Animated.View entering={FadeIn.duration(300)}>
+                  <Card
+                    style={[styles.quotaCard, { backgroundColor: colors.errorMuted }]}
+                    pressable={false}
+                  >
+                    <Lock size={20} color={colors.error} />
+                    <View style={styles.quotaTextContainer}>
+                      <Text style={[styles.quotaTitle, { color: colors.error }]}>
+                        Monthly limit reached
+                      </Text>
+                      <Text style={[styles.quotaSubtitle, { color: colors.textSecondary }]}>
+                        Your quota will reset on {scanQuotaResetDate}
+                      </Text>
                     </View>
-                ) : (
-                    <>
-                        { scanQuotaReached && (
-                            <View style={styles.elevatedBoxContainer}>
-                                <Text style={styles.scanQuotaReachedText}>You've reached the maximum number of scans for a free tier account this month.</Text>
-                                <Text style={styles.scanQuotaReachedSubText}>Your quota will reset on {scanQuotaResetDate}.</Text>
-                            </View>
-                        )}
+                  </Card>
+                </Animated.View>
+              )}
 
-                        <View style={styles.elevatedBoxContainer}>
-                            <View style={styles.uploadBoxContent}>
-                                {image ? (
-                                    <View style={styles.uploadedImageContainer}>
-                                        <Image source={{ uri: image.uri }} style={[styles.uploadedImage, { aspectRatio: aspectRatio }]} resizeMode="contain" />
-                                        <TouchableOpacity 
-                                            onPress={() => {
-                                                setImage(null);
-                                                setResults(null);
-                                        }}>
-                                            <Text style={styles.clearButtonText}>Clear</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : (
-                                    <>
-                                        <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
-                                            <Text style={styles.howToUseText}>How to use this feature?</Text>
-                                        </TouchableOpacity>
-                                        <View style={styles.uploadPlaceholder}>
-                                            <TouchableOpacity
-                                                style={styles.uploadBoxIconContainer}
-                                                onPress={() => {
-                                                    if (scanQuotaReached) return;
-                                                    pickImage();
-                                                }}
-                                                disabled={scanQuotaReached}
-                                            >
-                                                <Upload size={36} color="#7C3AED" />
-                                            </TouchableOpacity>
-                                            <Text style={styles.uploadBoxTitle}>Upload a Screenshot</Text>
-                                            {scanQuotaReached && (
-                                                <View style={styles.uploadBoxOverlay}>
-                                                    <Lock size={32} color="white" />
-                                                </View>
-                                            )}
-                                        </View>
-                                    </>
+              {/* Upload Card */}
+              <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+                <Card style={styles.uploadCard} pressable={false}>
+                  <TouchableOpacity
+                    style={styles.howToUseButton}
+                    onPress={() => setShowModal(true)}
+                  >
+                    <Info size={16} color={colors.accent} />
+                    <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                      How to use this feature
+                    </Text>
+                  </TouchableOpacity>
 
-                                )}
-                            </View>
-                        </View>
-
-                        <TouchableOpacity 
-                            disabled={scanButtonDisabled} 
-                            style={{ marginTop: 16, opacity: scanButtonDisabled ? 0.5 : 1 }} // Opacity of 1 if the image is selected, its not loading, and the user exists
-                            onPress={handleScan}>
-                            <LinearGradient
-                                colors={["#5426F8", "#CF68FF"]}
-                                start={{ x: 0, y: 0.5 }}
-                                end={{ x: 1, y: 0.5 }}
-                                style={styles.scanButtonGradient}
-                                disabled={scanButtonDisabled}
-                            >
-                                <Text style={styles.scanButtonText}>
-                                    {
-                                        loading ? (
-                                            <ActivityIndicator size="small" color="white" />
-                                        ) : "Scan"
-                                    }
-
-                                </Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-
-                        {results ? (
-                            <>
-                                <View style={styles.scanResultsDividerContainer}>
-                                    <HalfGradientDivider />
-                                    <View style={styles.scanResultsTitleContainer}>
-                                        <Shield size={18} color="#7C3AED" />
-                                        <Text style={styles.scanResultsTitle}>Scan Results</Text>
-                                    </View>
-                                    <HalfGradientDivider />
-                                </View>
-
-                                <View style={styles.shadowContainer}>
-                                    <LinearGradient
-                                        colors={getRiskColour(results.risk_level)}
-                                        start={{ x: 0, y: 0.5 }}
-                                        end={{ x: 1, y: 0.5 }}
-                                        style={styles.confidenceContainer}
-                                    >
-                                        <View style={styles.scamResultHeader}>
-                                            <View style={styles.scamResultTitleContainer}>
-                                                {results.is_scam ? <TriangleAlert size={28} color="white" /> : <Shield size={28} color="white" />}
-                                                <Text style={styles.scamResultTitle}>
-                                                    {results.is_scam ? "Likely a Scam" : "Looks Safe"}
-                                                </Text>
-                                            </View>
-                                            <Text style={styles.scamResultPercentage}>{results.confidence}%</Text>
-                                        </View>
-                                        <View style={styles.scamResultDetails}>
-                                            <Text style={styles.scamResultDetailText}>
-                                                {results.risk_level.charAt(0).toUpperCase() + results.risk_level.slice(1)} risk detected
-                                            </Text>
-                                            <Text style={styles.scamResultDetailText}>Confidence</Text>
-                                        </View>
-
-                                        {results.is_scam ? (
-                                            <View style={styles.scamWarningContainer}>
-                                                <Text style={styles.scamWarningText}>⚠️ Do not respond or click any links. Report and delete this message immediately.</Text>
-                                            </View>
-                                        ): (
-                                            <View style={styles.scamWarningContainer}>
-                                                <Text style={styles.scamWarningText}>This looks safe. But always be cautious and verify the sender before responding or clicking any links.</Text>
-                                            </View>
-                                        )}
-                                    </LinearGradient>
-                                </View>
-                                
-
-                                <View style={styles.elevatedBoxContainer}>
-                                    <View style={styles.keyDetectionsHeader}>
-                                        <Text style={styles.keyDetectionsTitle}>Key Detections</Text>
-                                        <View style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 12 }}>
-                                            <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
-                                                {getSeverityIcon("high")}
-                                                <Text>High risk</Text>
-                                            </View>
-                                            <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
-                                                {getSeverityIcon("medium")}
-                                                <Text>Medium risk</Text>
-                                            </View>
-                                            <View style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
-                                                {getSeverityIcon("low")}
-                                                <Text>Low risk</Text>
-                                            </View>  
-                                        </View>
-                                    </View>
-                                    {results.detections.map((detection, index) => (
-                                        <View style={styles.keyDetectionsItem} key={index}>
-                                            {getSeverityIcon(detection.severity)}
-                                            <Text style={styles.keyDetectionsText}>{detection.description}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-
-                                <View style={styles.shadowContainer}>
-                                    <LinearGradient 
-                                        colors={["#eff6ff", "#eef2ff"]}
-                                        start={{ x: 0, y: 0.5 }}
-                                        end={{ x: 1, y: 0.5 }}
-                                        style={styles.tipsContainer}
-                                    >
-                                        <View style={styles.tipsHeader}>
-                                            <Shield size={24} color="#2563EB" />
-                                            <Text style={styles.tipsTitle}>Stay Safe</Text>
-                                        </View>
-                                        <View style={styles.tipsContent}>
-                                            <View style={styles.tipsItem}>
-                                                <Text style={styles.tipDecorator}>•</Text>
-                                                <Text style={styles.tipText}>Never share passwords or financial information via text or email.</Text>
-                                            </View>
-                                            <View style={styles.tipsItem}>
-                                                <Text style={styles.tipDecorator}>•</Text>
-                                                <Text style={styles.tipText}>Verfiy the sender through official channels like an organisation's known phone number.</Text>
-                                            </View>
-                                            <View style={styles.tipsItem}>
-                                                <Text style={styles.tipDecorator}>•</Text>
-                                                <Text style={styles.tipText}>Be wary of urgent requests or threats.</Text>
-                                            </View>
-                                            <View style={styles.tipsItem}>
-                                                <Text style={styles.tipDecorator}>•</Text>
-                                                <Text style={styles.tipText}>Check URL details carefully before clicking any links.</Text>
-                                            </View>
-                                        </View>
-                                    </LinearGradient>
-                                </View>
-                            </>
-                        ) : (
-                            <></>
-                        )}
-
-                        <View style={{ marginTop: 24 }}>
-                            <Text style={styles.disclaimerTitle}>Disclaimer</Text>
-                            <Text style={styles.disclaimerText}>
-                                This tool uses AI to analyze text messages, emails, social media posts, and other online content for potential signs of scams or fraud. 
-                                While we strive to provide accurate and helpful assessments, the results are generated automatically and may not always reflect the full context or intent of the content. 
-                                Always use your own judgment and verify suspicious messages or accounts through official sources before taking any action.{"\n\n"}
-                                We appreciate your feedback on this tool. Please email
-                                <Text style={{ color: "#0058FA" }}> feedback@scamly.io </Text>
-                                to submit any feedback you may have.
-                            </Text>
-                        </View>
-
-                        <Modal
-                            animationType="fade"
-                            transparent={true}
-                            visible={showModal}
-                            onRequestClose={() => setShowModal(false)}
+                  {image ? (
+                    <View style={styles.uploadedImageContainer}>
+                      <Image
+                        source={{ uri: image.uri }}
+                        style={[
+                          styles.uploadedImage,
+                          { aspectRatio: aspectRatio, borderRadius: radius.lg },
+                        ]}
+                        resizeMode="contain"
+                      />
+                      <TouchableOpacity
+                        onPress={() => {
+                          setImage(null);
+                          setResults(null);
+                        }}
+                      >
+                        <Text style={[styles.clearButtonText, { color: colors.error }]}>
+                          Clear
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.uploadPlaceholder,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: colors.backgroundSecondary,
+                          borderRadius: radius.xl,
+                        },
+                      ]}
+                      onPress={() => {
+                        if (!scanQuotaReached) pickImage();
+                      }}
+                      disabled={scanQuotaReached}
+                    >
+                      <View
+                        style={[
+                          styles.uploadIconContainer,
+                          { backgroundColor: colors.accentMuted },
+                        ]}
+                      >
+                        <Upload size={28} color={colors.accent} />
+                      </View>
+                      <Text style={[styles.uploadTitle, { color: colors.textPrimary }]}>
+                        Upload a Screenshot
+                      </Text>
+                      <Text style={[styles.uploadSubtitle, { color: colors.textSecondary }]}>
+                        Tap to select an image
+                      </Text>
+                      {scanQuotaReached && (
+                        <View
+                          style={[styles.uploadOverlay, { backgroundColor: "rgba(0,0,0,0.6)" }]}
                         >
-                            <View style={styles.modalOverlay}>
-                                <View style={styles.modalContainer}>
-                                    <Text style={styles.modalTitle}>💡 Tip</Text>
-                                    <Text style={styles.modalText}>
-                                        To get the most accurate scan results, make sure your screenshot clearly shows the key details:
-                                        {"\n\n"}- Include the main message or section you want the AI to analyze.
-                                        {"\n"}- If relevant, capture contact details (email addresses, phone numbers, etc.) in the same image.
-                                        {"\n"}- For long messages or emails, focus on the most suspicious or important parts instead of the entire thread.
-                                        {"\n"}- Ensrure the text is easy to read, avoiding blurry or cropped images.
-                                        {"\n\n"}Clear, well-framed screenshots help the AI identify potential scam signals more effectively.
-                                    </Text>
-                                    <Pressable onPress={() => setShowModal(false)} style={styles.closeButton}>
-                                        <Text style={styles.closeButtonText}>Got it</Text>
-                                    </Pressable>
-                                </View>
-                            </View>
-                        </Modal>
-                    </>
-                )}
+                          <Lock size={28} color="white" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </Card>
+              </Animated.View>
 
+              {/* Scan Button */}
+              <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.scanButtonContainer}>
+                <Button
+                  onPress={handleScan}
+                  disabled={scanButtonDisabled}
+                  loading={loading}
+                  fullWidth
+                  size="lg"
+                >
+                  Scan for Scams
+                </Button>
+              </Animated.View>
 
-            </SafeAreaView>
-        </CollapsibleHeaderScreen>
-    )
+              {/* Results */}
+              {results && (
+                <Animated.View entering={FadeIn.duration(400)}>
+                  {/* Risk Level Card */}
+                  <Card
+                    style={[
+                      styles.resultCard,
+                      { backgroundColor: getRiskBgColor(results.risk_level) },
+                    ]}
+                    pressable={false}
+                  >
+                    <View style={styles.resultHeader}>
+                      <View style={styles.resultTitleRow}>
+                        {results.is_scam ? (
+                          <TriangleAlert size={24} color={getRiskColor(results.risk_level)} />
+                        ) : (
+                          <CheckCircle size={24} color={getRiskColor(results.risk_level)} />
+                        )}
+                        <Text
+                          style={[
+                            styles.resultTitle,
+                            { color: getRiskColor(results.risk_level) },
+                          ]}
+                        >
+                          {results.is_scam ? "Likely a Scam" : "Looks Safe"}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.confidenceText,
+                          { color: getRiskColor(results.risk_level) },
+                        ]}
+                      >
+                        {results.confidence}%
+                      </Text>
+                    </View>
+                    <View style={styles.resultDetails}>
+                      <Text style={[styles.riskLevelText, { color: colors.textSecondary }]}>
+                        {results.risk_level.charAt(0).toUpperCase() + results.risk_level.slice(1)}{" "}
+                        risk detected
+                      </Text>
+                      <Text style={[styles.confidenceLabel, { color: colors.textSecondary }]}>
+                        Confidence
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.warningBox,
+                        { backgroundColor: isDark ? colors.surface : "rgba(255,255,255,0.6)" },
+                      ]}
+                    >
+                      <Text style={[styles.warningText, { color: colors.textPrimary }]}>
+                        {results.is_scam
+                          ? "Do not respond or click any links. Report and delete this message immediately."
+                          : "This looks safe. But always verify the sender before responding."}
+                      </Text>
+                    </View>
+                  </Card>
+
+                  {/* Key Detections */}
+                  <Card style={styles.detectionsCard} pressable={false}>
+                    <Text style={[styles.detectionsTitle, { color: colors.textPrimary }]}>
+                      Key Detections
+                    </Text>
+                    <View style={styles.detectionsList}>
+                      {results.detections.map((detection, index) => (
+                        <View
+                          key={index}
+                          style={[
+                            styles.detectionItem,
+                            { backgroundColor: colors.backgroundSecondary },
+                          ]}
+                        >
+                          {getSeverityIcon(detection.severity)}
+                          <Text
+                            style={[styles.detectionText, { color: colors.textPrimary }]}
+                          >
+                            {detection.description}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </Card>
+
+                  {/* Safety Tips */}
+                  <Card
+                    style={[styles.tipsCard, { backgroundColor: colors.accentMuted }]}
+                    pressable={false}
+                  >
+                    <View style={styles.tipsHeader}>
+                      <Shield size={20} color={colors.accent} />
+                      <Text style={[styles.tipsTitle, { color: colors.textPrimary }]}>
+                        Stay Safe
+                      </Text>
+                    </View>
+                    <View style={styles.tipsList}>
+                      {[
+                        "Never share passwords or financial information via text or email.",
+                        "Verify the sender through official channels.",
+                        "Be wary of urgent requests or threats.",
+                        "Check URL details carefully before clicking links.",
+                      ].map((tip, index) => (
+                        <View key={index} style={styles.tipItem}>
+                          <Text style={[styles.tipBullet, { color: colors.accent }]}>•</Text>
+                          <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                            {tip}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </Card>
+                </Animated.View>
+              )}
+
+              {/* Disclaimer */}
+              <View style={styles.disclaimer}>
+                <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>
+                  Disclaimer
+                </Text>
+                <Text style={[styles.disclaimerText, { color: colors.textTertiary }]}>
+                  This tool uses AI to analyze content for potential scams. Results are generated
+                  automatically and may not always reflect the full context. Always use your own
+                  judgment and verify through official sources.
+                </Text>
+              </View>
+            </>
+          )}
+        </ScrollView>
+
+        {/* How to Use Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showModal}
+          onRequestClose={() => setShowModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View
+              entering={FadeIn.duration(200)}
+              style={[
+                styles.modalContainer,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius["2xl"],
+                  ...shadows.xl,
+                },
+              ]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Tips</Text>
+              <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+                For the best results:{"\n\n"}• Include the main message or section to analyze
+                {"\n"}• Capture contact details if relevant{"\n"}• Focus on the most suspicious
+                parts{"\n"}• Ensure text is easy to read
+              </Text>
+              <Button onPress={() => setShowModal(false)}>Got it</Button>
+            </Animated.View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </ThemedBackground>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        paddingHorizontal: 16,
-    },
-    shadowContainer: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.2,
-        shadowRadius: 20,
-        elevation: 8,
-    },
-    elevatedBoxContainer: {
-        marginTop: 16,
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-        backgroundColor: "white",
-        borderRadius: 20,
-        padding: 16,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.2,
-        shadowRadius: 20,
-        elevation: 8,
-    },
-    scanQuotaReachedText: {
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 16,
-        color: "#ff6467",
-        textAlign: "center",
-    },
-    scanQuotaReachedSubText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "#374151",
-        textAlign: "center",
-    },
-    uploadBoxContent: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-    },
-    uploadPlaceholder: {
-        width: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        position: "relative",
-    },
-    uploadedImageContainer: {
-        width: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#F5F3FF",
-        borderRadius: 14,
-        padding: 24,
-        gap: 24,
-    },
-    uploadedImage: {
-        width: "100%",
-        maxHeight: 350,
-        borderRadius: 14,
-    },
-    clearButtonText: {
-        fontSize: 16,
-        fontFamily: "Poppins-SemiBold",
-        color: "#fb2c36",
-    },
-    uploadBoxIconContainer: {
-        backgroundColor: "#E0E7FF",
-        borderRadius: 14,
-        padding: 20,
-    },
-    uploadBoxOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        borderRadius: 14,
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
-        justifyContent: "center",
-        alignItems: "center",
-        paddingHorizontal: 16,
-        gap: 8,
-        zIndex: 5,
-    },
-    uploadBoxOverlayText: {
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 16,
-        color: "white",
-        textAlign: "center",
-    },
-    uploadBoxOverlaySubText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "white",
-        textAlign: "center",
-    },
-    uploadBoxTitle: {
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 20,
-        textAlign: "center",
-        color: "#374151",
-    },
-    uploadBoxText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 16,
-        color: "#6B7280",
-    },
-    scanButtonGradient: {
-        height: 45,
-        borderRadius: 14,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    scanButtonText: {
-        color: "white",
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 16,
-    },
-    scanResultsDividerContainer: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        marginTop: 32,
-    },
-    scanResultsTitleContainer: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        backgroundColor: "white",
-        borderRadius: 999,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 5 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
-        elevation: 4,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
-    scanResultsTitle: {
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 16,
-        color: "#374151",
-    },
-    confidenceContainer: {
-        marginTop: 16,
-        borderRadius: 14,
-        padding: 16,
-    },
-    scamResultHeader: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-    },
-    scamResultTitleContainer: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        marginBottom: 6,
-    },
-    scamResultTitle: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 20,
-        color: "white",
-    },
-    scamResultPercentage: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 28,
-        color: "white",
-        textAlign: "right",
-    },
-    scamResultDetails: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-    },
-    scamResultDetailText: {
-        fontFamily: "Poppins-Light",
-        fontSize: 14,
-        color: "white",
-    },
-    scamWarningContainer: {
-        marginTop: 16,
-        padding: 16,
-        backgroundColor: "rgba(255, 255, 255, 0.2)",
-        borderRadius: 14,
-    },
-    scamWarningText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "white",
-    },
-    scamWarningTextSafe: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "#1f2937",
-    },
-    keyDetectionsHeader: {
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 16,
-    },
-    keyDetectionsTitle: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 20,
-        color: "#1f2937",
-    },
-    keyDetectionsItem: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        padding: 16,
-        backgroundColor: "#f9fafb",
-        borderRadius: 14,
-    },
-    keyDetectionsText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "#1f2937",
-        flexShrink: 1,
-    },
-    tipsContainer: {
-        marginTop: 16,
-        display: "flex",
-        borderRadius: 14,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: "#dbeafe",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 20,
-        elevation: 8,
-    },
-    tipsHeader: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        marginBottom: 12,
-    },
-    tipsTitle: {
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 20,
-        color: "#1f2937",
-    },
-    tipsContent: {
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-    },
-    tipsItem: {
-        display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-    },
-    tipDecorator: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 16,
-        color: "#2563EB",
-    },
-    tipText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "#374151",
-    },
-    howToUseButton: {
-        marginBottom: 16,
-    },
-    howToUseText: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 14,
-        color: "#00598a",
-        textAlign: "center",
-        textDecorationLine: "underline",
-    },
-    disclaimerContainer: {
-        marginVertical: 36,
-    },
-    disclaimerTitle: {
-        fontFamily: "Poppins-SemiBold",
-    },
-    disclaimerText: {
-        fontFamily: "Poppins-ExtraLightItalic",
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.4)",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
-    },
-    modalContainer: {
-        backgroundColor: "white",
-        borderRadius: 20,
-        padding: 24,
-        width: "90%",
-    },
-    modalTitle: {
-        fontFamily: "Poppins-Bold",
-        fontSize: 18,
-        marginBottom: 10,
-        color: "#1F2937",
-        textAlign: "center",
-    },
-    modalText: {
-        fontFamily: "Poppins-Regular",
-        fontSize: 14,
-        color: "#1F2937",
-        marginBottom: 20,
-        lineHeight: 20,
-    },
-    closeButton: {
-        backgroundColor: "#5426F8",
-        borderRadius: 12,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        alignSelf: "center",
-    },
-    closeButtonText: {
-        color: "white",
-        fontFamily: "Poppins-SemiBold",
-        fontSize: 14,
-    },
+  safeArea: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  headerTitle: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 15,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+  quotaCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  quotaTextContainer: {
+    flex: 1,
+  },
+  quotaTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 15,
+  },
+  quotaSubtitle: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 13,
+  },
+  uploadCard: {
+    marginBottom: 16,
+  },
+  howToUseButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  howToUseText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+  },
+  uploadedImageContainer: {
+    alignItems: "center",
+    gap: 16,
+  },
+  uploadedImage: {
+    width: "100%",
+    maxHeight: 300,
+  },
+  clearButtonText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 15,
+  },
+  uploadPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    gap: 12,
+    position: "relative",
+    overflow: "hidden",
+  },
+  uploadIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  uploadTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 17,
+    textAlign: "center",
+  },
+  uploadSubtitle: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+  },
+  scanButtonContainer: {
+    marginBottom: 24,
+  },
+  resultCard: {
+    marginBottom: 16,
+  },
+  resultHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  resultTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  resultTitle: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 20,
+  },
+  confidenceText: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 26,
+  },
+  resultDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  riskLevelText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+  },
+  confidenceLabel: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+  },
+  warningBox: {
+    padding: 14,
+    borderRadius: 12,
+  },
+  warningText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  detectionsCard: {
+    marginBottom: 16,
+  },
+  detectionsTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 18,
+    marginBottom: 14,
+  },
+  detectionsList: {
+    gap: 10,
+  },
+  detectionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+  },
+  detectionText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+  },
+  tipsCard: {
+    marginBottom: 24,
+  },
+  tipsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+  },
+  tipsTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 17,
+  },
+  tipsList: {
+    gap: 10,
+  },
+  tipItem: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  tipBullet: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 16,
+  },
+  tipText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+  },
+  disclaimer: {
+    marginTop: 8,
+  },
+  disclaimerTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  disclaimerText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContainer: {
+    width: "100%",
+    maxWidth: 340,
+    padding: 24,
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 20,
+    marginBottom: 16,
+  },
+  modalText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 24,
+    textAlign: "left",
+    width: "100%",
+  },
 });

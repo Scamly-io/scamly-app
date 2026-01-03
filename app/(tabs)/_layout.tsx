@@ -1,9 +1,12 @@
+import { useTheme } from "@/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs, usePathname } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { Platform } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
+import { BlurView } from "expo-blur";
 
 export default function TabsLayout() {
+  const { colors, isDark } = useTheme();
   const pathName = usePathname();
   const isChatDetail = pathName.includes("/chat/") && pathName !== "/chat";
 
@@ -25,10 +28,24 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarStyle: isChatDetail ? { display: "none" } : {},
+        tabBarStyle: isChatDetail
+          ? { display: "none" }
+          : {
+              backgroundColor: colors.tabBar,
+              borderTopColor: colors.tabBarBorder,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              paddingTop: 8,
+              paddingBottom: Platform.OS === "ios" ? 24 : 12,
+              height: Platform.OS === "ios" ? 88 : 68,
+            },
         headerShown: false,
-        tabBarActiveTintColor: "black",
-        tabBarInactiveTintColor: "gray",
+        tabBarActiveTintColor: colors.tabActive,
+        tabBarInactiveTintColor: colors.tabInactive,
+        tabBarLabelStyle: {
+          fontFamily: "Poppins-Medium",
+          fontSize: 11,
+          marginTop: 4,
+        },
       }}
     >
       <Tabs.Screen
@@ -43,12 +60,14 @@ export default function TabsLayout() {
         name="scan"
         options={{
           title: "Scan",
-          tabBarIcon: ({ focused, color }) => (Platform.OS === "ios" ? 
-            <SymbolView name="sparkles.2" tintColor={color} /> : 
-            focused ? 
-              <Ionicons name="sparkles" size={22} color={color} /> : 
+          tabBarIcon: ({ focused, color }) =>
+            Platform.OS === "ios" ? (
+              <SymbolView name="sparkles.2" tintColor={color} />
+            ) : focused ? (
+              <Ionicons name="sparkles" size={22} color={color} />
+            ) : (
               <Ionicons name="sparkles-outline" size={22} color={color} />
-          )
+            ),
         }}
       />
       <Tabs.Screen
@@ -62,13 +81,15 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="info-search"
         options={{
-          title: "Info Search",
-          tabBarIcon: ({ focused, color }) => (Platform.OS === "ios" ? 
-            <SymbolView name="sparkle.magnifyingglass" tintColor={color} /> : 
-            focused ? 
-              <Ionicons name="search" size={22} color={color} /> : 
+          title: "Search",
+          tabBarIcon: ({ focused, color }) =>
+            Platform.OS === "ios" ? (
+              <SymbolView name="sparkle.magnifyingglass" tintColor={color} />
+            ) : focused ? (
+              <Ionicons name="search" size={22} color={color} />
+            ) : (
               <Ionicons name="search-outline" size={22} color={color} />
-          )
+            ),
         }}
       />
       <Tabs.Screen

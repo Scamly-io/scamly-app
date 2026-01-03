@@ -1,15 +1,22 @@
-import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from "@/theme";
+import { View, StyleSheet } from "react-native";
 
 export default function HalfGradientDivider() {
-    return (
-        <LinearGradient
-            colors={['transparent', '#D8B4FE', 'transparent']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={{
-                height: 1,
-                flex: 1,
-            }}
-        />
-    );
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.container}>
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  divider: {
+    height: 1,
+  },
+});

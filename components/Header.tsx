@@ -1,89 +1,102 @@
-import { LinearGradient } from "expo-linear-gradient";
+import { useTheme } from "@/theme";
 import { Image, ImageSourcePropType, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type HeaderProps = {
-    title: string;
-    imageUrl?: ImageSourcePropType;
-    subtitle?: string;
-    basicHeader?: boolean;
-}
+  title: string;
+  imageUrl?: ImageSourcePropType;
+  subtitle?: string;
+  basicHeader?: boolean;
+};
 
 export default function Header({ title, imageUrl, subtitle, basicHeader = false }: HeaderProps) {
+  const { colors, isDark, spacing } = useTheme();
 
-    return (
-        <LinearGradient
-            colors={["hsl(258, 91%, 56%)", "hsl(285, 100%, 71%)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.headerContainer}
-        >
-            <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
-                {basicHeader ? (
-                    <View style={styles.basicHeaderContent}>
-                        <View style={styles.basicHeaderTitleContainer}>
-                            <Text style={styles.headerTitle}>{title}</Text>
-                        </View>
-                    </View>
-                ) : (
-                    <View style={styles.headerContent}>
-                        <View style={styles.headerTitleContainer}>
-                            <Text style={styles.headerTitle}>{title}</Text>
-                            <Text style={styles.headerSubtitle}>{subtitle}</Text>
-                        </View>
-                        <Image source={imageUrl} style={styles.headerImage} />
-                    </View>
-                )}
-            </SafeAreaView>
-        </LinearGradient>
-    )
+  const headerBackground = isDark 
+    ? colors.surfaceElevated 
+    : colors.surface;
+
+  return (
+    <View style={[styles.headerContainer, { backgroundColor: headerBackground }]}>
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
+        {basicHeader ? (
+          <View style={styles.basicHeaderContent}>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{title}</Text>
+          </View>
+        ) : (
+          <View style={styles.headerContent}>
+            <View style={styles.headerTitleContainer}>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{title}</Text>
+              {subtitle && (
+                <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+                  {subtitle}
+                </Text>
+              )}
+            </View>
+            {imageUrl && (
+              <View style={[styles.imageContainer, { backgroundColor: colors.accentMuted }]}>
+                <Image source={imageUrl} style={styles.headerImage} />
+              </View>
+            )}
+          </View>
+        )}
+      </SafeAreaView>
+      <View style={[styles.headerBorder, { backgroundColor: colors.border }]} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    headerContainer: {
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        overflow: "hidden",
-    },
-    safeArea: {
-        paddingHorizontal: 16,
-        paddingBottom: 10,
-    },
-    headerContent: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 10,
-    },
-    basicHeaderContent: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 10,
-    },
-    headerTitleContainer: {
-        flexDirection: "column",
-        alignItems: "flex-start",
-        maxWidth: "75%",
-    },
-    basicHeaderTitleContainer: {
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    headerTitle: {
-        fontSize: 32,
-        fontFamily: "Poppins-Bold",
-        color: "white",
-    },
-    headerImage: {
-        width: 82,
-        height: 82,
-        resizeMode: "contain",
-    },
-    headerSubtitle: {
-        fontSize: 16,
-        fontFamily: "Poppins-Medium",
-        color: "white",
-    },
-})
+  headerContainer: {
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: "hidden",
+  },
+  safeArea: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 8,
+  },
+  basicHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 8,
+  },
+  headerTitleContainer: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    flex: 1,
+    paddingRight: 16,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: "Poppins-Bold",
+  },
+  headerImage: {
+    width: 56,
+    height: 56,
+    resizeMode: "contain",
+  },
+  imageContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    fontFamily: "Poppins-Regular",
+    marginTop: 2,
+  },
+  headerBorder: {
+    height: 1,
+    marginHorizontal: 20,
+  },
+});
