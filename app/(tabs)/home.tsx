@@ -192,7 +192,7 @@ export default function Home() {
                         >
                             <Image source={require("@/assets/images/page-images/ai.png")} style={styles.navOptionIcon} />
                         </LinearGradient>
-                        <Text style={styles.navOptionText}>Scan online media for scams</Text>
+                        <Text style={styles.navOptionText}>Scam Scanner</Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity style={styles.navOption} onPress={() => router.push("/chat")}>
@@ -204,7 +204,7 @@ export default function Home() {
                         >
                             <Image source={require("@/assets/images/page-images/chat.png")} style={styles.navOptionIcon} />
                         </LinearGradient>
-                        <Text style={styles.navOptionText}>Chat with our AI assistant</Text>
+                        <Text style={styles.navOptionText}>AI Chat</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.navOption} onPress={() => router.push("/info-search")}>
@@ -216,7 +216,7 @@ export default function Home() {
                         >
                             <Image source={require("@/assets/images/page-images/phone-search.png")} style={styles.navOptionIcon} />
                         </LinearGradient>
-                        <Text style={styles.navOptionText}>Search for contact info</Text>
+                        <Text style={styles.navOptionText}>Info Search</Text>
                     </TouchableOpacity>
                 </View>
 

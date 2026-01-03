@@ -1,18 +1,16 @@
-import ChatHeader from "@/components/ChatHeader";
+import ChatInputBar from "@/components/ChatInputBar";
 import GradientBackgound from "@/components/GradientBackground";
+import MessageBlock, { ChatMessage } from "@/components/MessageBlock";
+import ThinkingIndicator from "@/components/ThinkingIndicator";
 import { supabase } from "@/utils/supabase";
-import { useLocalSearchParams } from "expo-router";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { ArrowLeft } from "lucide-react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
 
-type Message = {
-    id: string;
-    role: "user" | "assistant" | "system"; // Message sender role
-    content: string; // Message text content
-    created_at: string; // Timestamp when message was created
-};
+const THINKING_TOKEN = "__thinking__";
 
 /**
  * Chat detail screen component displaying a conversation with the AI assistant.
@@ -21,23 +19,23 @@ type Message = {
 export default function ChatDetail() {
     const { id: chatId } = useLocalSearchParams<{ id: string }>();
     // All messages in the current chat conversation
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     // Timestamp when the chat was created
-    const [createdAt, setCreatedAt] = useState<String>("");
+    const [createdAt, setCreatedAt] = useState<string>("");
     // Loading state while fetching chat data
-    const [loading, setLoading] = useState<Boolean>(true);
+    const [loading, setLoading] = useState<boolean>(true);
     // Current user input text
-    const [input, setInput] = useState<String>("");
+    const [input, setInput] = useState<string>("");
     // OpenAI conversation ID for maintaining context
-    const [conversationId, setConversationId] = useState<String>("");
+    const [conversationId, setConversationId] = useState<string>("");
     // Subscription plan state
-    const [planLoading, setPlanLoading] = useState<Boolean>(true);
+    const [planLoading, setPlanLoading] = useState<boolean>(true);
     // Free plan state
-    const [isFreePlan, setIsFreePlan] = useState<Boolean>(false);
+    const [isFreePlan, setIsFreePlan] = useState<boolean>(false);
     // Current user ID
-    const [userId, setUserId] = useState<String>("");
+    const [userId, setUserId] = useState<string>("");
 
-    const flatListRef = useRef<FlatList>(null);
+    const flatListRef = useRef<FlatList<ChatMessage>>(null);
 
     // Fetch subscription plan on mount
     useEffect(() => {
@@ -97,30 +95,30 @@ export default function ChatDetail() {
         fetchMessages();
     }, [chatId, isFreePlan, planLoading]);
 
-    // Memoized message bubble component for performance
-    const MessageBubble = memo(function MessageBubble({ item }: { item: Message }) {
-        const isUser = item.role === "user";
-        return (
-            <View style={isUser ? styles.messageContainerUser : styles.messageContainerAssistant}>
-                <Text style={isUser ? styles.messageContentUser : styles.messageContentAssistant}>
-                    {item.content}
-                </Text>
-            </View>
-        );
-    });
+    // Render each message block
+    const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
+        if (item.role === "assistant" && item.content === THINKING_TOKEN) {
+            return (
+                <View style={styles.thinkingRow}>
+                    <View style={[styles.avatar, styles.avatarAssistant]}>
+                        <Text style={styles.avatarLabel}>AI</Text>
+                    </View>
+                    <ThinkingIndicator />
+                </View>
+            );
+        }
+        return <MessageBlock message={item} />;
+    }, []);
 
-    // With an inverted FlatList and maintainVisibleContentPosition, the latest messages stay anchored to the input without manual scrolling
-    // Keep hooks (like useCallback) before any early returns to preserve hook order
-    const renderItem = useCallback(({ item }: { item: Message }) => (
-        <MessageBubble item={item} />
-    ), []);
-    // Render newest at bottom with inverted list by reversing data for display
-    const invertedData = useMemo(() => {
-        return [...messages].reverse();
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+        }, 50);
+        return () => clearTimeout(timeout);
     }, [messages]);
 
     // Replaces the typing indicator message with an error message
-    function displayErrorMessage(typingMessage: Message) {
+    function displayErrorMessage(typingMessage: ChatMessage) {
         setMessages((prev) => {
             return prev.map(msg => 
                 msg.id === typingMessage.id 
@@ -136,12 +134,13 @@ export default function ChatDetail() {
             Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
             return;
         }
-        const content = input;
+        const content = input.trim();
+        if (!content) return;
 
         // Create user message object
         const userMessage = {
             id: uuid.v4().toString(),
-            role: "user",
+            role: "user" as const,
             content,
             created_at: new Date().toISOString()
         }
@@ -149,8 +148,8 @@ export default function ChatDetail() {
         // Create typing indicator message
         const typingMessage = {
             id: uuid.v4().toString(),
-            role: "assistant",
-            content: "Typing...",
+            role: "assistant" as const,
+            content: THINKING_TOKEN,
             created_at: new Date().toISOString()
         }
 
@@ -165,8 +164,8 @@ export default function ChatDetail() {
             });
 
             if (!res.ok) {
+                displayErrorMessage(typingMessage);
                 throw new Error(`HTTP error! status: ${res.status}`);
-                displayErrorMessage(typingMessage); 
             }
 
             const data = await res.json();
@@ -188,8 +187,7 @@ export default function ChatDetail() {
     if (loading || planLoading) {
         return (
             <>
-                <ChatHeader date={createdAt} />
-                <SafeAreaView style={styles.mainContainer}>
+                <SafeAreaView edges={["top", "bottom", "left", "right"]} style={styles.mainContainer}>
                     <View style={styles.mainContainer}>
                         <ActivityIndicator size="large" />
                     </View>
@@ -200,9 +198,8 @@ export default function ChatDetail() {
 
     return (
         <GradientBackgound>
-            <ChatHeader date={createdAt} />
             {isFreePlan ? (
-                <SafeAreaView edges={["bottom", "left", "right"]} style={styles.mainContainer}>
+                <SafeAreaView edges={["top", "bottom", "left", "right"]} style={styles.mainContainer}>
                     <View style={[styles.mainContainer, styles.lockContainer]}>
                         <Text style={styles.lockTitle}>AI Chat is for paid plans</Text>
                         <Text style={styles.lockText}>Upgrade to continue this conversation.</Text>
@@ -215,36 +212,46 @@ export default function ChatDetail() {
                     //Keep zero offset because header sits outside this view
                     keyboardVerticalOffset={-20}
                 >
-                    <SafeAreaView edges={["bottom", "left", "right"]} style={styles.mainContainer}>
-                        <View style={{ flex: 1 }}>
+                    <SafeAreaView edges={["top", "bottom", "left", "right"]} style={styles.mainContainer}>
+                        <View style={styles.sheet}>
+                            <View style={styles.topRow}>
+                                <TouchableOpacity style={styles.backButton} onPress={() => router.push("/chat")}>
+                                    <ArrowLeft size={18} color="#0F172A" />
+                                    <Text style={styles.backLabel}>Chats</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.timestampSmall}>{new Date(createdAt || "").toLocaleDateString()}</Text>
+                            </View>
+                            <View style={styles.headerRow}>
+                                <Text style={styles.title}>Chat with Scamly</Text>
+                                <Text style={styles.subtitle}>Get advice on scams, fraud, and cyber safety.</Text>
+                            </View>
                             <FlatList
                                 ref={flatListRef}
-                                data={invertedData}
+                                data={messages}
                                 keyExtractor={(item) => item.id.toString()}
                                 renderItem={renderItem}
-                                inverted
                                 keyboardShouldPersistTaps="handled"
-                                maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 20 }}
-                                contentContainerStyle={{ paddingVertical: 8 }}
+                                contentContainerStyle={styles.listContent}
                                 removeClippedSubviews
                                 initialNumToRender={20}
                                 maxToRenderPerBatch={20}
                                 windowSize={7}
-                                updateCellsBatchingPeriod={50}
+                                ListEmptyComponent={
+                                    <View style={styles.emptyState}>
+                                        <Text style={styles.emptyTitle}>No messages yet</Text>
+                                        <Text style={styles.emptyCopy}>Ask a question to get personalised guidance from Scamly.</Text>
+                                    </View>
+                                }
                             />
                         </View>
 
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Type a message"
-                                placeholderTextColor="#171924"
-                                returnKeyType="send"
+                        <View style={styles.inputWrapper}>
+                            <ChatInputBar
                                 value={input}
                                 onChangeText={setInput}
-                                blurOnSubmit={false}
-                                multiline={false}
-                                onSubmitEditing={processMessage}
+                                onSend={processMessage}
+                                placeholder="Ask Scamly about scams, fraud, or cyber crime..."
+                                disabled={planLoading}
                             />
                         </View>
                     </SafeAreaView>
@@ -263,44 +270,66 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: 16,
     },
-    messageContainerUser: {
-        alignSelf: "flex-end",
-        backgroundColor: "#2074F3",
-        borderRadius: 12,
-        padding: 10,
-        marginVertical: 8,
-        maxWidth: "80%",
+    sheet: {
+        flex: 1,
+        backgroundColor: "rgba(255,255,255,0.9)",
+        borderRadius: 18,
+        padding: 16,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        elevation: 4,
     },
-    messageContainerAssistant: {
-        alignSelf: "flex-start",
-        backgroundColor: "#DBDBDB",
-        borderRadius: 12,
-        padding: 10,
-        marginVertical: 8,
-        maxWidth: "80%"
+    headerRow: {
+        marginBottom: 8,
     },
-    messageContentUser: {
-        color: "white",
-        fontFamily: "Poppins-Regular",
+    topRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10,
     },
-    messageContentAssistant: {
-        color: "#000",
-        fontFamily: "Poppins-Regular",
-    },
-    inputContainer: {
+    backButton: {
         flexDirection: "row",
         alignItems: "center",
-        paddingTop: 8,
+        gap: 6,
+        backgroundColor: "rgba(15, 23, 42, 0.06)",
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "rgba(15, 23, 42, 0.1)",
     },
-    input: {
-        flex: 1,
-        borderWidth: 2,
-        borderColor: "#bbb",
-        borderRadius: 999,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        marginRight: 8,
+    backLabel: {
+        fontFamily: "Poppins-SemiBold",
+        color: "#0F172A",
+        fontSize: 14,
+    },
+    timestampSmall: {
         fontFamily: "Poppins-Regular",
+        color: "#475569",
+        fontSize: 12,
+    },
+    title: {
+        fontFamily: "Poppins-Bold",
+        fontSize: 18,
+        color: "#0F172A",
+    },
+    subtitle: {
+        fontFamily: "Poppins-Regular",
+        fontSize: 13,
+        color: "#475569",
+        marginTop: 2,
+    },
+    listContent: {
+        paddingBottom: 16,
+        paddingVertical: 8,
+        gap: 14,
+    },
+    inputWrapper: {
+        marginTop: 8,
+        paddingBottom: 4,
     },
     lockContainer: {
         alignItems: "center",
@@ -318,5 +347,45 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#4B5563",
         textAlign: "center",
-    }
+    },
+    avatar: {
+        width: 34,
+        height: 34,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    avatarAssistant: {
+        backgroundColor: "rgba(37, 99, 235, 0.12)",
+    },
+    avatarLabel: {
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 12,
+        color: "#0F172A",
+    },
+    thinkingRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingHorizontal: 2,
+    },
+    emptyState: {
+        padding: 16,
+        backgroundColor: "rgba(37, 99, 235, 0.06)",
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "rgba(37, 99, 235, 0.14)",
+        gap: 6,
+    },
+    emptyTitle: {
+        fontFamily: "Poppins-Bold",
+        fontSize: 16,
+        color: "#0F172A",
+    },
+    emptyCopy: {
+        fontFamily: "Poppins-Regular",
+        fontSize: 14,
+        color: "#475569",
+        lineHeight: 20,
+    },
 })

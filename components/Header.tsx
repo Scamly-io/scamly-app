@@ -13,10 +13,9 @@ export default function Header({ title, imageUrl, subtitle, basicHeader = false 
 
     return (
         <LinearGradient
-            colors={["#FA5958", "#F5658F", "#FDB653"]}
-            locations={[0, 0.5, 1]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
+            colors={["hsl(258, 91%, 56%)", "hsl(285, 100%, 71%)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.headerContainer}
         >
             <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>

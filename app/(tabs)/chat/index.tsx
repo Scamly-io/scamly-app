@@ -3,8 +3,8 @@ import Header from "@/components/Header";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
-import { Lock, Trash2 } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import { Clock3, Lock, Plus, Trash2 } from "lucide-react-native";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -26,6 +26,18 @@ export default function ChatIndex() {
     // Subscription plan state
     const [planLoading, setPlanLoading] = useState(true);
     const [isFreePlan, setIsFreePlan] = useState(false);
+
+    const formatDate = (iso?: string) => {
+        if (!iso) return "";
+        const date = new Date(iso);
+        return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+
+    const formatTime = (iso?: string) => {
+        if (!iso) return "";
+        const date = new Date(iso);
+        return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    }
 
     const fetchSubscriptionPlan = async () => {
         setPlanLoading(true);
@@ -113,6 +125,10 @@ export default function ChatIndex() {
             fetchSubscriptionPlan().then(() => fetchChats());
         }, [])
     );
+
+    const sortedChats = useMemo(() => {
+        return [...chats].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }, [chats]);
 
     // Creates a new chat conversation and navigates to it
     async function createNewChat() {
@@ -215,13 +231,17 @@ export default function ChatIndex() {
             <SafeAreaView edges={[ "left", "right", "bottom" ]} style={styles.container}>
                 <View style={styles.content}>
                     <View style={styles.titleContainer}>
-                        <Text style={styles.title}>Chats</Text>
+                        <View>
+                            <Text style={styles.title}>Your conversations</Text>
+                            <Text style={styles.subtitle}>Pick up where you left off or start fresh.</Text>
+                        </View>
                         <TouchableOpacity
                             onPress={createNewChat}
                             style={[styles.createChatButton, isFreePlan ? { opacity: 0.5 } : null]}
                             disabled={isFreePlan}
                         >
-                            <Text style={styles.createChatButtonText}>New</Text>
+                            <Plus size={18} color="white" />
+                            <Text style={styles.createChatButtonText}>New chat</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -231,47 +251,79 @@ export default function ChatIndex() {
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator size="large" color="#5426F8" />
                         </View>
+                    ) : sortedChats.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <View style={styles.emptyBadge}>
+                                <Clock3 size={16} color="#2563EB" />
+                                <Text style={styles.emptyBadgeText}>No conversations yet</Text>
+                            </View>
+                            <Text style={styles.emptyTitle}>Start a new discussion</Text>
+                            <Text style={styles.emptyCopy}>Ask Scamly about scams, fraud, or cyber crime to get tailored guidance.</Text>
+                            <TouchableOpacity
+                                onPress={createNewChat}
+                                style={[styles.createChatButtonLarge, isFreePlan ? { opacity: 0.5 } : null]}
+                                disabled={isFreePlan}
+                            >
+                                <Plus size={18} color="white" />
+                                <Text style={styles.createChatButtonText}>Start chatting</Text>
+                            </TouchableOpacity>
+                        </View>
                     ) : (
                         <FlatList
-                            data={chats}
+                            data={sortedChats}
                             keyExtractor={(item) => item.id}
                             style={styles.flatList}
                             contentContainerStyle={styles.flatListContent}
+                            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
                             renderItem={({ item }) => (
-                                <>
-                                    <View style={styles.chatItem}>
-                                        {isFreePlan ? (
-                                            <Pressable style={styles.chatPressable} disabled>
-                                                <Text style={styles.chatDate}>
-                                                    {item.created_at.split("T")[0]}
-                                                </Text>
-                                                <Text style={styles.chatMessage} numberOfLines={1}>
+                                <View style={styles.card}>
+                                    {isFreePlan ? (
+                                        <Pressable style={styles.cardBody} disabled>
+                                            <View style={styles.cardHeader}>
+                                                <Text style={styles.chatDate}>{formatDate(item.created_at)}</Text>
+                                                <View style={styles.pill}>
+                                                    <Text style={styles.pillText}>Saved</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={styles.chatMessage} numberOfLines={2}>
+                                                {item.last_message || "No messages yet"}
+                                            </Text>
+                                            <View style={styles.cardFooter}>
+                                                <View style={styles.timestampRow}>
+                                                    <Clock3 size={14} color="#6B7280" />
+                                                    <Text style={styles.chatTime}>{formatTime(item.created_at)}</Text>
+                                                </View>
+                                            </View>
+                                        </Pressable>
+                                    ) : (
+                                        <Link href={`/chat/${item.id}`} asChild>
+                                            <Pressable style={styles.cardBody}>
+                                                <View style={styles.cardHeader}>
+                                                    <Text style={styles.chatDate}>{formatDate(item.created_at)}</Text>
+                                                    <View style={styles.pill}>
+                                                        <Text style={styles.pillText}>Saved</Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={styles.chatMessage} numberOfLines={2}>
                                                     {item.last_message || "No messages yet"}
                                                 </Text>
+                                                <View style={styles.cardFooter}>
+                                                    <View style={styles.timestampRow}>
+                                                        <Clock3 size={14} color="#6B7280" />
+                                                        <Text style={styles.chatTime}>{formatTime(item.created_at)}</Text>
+                                                    </View>
+                                                </View>
                                             </Pressable>
-                                        ) : (
-                                            <Link href={`/chat/${item.id}`} asChild>
-                                                <Pressable style={styles.chatPressable}>
-                                                    <Text style={styles.chatDate}>
-                                                        {item.created_at.split("T")[0]}
-                                                    </Text>
-                                                    <Text style={styles.chatMessage} numberOfLines={1}>
-                                                        {item.last_message || "No messages yet"}
-                                                    </Text>
-                                                </Pressable>
-                                            </Link>
-                                        )}
-                                        <TouchableOpacity
-                                            onPress={() => deleteChat(item.id)}
-                                            style={[styles.deleteButton, isFreePlan ? { opacity: 0.5 } : null]}
-                                            disabled={isFreePlan}
-                                        >
-                                            <Trash2 size={20} color="white" />
-                                        </TouchableOpacity>
-                                    </View>
-                                    <View style={styles.separator} />
-                                </>
-                                
+                                        </Link>
+                                    )}
+                                    <TouchableOpacity
+                                        onPress={() => deleteChat(item.id)}
+                                        style={[styles.deleteButton, isFreePlan ? { opacity: 0.5 } : null]}
+                                        disabled={isFreePlan}
+                                    >
+                                        <Trash2 size={18} color="white" />
+                                    </TouchableOpacity>
+                                </View>
                             )}
                         />
                     )}
@@ -302,11 +354,11 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         padding: 16,
-        backgroundColor: "white",
+        backgroundColor: "rgba(255,255,255,0.85)",
         borderRadius: 20,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.1,
         shadowRadius: 20,
         elevation: 8,
     },
@@ -314,62 +366,119 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        marginVertical: 16,
+        gap: 12,
+        marginBottom: 12,
     },
     title: {
-        fontSize: 24,
-        fontWeight: "bold",
+        fontSize: 22,
+        fontFamily: "Poppins-Bold",
+        color: "#0F172A",
+    },
+    subtitle: {
+        fontSize: 14,
+        fontFamily: "Poppins-Regular",
+        color: "#475569",
+        marginTop: 4,
     },
     createChatButton: {
-        backgroundColor: "#5DB6FF",
+        backgroundColor: "#2563EB",
         borderRadius: 999,
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        display: "flex",
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        flexDirection: "row",
         alignItems: "center",
-        justifyContent: "center",
+        gap: 8,
+    },
+    createChatButtonLarge: {
+        backgroundColor: "#2563EB",
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginTop: 12,
     },
     createChatButtonText: {
         color: "white",
         fontFamily: "Poppins-Bold",
     },
-    chatItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 20,
-    },
-    chatPressable: {
-        flex: 1,
-        gap: 8,
-        paddingVertical: 16,
-    },
-    chatDate: {
-        fontSize: 18,
-        fontWeight: "bold",
-    },
-    chatMessage: {
-        color: "#555",
-    },
-    deleteButton: {
-        padding: 10,
-        backgroundColor: "#ff6565",
-        marginRight: 8,
-        borderRadius: 999,
-    },
-    deleteButtonText: {
-        color: "white",
-        fontWeight: "bold",
-    },
     separator: {
         height: 1,
-        backgroundColor: "#b4b4b4",
-        marginVertical: 8,
+        backgroundColor: "rgba(15, 23, 42, 0.08)",
+        marginBottom: 16,
     },
     flatList: {
         flex: 1,
     },
     flatListContent: {
-        flexGrow: 1,
+        paddingBottom: 8,
+    },
+    card: {
+        backgroundColor: "white",
+        borderRadius: 16,
+        padding: 16,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: "rgba(15, 23, 42, 0.06)",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    cardBody: {
+        flex: 1,
+        gap: 8,
+    },
+    cardHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    cardFooter: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    chatDate: {
+        fontSize: 14,
+        fontFamily: "Poppins-SemiBold",
+        color: "#0F172A",
+    },
+    chatTime: {
+        fontSize: 13,
+        fontFamily: "Poppins-Regular",
+        color: "#6B7280",
+        marginLeft: 6,
+    },
+    chatMessage: {
+        color: "#1F2937",
+        fontFamily: "Poppins-Regular",
+        fontSize: 15,
+        lineHeight: 22,
+    },
+    timestampRow: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    pill: {
+        backgroundColor: "rgba(37, 99, 235, 0.1)",
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+    },
+    pillText: {
+        color: "#1D4ED8",
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 12,
+    },
+    deleteButton: {
+        padding: 10,
+        backgroundColor: "#EF4444",
+        borderRadius: 12,
     },
     lockOverlay: {
         ...StyleSheet.absoluteFillObject,
@@ -392,5 +501,43 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textAlign: "center",
     },
-
+    emptyState: {
+        backgroundColor: "white",
+        borderRadius: 16,
+        padding: 20,
+        alignItems: "flex-start",
+        gap: 10,
+        borderWidth: 1,
+        borderColor: "rgba(37, 99, 235, 0.12)",
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
+    },
+    emptyBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: "rgba(37, 99, 235, 0.08)",
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+    },
+    emptyBadgeText: {
+        color: "#1D4ED8",
+        fontFamily: "Poppins-SemiBold",
+        fontSize: 12,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontFamily: "Poppins-Bold",
+        color: "#0F172A",
+    },
+    emptyCopy: {
+        fontSize: 14,
+        fontFamily: "Poppins-Regular",
+        color: "#475569",
+        lineHeight: 20,
+    },
 })
