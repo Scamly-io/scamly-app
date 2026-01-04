@@ -89,7 +89,11 @@ export default function Login() {
             >
               <View style={[styles.logoContainer, { backgroundColor: colors.accentMuted }]}>
                 <Image
-                  source={require("@/assets/images/page-images/monologo.png")}
+                  source={
+                    isDark
+                      ? require("@/assets/images/page-images/logo_square_dark.png")
+                      : require("@/assets/images/page-images/logo_square_light.png")
+                  }
                   style={styles.logo}
                   resizeMode="contain"
                 />

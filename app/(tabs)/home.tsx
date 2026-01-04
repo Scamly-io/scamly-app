@@ -9,14 +9,14 @@ import { router } from "expo-router";
 import { LogOut, MessageCircle, Scan, Search, Sparkles, TrendingUp } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -214,7 +214,11 @@ export default function Home() {
             </View>
             <View style={[styles.avatarContainer, { backgroundColor: colors.accentMuted }]}>
               <Image
-                source={require("@/assets/images/page-images/monologo.png")}
+                source={
+                  isDark
+                    ? require("@/assets/images/page-images/logo_square_dark.png")
+                    : require("@/assets/images/page-images/logo_square_light.png")
+                }
                 style={styles.avatarImage}
               />
             </View>
@@ -324,7 +328,7 @@ export default function Home() {
                   ]}
                 >
                   <Image
-                    source={require("@/assets/images/page-images/monologo.png")}
+                    source={require("@/assets/images/page-images/logo_square_dark.png")}
                     style={styles.premiumIcon}
                   />
                 </View>
@@ -345,7 +349,7 @@ export default function Home() {
                   >
                     {isPremium
                       ? "Thank you for being a premium member"
-                      : "Upgrade for unlimited access"}
+                      : "Upgrade to premium for unlimited access"}
                   </Text>
                 </View>
               </View>

@@ -1,29 +1,12 @@
 import { useTheme } from "@/theme";
-import { Ionicons } from "@expo/vector-icons";
 import { Tabs, usePathname } from "expo-router";
-import { SymbolView } from "expo-symbols";
-import { Platform, StyleSheet, View } from "react-native";
-import { BlurView } from "expo-blur";
+import { Platform, StyleSheet } from "react-native";
+import { House, Sparkles, MessageCircle, SearchCode, BookOpen } from "lucide-react-native";
 
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
   const pathName = usePathname();
   const isChatDetail = pathName.includes("/chat/") && pathName !== "/chat";
-
-  const getIcon = (
-    iosSymbol: string,
-    iosSymbolFocused: string,
-    androidIcon: keyof typeof Ionicons.glyphMap,
-    androidIconFocused: keyof typeof Ionicons.glyphMap,
-    focused: boolean,
-    color: string
-  ) => {
-    if (Platform.OS === "ios") {
-      return <SymbolView name={focused ? iosSymbolFocused : iosSymbol} tintColor={color} />;
-    } else {
-      return <Ionicons name={focused ? androidIconFocused : androidIcon} size={22} color={color} />;
-    }
-  };
 
   return (
     <Tabs
@@ -52,52 +35,45 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ focused, color }) =>
-            getIcon("house", "house.fill", "home-outline", "home", focused, color),
+          tabBarIcon: ({ focused, color }) => (
+            <House size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+          ),
         }}
       />
       <Tabs.Screen
         name="scan"
         options={{
           title: "Scan",
-          tabBarIcon: ({ focused, color }) =>
-            Platform.OS === "ios" ? (
-              <SymbolView name="sparkles.2" tintColor={color} />
-            ) : focused ? (
-              <Ionicons name="sparkles" size={22} color={color} />
-            ) : (
-              <Ionicons name="sparkles-outline" size={22} color={color} />
-            ),
+          tabBarIcon: ({ focused, color }) => (
+            <Sparkles size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+          ),
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
           title: "Chat",
-          tabBarIcon: ({ focused, color }) =>
-            getIcon("message", "message.fill", "chatbubble-outline", "chatbubble", focused, color),
+          tabBarIcon: ({ focused, color }) => (
+            <MessageCircle size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+          ),
         }}
       />
       <Tabs.Screen
         name="info-search"
         options={{
           title: "Search",
-          tabBarIcon: ({ focused, color }) =>
-            Platform.OS === "ios" ? (
-              <SymbolView name="sparkle.magnifyingglass" tintColor={color} />
-            ) : focused ? (
-              <Ionicons name="search" size={22} color={color} />
-            ) : (
-              <Ionicons name="search-outline" size={22} color={color} />
-            ),
+          tabBarIcon: ({ focused, color }) => (
+            <SearchCode size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+          ),
         }}
       />
       <Tabs.Screen
         name="learn"
         options={{
           title: "Learn",
-          tabBarIcon: ({ focused, color }) =>
-            getIcon("book", "book.fill", "book-outline", "book", focused, color),
+          tabBarIcon: ({ focused, color }) => (
+            <BookOpen size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
+          ),
         }}
       />
     </Tabs>

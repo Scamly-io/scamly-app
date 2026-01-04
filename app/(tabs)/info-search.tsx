@@ -7,16 +7,16 @@ import * as Clipboard from "expo-clipboard";
 import { Check, ContactRound, Copy, ExternalLink, Globe, Info, Lock, Phone, Search } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Linking,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -72,7 +72,7 @@ export default function PhoneSearch() {
 
   async function handleSearch() {
     if (isFreePlan) {
-      Alert.alert("Upgrade required", "Info Search is available on paid plans.");
+      Alert.alert("Feature Locked", "This feature is not available on free accounts.");
       return;
     }
     if (!searchInput.trim()) return;
@@ -187,9 +187,9 @@ export default function PhoneSearch() {
               {isFreePlan && !planLoading && (
                 <View style={[styles.lockOverlay, { borderRadius: radius.xl }]}>
                   <Lock size={28} color="white" />
-                  <Text style={styles.lockTitle}>Premium Feature</Text>
+                  <Text style={styles.lockTitle}>Feature Locked</Text>
                   <Text style={styles.lockSubtitle}>
-                    Upgrade to access the Info Search tool
+                    Scamly's advanced contact information search tool is not available on free accounts.
                   </Text>
                 </View>
               )}

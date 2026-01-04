@@ -5,7 +5,7 @@ import { useTheme } from "@/theme";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
-import { Clock3, Lock, Plus, Trash2, MessageCircle } from "lucide-react-native";
+import { Clock3, Lock, MessageCircle, Plus, Trash2 } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -136,7 +136,7 @@ export default function ChatIndex() {
 
   async function createNewChat() {
     if (isFreePlan) {
-      Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
+      Alert.alert("Feature Locked", "This feature is not available on free accounts.");
       return;
     }
     const {
@@ -181,7 +181,7 @@ export default function ChatIndex() {
 
   async function deleteChat(chatId: string) {
     if (isFreePlan) {
-      Alert.alert("Upgrade required", "AI Chat is available on paid plans.");
+      Alert.alert("Feature Locked", "This feature is not available on free accounts.");
       return;
     }
     Alert.alert("Delete Chat", "Are you sure you want to delete this chat?", [
@@ -360,9 +360,9 @@ export default function ChatIndex() {
           {isFreePlan && !planLoading && (
             <View style={[styles.lockOverlay, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
               <Lock size={40} color="white" />
-              <Text style={styles.lockTitle}>AI Chat is for paid plans</Text>
+              <Text style={styles.lockTitle}>Feature Locked</Text>
               <Text style={styles.lockSubtitle}>
-                Upgrade to utilise Scamly's advanced AI model for discussing scams and fraud
+                Scamly's advanced AI chat model is not available on free accounts.
               </Text>
             </View>
           )}
