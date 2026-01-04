@@ -218,7 +218,7 @@ export default function ArticleDetail() {
                 styles.backButton,
                 { backgroundColor: colors.surface, borderRadius: radius.md, ...shadows.sm },
               ]}
-              onPress={() => router.back()}
+              onPress={() => router.replace("/learn")}
             >
               <ArrowLeft size={20} color={colors.textPrimary} />
               <Text style={[styles.backLabel, { color: colors.textPrimary }]}>Back</Text>

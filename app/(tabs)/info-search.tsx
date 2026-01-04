@@ -3,7 +3,8 @@ import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { supabase } from "@/utils/supabase";
-import { ExternalLink, Globe, Info, Lock, Phone, Search } from "lucide-react-native";
+import * as Clipboard from "expo-clipboard";
+import { Check, ContactRound, Copy, ExternalLink, Globe, Info, Lock, Phone, Search } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
@@ -31,6 +32,7 @@ export default function PhoneSearch() {
   const [planLoading, setPlanLoading] = useState(true);
   const [isFreePlan, setIsFreePlan] = useState<Boolean>(false);
   const [userId, setUserId] = useState<String>("");
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSubscriptionPlan = async () => {
@@ -106,6 +108,21 @@ export default function PhoneSearch() {
   }
 
   const company = resultData?.data || null;
+
+  // Clean domain by removing www., https://, or http:// prefixes
+  const cleanDomain = (domain: string) => {
+    if (!domain || domain === "0") return domain;
+    return domain
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '');
+  };
+
+  // Copy phone number to clipboard with visual feedback
+  const copyToClipboard = async (value: string, fieldName: string) => {
+    await Clipboard.setStringAsync(value);
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   return (
     <ThemedBackground>
@@ -212,20 +229,54 @@ export default function PhoneSearch() {
                         >
                           <Globe size={18} color={colors.accent} />
                         </View>
-                        <View>
+                        <View style={styles.infoTextContainer}>
                           <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
                             Website
                           </Text>
                           <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
                             {company.website_domain !== "0"
-                              ? `www.${company.website_domain}`
+                              ? `www.${cleanDomain(company.website_domain)}`
                               : "Not found"}
                           </Text>
                         </View>
                       </View>
                       {company.website_domain !== "0" && (
                         <TouchableOpacity
-                          onPress={() => Linking.openURL(`https://${company.website_domain}`)}
+                          onPress={() => Linking.openURL(`https://${cleanDomain(company.website_domain)}`)}
+                          style={[styles.actionButton, { backgroundColor: colors.accentMuted }]}
+                        >
+                          <ExternalLink size={18} color={colors.accent} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {/* Website */}
+                    <View
+                      style={[
+                        styles.infoItem,
+                        { backgroundColor: colors.backgroundSecondary, borderRadius: radius.lg },
+                      ]}
+                    >
+                      <View style={styles.infoItemLeft}>
+                        <View
+                          style={[styles.infoIconContainer, { backgroundColor: colors.accentMuted }]}
+                        >
+                          <ContactRound size={18} color={colors.accent} />
+                        </View>
+                        <View style={styles.infoTextContainer}>
+                          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+                            Contact Us Page
+                          </Text>
+                          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                            {company.contact_us_page !== "0"
+                              ? `${company.contact_us_page}`
+                              : "Not found"}
+                          </Text>
+                        </View>
+                      </View>
+                      {company.contact_us_page !== "0" && (
+                        <TouchableOpacity
+                          onPress={() => Linking.openURL(`https://${company.contact_us_page}`)}
                           style={[styles.actionButton, { backgroundColor: colors.accentMuted }]}
                         >
                           <ExternalLink size={18} color={colors.accent} />
@@ -246,7 +297,7 @@ export default function PhoneSearch() {
                         >
                           <Phone size={18} color={colors.accent} />
                         </View>
-                        <View>
+                        <View style={styles.infoTextContainer}>
                           <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
                             Local Phone
                           </Text>
@@ -257,6 +308,18 @@ export default function PhoneSearch() {
                           </Text>
                         </View>
                       </View>
+                      {company.local_phone_number !== "0" && (
+                        <TouchableOpacity
+                          onPress={() => copyToClipboard(company.local_phone_number, "local_phone")}
+                          style={[styles.actionButton, { backgroundColor: colors.accentMuted }]}
+                        >
+                          {copiedField === "local_phone" ? (
+                            <Check size={18} color={colors.success} />
+                          ) : (
+                            <Copy size={18} color={colors.accent} />
+                          )}
+                        </TouchableOpacity>
+                      )}
                     </View>
 
                     {/* International Phone */}
@@ -272,7 +335,7 @@ export default function PhoneSearch() {
                         >
                           <Phone size={18} color={colors.accent} />
                         </View>
-                        <View>
+                        <View style={styles.infoTextContainer}>
                           <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
                             International
                           </Text>
@@ -285,12 +348,14 @@ export default function PhoneSearch() {
                       </View>
                       {company.international_phone_number !== "0" && (
                         <TouchableOpacity
-                          onPress={() =>
-                            Linking.openURL(`tel:${company.international_phone_number}`)
-                          }
+                          onPress={() => copyToClipboard(company.international_phone_number, "international_phone")}
                           style={[styles.actionButton, { backgroundColor: colors.accentMuted }]}
                         >
-                          <Phone size={18} color={colors.accent} />
+                          {copiedField === "international_phone" ? (
+                            <Check size={18} color={colors.success} />
+                          ) : (
+                            <Copy size={18} color={colors.accent} />
+                          )}
                         </TouchableOpacity>
                       )}
                     </View>
@@ -483,6 +548,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14,
     flex: 1,
+    marginRight: 12,
   },
   infoIconContainer: {
     width: 40,
@@ -490,6 +556,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
+  },
+  infoTextContainer: {
+    flex: 1,
+    flexShrink: 1,
   },
   infoLabel: {
     fontFamily: "Poppins-Regular",
@@ -498,6 +569,7 @@ const styles = StyleSheet.create({
   infoValue: {
     fontFamily: "Poppins-SemiBold",
     fontSize: 15,
+    flexWrap: "wrap",
   },
   actionButton: {
     width: 40,
