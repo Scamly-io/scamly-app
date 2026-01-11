@@ -5,10 +5,12 @@ import QuickTipTile from "@/components/QuickTipTile";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/access";
+import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
 import { supabase } from "@/utils/supabase";
+import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { ChevronRight, Clock, Search, Sparkles, TrendingUp } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type Article = {
@@ -47,6 +49,13 @@ export default function Learn() {
   const [trendingArticles, setTrendingArticles] = useState<Article[]>([]);
   const [quickTips, setQuickTips] = useState<Article[]>([]);
   const [isPremium, setIsPremium] = useState<boolean>(false);
+
+  // Track feature discovery when learning center tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      trackFeatureOpened("learning_center");
+    }, [])
+  );
 
   useEffect(() => {
     async function fetchPageData() {
@@ -191,6 +200,8 @@ export default function Learn() {
       }
     } catch (error) {
       console.error("Error searching articles: ", error);
+      // Track user-visible error: search failure
+      trackUserVisibleError("learn", "search_failed", true);
       Alert.alert("Error", "Failed to search articles. Please try again later.");
     } finally {
       setSearchLoading(false);

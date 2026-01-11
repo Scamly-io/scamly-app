@@ -2,20 +2,21 @@ import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
+import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
 import { Clock3, Lock, MessageCircle, Plus, Trash2 } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Pressable,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeInRight } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -53,6 +54,8 @@ export default function ChatIndex() {
     } = await supabase.auth.getUser();
     if (userError || !user) {
       console.error("No user:", userError);
+      // Track user-visible error: session invalid
+      trackUserVisibleError("chat", "session_invalid", false);
       Alert.alert("Error", "No user found");
       setPlanLoading(false);
       return null;
@@ -66,6 +69,8 @@ export default function ChatIndex() {
 
     if (profileError) {
       console.error("Error fetching user profile:", profileError);
+      // Track user-visible error: profile fetch failure
+      trackUserVisibleError("chat", "profile_fetch_failed", false);
       Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
       setPlanLoading(false);
       return null;
@@ -85,6 +90,8 @@ export default function ChatIndex() {
     } = await supabase.auth.getUser();
     if (userError || !user) {
       console.error("No user:", userError);
+      // Track user-visible error: session invalid when fetching chats
+      trackUserVisibleError("chat", "session_invalid", false);
       Alert.alert("Error", "No user found");
       setLoading(false);
       return;
@@ -124,6 +131,8 @@ export default function ChatIndex() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // Track feature discovery when chat tab is focused
+      trackFeatureOpened("chat");
       fetchSubscriptionPlan().then(() => fetchChats());
     }, [])
   );
@@ -145,6 +154,8 @@ export default function ChatIndex() {
     } = await supabase.auth.getUser();
     if (userError || !user) {
       console.error("No user:", userError);
+      // Track user-visible error: session invalid when creating chat
+      trackUserVisibleError("chat", "session_invalid", false);
       Alert.alert("Error", "No user found");
       return;
     }
@@ -157,6 +168,8 @@ export default function ChatIndex() {
 
     if (error) {
       console.error("Error creating chat:", error);
+      // Track user-visible error: chat creation failed
+      trackUserVisibleError("chat", "chat_create_failed", true);
       Alert.alert("Error", "Could not create new chat");
       return null;
     }
@@ -172,6 +185,8 @@ export default function ChatIndex() {
       });
     } catch (error) {
       console.error("Error creating conversation ID:", error);
+      // Track user-visible error: conversation ID creation failed
+      trackUserVisibleError("chat", "cid_create_failed", false);
       Alert.alert(
         "Error",
         "There was an error creating your new chat. Please exit and try again."
@@ -205,6 +220,8 @@ export default function ChatIndex() {
             await supabase.from("chats").delete().eq("id", chatId);
           } catch (error) {
             console.error("Error deleting chat:", error);
+            // Track user-visible error: chat deletion failed
+            trackUserVisibleError("chat", "chat_delete_failed", true);
             Alert.alert("Error", "Could not delete chat");
           }
         },

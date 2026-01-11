@@ -2,22 +2,31 @@ import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
+import {
+  trackFeatureOpened,
+  trackResultViewed,
+  trackScanCompleted,
+  trackScanFailed,
+  trackScanStarted,
+  trackUserVisibleError,
+  type ResultCategory,
+} from "@/utils/analytics";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { CheckCircle, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -66,6 +75,17 @@ function getUserBillingPeriod(createdAt: string | Date) {
 
 const FREE_USER_SCAN_QUOTA = 4;
 
+/**
+ * Map scan results to analytics result category.
+ * Uses is_scam and risk_level to determine the category.
+ */
+function getResultCategory(isScam: boolean, riskLevel: string): ResultCategory {
+  if (isScam && riskLevel === "high") return "scam";
+  if (isScam && riskLevel === "medium") return "likely_scam";
+  if (!isScam && riskLevel === "low") return "safe";
+  return "unsure";
+}
+
 export default function Scan() {
   const { colors, radius, shadows, isDark } = useTheme();
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
@@ -80,6 +100,9 @@ export default function Scan() {
   const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
   const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
 
+  // Track whether we've already fired result_viewed for the current results
+  const hasTrackedResultView = useRef<boolean>(false);
+
   async function handlePageMount() {
     setPageLoading(true);
 
@@ -90,6 +113,8 @@ export default function Scan() {
 
     if (userError || !user) {
       console.error("No user:", userError);
+      // Track user-visible error: account/session issue
+      trackUserVisibleError("scan", "session_invalid", false);
       Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
       return;
     }
@@ -104,6 +129,8 @@ export default function Scan() {
 
     if (profileError) {
       console.error("Error fetching user profile:", profileError);
+      // Track user-visible error: profile fetch failure
+      trackUserVisibleError("scan", "profile_fetch_failed", false);
       Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
       return;
     }
@@ -120,6 +147,8 @@ export default function Scan() {
 
       if (countError) {
         console.error("Error fetching scan count:", countError);
+        // Track user-visible error: quota check failure
+        trackUserVisibleError("scan", "quota_check_failed", false);
         Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
         return;
       }
@@ -138,6 +167,8 @@ export default function Scan() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // Track feature discovery when scan tab is focused
+      trackFeatureOpened("scan");
       handlePageMount();
     }, [])
   );
@@ -198,7 +229,7 @@ export default function Scan() {
     }
   }
 
-  async function scanImage(imageUrl: string, userId: string) {
+  async function scanImage(imageUrl: string, userId: string, scanStartTime: number) {
     const response = await fetch(
       "https://ab16q62v9b.execute-api.ap-southeast-2.amazonaws.com/dev/scan",
       {
@@ -218,6 +249,15 @@ export default function Scan() {
     const json = await response.json();
     const data: ScanResults = typeof json === "string" ? JSON.parse(json) : json;
 
+    // Track successful scan completion with result category and processing time
+    const processingTimeMs = Date.now() - scanStartTime;
+    const resultCategory = getResultCategory(data.is_scam, data.risk_level);
+    trackScanCompleted("screenshot", resultCategory, processingTimeMs);
+
+    // Track that the user is viewing the result
+    trackResultViewed(resultCategory);
+    hasTrackedResultView.current = true;
+
     setResults(data);
   }
 
@@ -227,6 +267,13 @@ export default function Scan() {
 
     setResults(null);
     setLoading(true);
+    // Reset result view tracking for new scan
+    hasTrackedResultView.current = false;
+
+    // Track scan initiation - source is always 'upload' since camera is not yet implemented
+    trackScanStarted("screenshot", "upload");
+
+    const scanStartTime = Date.now();
 
     const scrubbedFileName = image?.fileName?.split(".")[0] || makeId(12);
     const cleanFileName = `${scrubbedFileName}_${Date.now()}.jpeg`;
@@ -239,16 +286,22 @@ export default function Scan() {
       await uploadImageToS3(imageBlob, cleanFileName);
     } catch (err) {
       console.error("Error getting presigned upload URL: ", err);
+      // Track scan failure at upload stage
+      trackScanFailed("upload_failed", "upload");
+      trackUserVisibleError("scan", "upload_failed", true);
       Alert.alert("Error", "Your image failed to upload to the AI agent. Please try again later");
       setLoading(false);
       return;
     }
 
     try {
-      await scanImage(publicUrl, userId);
+      await scanImage(publicUrl, userId, scanStartTime);
       setLoading(false);
     } catch (err) {
       console.error("Error scanning image: ", err);
+      // Track scan failure at processing/response stage
+      trackScanFailed("scan_api_error", "processing");
+      trackUserVisibleError("scan", "scan_api_error", true);
       Alert.alert("Error", "We failed to scan your image. Please try again later");
       setLoading(false);
       return;
@@ -259,6 +312,8 @@ export default function Scan() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== "granted") {
+      // Track user-visible error: permission denied
+      trackUserVisibleError("scan", "photo_permission_denied", true);
       Alert.alert("Error", "We need permission to access your photos to upload images.");
       return;
     }

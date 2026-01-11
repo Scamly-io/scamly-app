@@ -1,6 +1,7 @@
 import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
+import { identifyUser, trackUserVisibleError, type UserPlan } from "@/utils/analytics";
 import { supabase } from "@/utils/supabase";
 import { useRouter } from "expo-router";
 import { Lock, Mail } from "lucide-react-native";
@@ -20,6 +21,16 @@ import Animated, {
   FadeInDown
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+/**
+ * Determine the user plan category from subscription_plan string.
+ * Maps Supabase subscription_plan values to analytics plan types.
+ */
+function getPlanCategory(subscriptionPlan: string): UserPlan {
+  if (subscriptionPlan === "free") return "free";
+  if (subscriptionPlan.includes("trial")) return "trial";
+  return "paid";
+}
 
 export default function Login() {
   const { colors, radius, shadows, isDark } = useTheme();
@@ -47,13 +58,36 @@ export default function Login() {
 
       if (error) {
         Alert.alert("Error", error.message);
+        // Track login failure as user-visible error
+        trackUserVisibleError("login", "auth_error", true);
         setLoading(false);
         return;
+      }
+
+      // Identify user for analytics after successful login
+      if (data.user) {
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("subscription_plan")
+            .eq("id", data.user.id)
+            .single();
+
+          if (profile) {
+            // Identify user with PostHog using Supabase user ID and plan
+            identifyUser(data.user.id, getPlanCategory(profile.subscription_plan));
+          }
+        } catch (profileError) {
+          // Continue login even if identification fails
+          console.error("Error identifying user:", profileError);
+        }
       }
 
       router.replace("/home");
     } catch (error) {
       Alert.alert("Error", "Something went wrong while logging in. Please try again.");
+      // Track unexpected login error
+      trackUserVisibleError("login", "unexpected_error", true);
       setLoading(false);
     }
   };

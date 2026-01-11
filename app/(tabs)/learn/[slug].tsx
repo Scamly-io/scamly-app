@@ -2,28 +2,39 @@ import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/access";
+import {
+  trackArticleEngaged,
+  trackArticleViewed,
+  trackUserVisibleError,
+} from "@/utils/analytics";
 import { supabase } from "@/utils/supabase";
+import Markdown from "@ronradtke/react-native-markdown-display";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ArrowLeft } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    LogBox,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  LogBox,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import Markdown from "react-native-markdown-display";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 LogBox.ignoreLogs([
   'A props object containing a "key" prop is being spread into JSX',
 ]);
+
+// Minimum thresholds for meaningful engagement
+const ENGAGEMENT_MIN_SCROLL_PERCENT = 0.75; // 75% of content
+const ENGAGEMENT_MIN_TIME_SECONDS = 60; // 60 seconds
 
 type Article = {
   content: string;
@@ -37,6 +48,51 @@ export default function ArticleDetail() {
 
   const { slug } = useLocalSearchParams<{ slug: string }>();
 
+  // Engagement tracking state
+  const articleViewStartTime = useRef<number>(0);
+  const maxScrollPercent = useRef<number>(0);
+  const hasTrackedEngagement = useRef<boolean>(false);
+  const hasTrackedView = useRef<boolean>(false);
+
+  /**
+   * Check if engagement criteria are met and fire event if so.
+   * Only fires once per article view.
+   */
+  const checkAndTrackEngagement = () => {
+    if (hasTrackedEngagement.current || !article) return;
+
+    const timeOnPageSeconds = Math.round((Date.now() - articleViewStartTime.current) / 1000);
+
+    if (
+      maxScrollPercent.current >= ENGAGEMENT_MIN_SCROLL_PERCENT &&
+      timeOnPageSeconds >= ENGAGEMENT_MIN_TIME_SECONDS
+    ) {
+      // User meaningfully engaged: scrolled 75%+ and spent 60+ seconds
+      trackArticleEngaged(article.id, timeOnPageSeconds);
+      hasTrackedEngagement.current = true;
+    }
+  };
+
+  /**
+   * Handle scroll events to track max scroll position.
+   * Only checks engagement on significant scroll changes.
+   */
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const scrollableHeight = contentSize.height - layoutMeasurement.height;
+
+    if (scrollableHeight > 0) {
+      const scrollPercent = contentOffset.y / scrollableHeight;
+      if (scrollPercent > maxScrollPercent.current) {
+        maxScrollPercent.current = scrollPercent;
+        // Check engagement when user scrolls past threshold
+        if (scrollPercent >= ENGAGEMENT_MIN_SCROLL_PERCENT) {
+          checkAndTrackEngagement();
+        }
+      }
+    }
+  };
+
   useEffect(() => {
     async function fetchArticle() {
       const premium = await getIsPremium();
@@ -49,6 +105,8 @@ export default function ArticleDetail() {
 
       if (articleError || !article) {
         console.error("Error fetching article:", articleError);
+        // Track user-visible error: article not found
+        trackUserVisibleError("learn", "article_not_found", false);
         Alert.alert("Error", "We couldn't find the article you were looking for.", [
           {
             text: "Back",
@@ -69,6 +127,13 @@ export default function ArticleDetail() {
       setArticle(article);
       setLoading(false);
 
+      // Track article view - fires once when article content is loaded
+      if (!hasTrackedView.current) {
+        trackArticleViewed(article.id, "article");
+        hasTrackedView.current = true;
+        articleViewStartTime.current = Date.now();
+      }
+
       try {
         await supabase.rpc("increment_article_views", { article_id: article.id });
       } catch (error) {
@@ -78,6 +143,13 @@ export default function ArticleDetail() {
 
     fetchArticle();
   }, [slug]);
+
+  // Check engagement when component unmounts (user leaves article)
+  useEffect(() => {
+    return () => {
+      checkAndTrackEngagement();
+    };
+  }, [article]);
 
   const markdownStyles = {
     body: {
@@ -230,6 +302,8 @@ export default function ArticleDetail() {
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={100}
           >
             <Animated.View entering={FadeIn.duration(400).delay(100)}>
               <Markdown style={markdownStyles}>{article?.content}</Markdown>

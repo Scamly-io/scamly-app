@@ -4,10 +4,12 @@ import Card from "@/components/Card";
 import QuickTipTile from "@/components/QuickTipTile";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
+import { resetUser, trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
 import { supabase } from "@/utils/supabase";
+import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { LogOut, MessageCircle, Scan, Search, Sparkles, TrendingUp } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -48,6 +50,13 @@ export default function Home() {
     return Math.max(1, Math.round(length / 1500));
   }
 
+  // Track feature discovery when home tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      trackFeatureOpened("home");
+    }, [])
+  );
+
   useEffect(() => {
     async function fetchPageData() {
       async function getUser(): Promise<boolean> {
@@ -58,6 +67,8 @@ export default function Home() {
 
         if (userError || !user) {
           console.error("No user:", userError);
+          // Track user-visible error: account issue requiring logout
+          trackUserVisibleError("home", "session_invalid", false);
           Alert.alert(
             "Error",
             "There has been an issue with your account and you have been logged out. Please log in again.",
@@ -83,6 +94,8 @@ export default function Home() {
 
         if (profileError || !profileData) {
           console.error("Error fetching profile:", profileError);
+          // Track user-visible error: profile fetch failure
+          trackUserVisibleError("home", "profile_fetch_failed", false);
           setUserName("");
           return false;
         }
@@ -165,10 +178,14 @@ export default function Home() {
 
   async function handleSignOut() {
     try {
+      // Reset analytics identity on logout
+      resetUser();
       await supabase.auth.signOut();
       router.replace("/login");
     } catch (err) {
       console.error("Error signing user out:", err);
+      // Track user-visible error: sign out failure
+      trackUserVisibleError("home", "signout_failed", true);
       Alert.alert("Error", "There was an error signing you out. Please try again.");
     }
   }

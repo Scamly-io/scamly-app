@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "scamly-app",
+    "name": "Scamly",
     "slug": "scamly-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -38,14 +38,17 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "appRoot": "app"
+      },
       "eas": {
         "projectId": "2609a083-c868-41d9-a2f0-0de59a2189dd"
       }
