@@ -1,50 +1,118 @@
-# Welcome to your Expo app 👋
+# Scamly
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A mobile application for scam detection and prevention, helping users identify and learn about scams through AI-powered scanning, chat assistance, and educational content.
 
-## Get started
+## Key Features
 
-1. Install dependencies
+- **Scanner**: Upload images or screenshots to detect potential scams using AI analysis
+- **AI Chat**: Interactive chat interface to ask questions and get advice about scams
+- **Info Search**: Search for information about specific scams and threats
+- **Learning Center**: Browse educational articles and quick tips about scam prevention
+- **User Authentication**: Secure login and user profile management
+- **Scan History**: Track and review past scan results
 
+## Tech Stack
+
+- **Framework**: React Native with Expo (~54.0.2)
+- **Routing**: Expo Router (file-based routing)
+- **Language**: TypeScript
+- **Backend**: Supabase (authentication, database, storage)
+- **Analytics**: PostHog
+- **Error Tracking**: Sentry
+- **UI/UX**: 
+  - React Native Reanimated for animations
+  - Custom theme system with dark mode support
+  - Lucide React Native for icons
+- **State Management**: React hooks and context
+- **Storage**: AsyncStorage for local data persistence
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher recommended)
+- npm or yarn
+- Expo CLI (installed globally or via npx)
+- iOS Simulator (for macOS) or Android Emulator (for development)
+- Expo Go app (optional, for testing on physical devices)
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd scamly-app
+   ```
+
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-2. Start the app
+3. Set up environment variables (see Environment Variables section below)
 
+4. Start the development server:
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+5. Run on your preferred platform:
+   - Press `i` for iOS simulator
+   - Press `a` for Android emulator
+   - Scan QR code with Expo Go app for physical device
+   - Press `w` for web browser
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Development Commands
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- `npm start` - Start Expo development server
+- `npm run android` - Start on Android
+- `npm run ios` - Start on iOS
+- `npm run web` - Start on web
+- `npm run lint` - Run ESLint
 
-## Get a fresh project
+## Environment Variables
 
-When you're ready, run:
+The following environment variables need to be configured in a `.env` file or your environment:
 
-```bash
-npm run reset-project
-```
+- `EXPO_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous/public key
+- `EXPO_PUBLIC_POSTHOG_API_KEY` - PostHog API key for analytics
+- `EXPO_PUBLIC_POSTHOG_HOST` - PostHog host URL (optional, defaults to `https://us.i.posthog.com`)
+- `EXPO_PUBLIC_SENTRY_DSN` - Sentry DSN for error tracking
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+**Note**: Do not commit actual values to version control. Use `.env.local` or similar for local development, and configure these in your deployment environment.
 
-## Learn more
+## Architecture Overview
 
-To learn more about developing your project with Expo, look at the following resources:
+Scamly follows a file-based routing architecture using Expo Router, which maps the file structure in the `app` directory to navigation routes.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Routing Structure
 
-## Join the community
+- **Root Layout** (`app/_layout.tsx`): Initializes Sentry, PostHog, fonts, and theme providers. Sets up global error boundaries.
+- **Index** (`app/index.tsx`): Entry point that checks authentication status and redirects to home or login accordingly.
+- **Auth Routes** (`app/(auth)/`): Authentication screens (login, etc.)
+- **Tab Routes** (`app/(tabs)/`): Main application screens with bottom tab navigation:
+  - `home.tsx` - Home dashboard
+  - `scan.tsx` - Scam scanner
+  - `chat/` - AI chat interface (with nested routes for individual chats)
+  - `info-search.tsx` - Information search
+  - `learn/` - Learning center with articles and quick tips
 
-Join our community of developers creating universal apps.
+### Data Flow
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. **Authentication**: Users authenticate through Supabase Auth. Session is checked on app startup and stored in AsyncStorage.
+2. **Backend Communication**: All backend operations (database queries, file uploads, AI chat) go through Supabase client configured in `utils/supabase.ts`.
+3. **Analytics**: PostHog tracks user events and sessions. Analytics are only enabled after authentication.
+4. **Error Tracking**: Sentry captures and reports errors with context about the feature and user state.
+5. **State Management**: React hooks and context API manage local state. Supabase handles server state through real-time subscriptions where needed.
+
+### Key Utilities
+
+- `utils/supabase.ts` - Supabase client configuration
+- `utils/analytics.ts` - PostHog analytics wrapper with session tracking
+- `utils/sentry.ts` - Sentry error tracking with smart filtering
+- `theme/` - Theme system with colors, typography, and dark mode support
+
+## Testing
+
+Currently, there are no automated tests in the codebase. Testing infrastructure and test suites are planned for future development.
