@@ -1,7 +1,7 @@
 import { useTheme } from "@/theme";
+import Markdown from "@ronradtke/react-native-markdown-display";
 import { memo, useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
-import Markdown from "@ronradtke/react-native-markdown-display";
 
 export type ChatMessage = {
   id: string;

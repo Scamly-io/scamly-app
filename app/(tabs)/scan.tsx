@@ -11,6 +11,7 @@ import {
   trackUserVisibleError,
   type ResultCategory,
 } from "@/utils/analytics";
+import { captureDataFetchError, captureScanError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -112,9 +113,8 @@ export default function Scan() {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error("No user:", userError);
-      // Track user-visible error: account/session issue
       trackUserVisibleError("scan", "session_invalid", false);
+      captureDataFetchError(userError || new Error("No user found"), "scan", "get_user", "critical");
       Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
       return;
     }
@@ -128,9 +128,8 @@ export default function Scan() {
       .single();
 
     if (profileError) {
-      console.error("Error fetching user profile:", profileError);
-      // Track user-visible error: profile fetch failure
       trackUserVisibleError("scan", "profile_fetch_failed", false);
+      captureDataFetchError(profileError, "scan", "fetch_profile", "critical");
       Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
       return;
     }
@@ -146,9 +145,8 @@ export default function Scan() {
         .lt("created_at", nextPeriodStart.toISOString());
 
       if (countError) {
-        console.error("Error fetching scan count:", countError);
-        // Track user-visible error: quota check failure
         trackUserVisibleError("scan", "quota_check_failed", false);
+        captureDataFetchError(countError, "scan", "fetch_quota", "critical");
         Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
         return;
       }
@@ -285,7 +283,7 @@ export default function Scan() {
     try {
       await uploadImageToS3(imageBlob, cleanFileName);
     } catch (err) {
-      console.error("Error getting presigned upload URL: ", err);
+      captureScanError(err, "upload_image", { fileName: cleanFileName });
       // Track scan failure at upload stage
       trackScanFailed("upload_failed", "upload");
       trackUserVisibleError("scan", "upload_failed", true);
@@ -298,7 +296,7 @@ export default function Scan() {
       await scanImage(publicUrl, userId, scanStartTime);
       setLoading(false);
     } catch (err) {
-      console.error("Error scanning image: ", err);
+      captureScanError(err, "scan_image", { imageUrl: publicUrl });
       // Track scan failure at processing/response stage
       trackScanFailed("scan_api_error", "processing");
       trackUserVisibleError("scan", "scan_api_error", true);
@@ -312,7 +310,7 @@ export default function Scan() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== "granted") {
-      // Track user-visible error: permission denied
+      // Permission denied is expected user behavior, not logged to Sentry
       trackUserVisibleError("scan", "photo_permission_denied", true);
       Alert.alert("Error", "We need permission to access your photos to upload images.");
       return;

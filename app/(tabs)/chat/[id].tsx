@@ -1,8 +1,9 @@
 import ChatInputBar from "@/components/ChatInputBar";
-import ThemedBackground from "@/components/ThemedBackground";
 import MessageBlock, { ChatMessage } from "@/components/MessageBlock";
+import ThemedBackground from "@/components/ThemedBackground";
 import ThinkingIndicator from "@/components/ThinkingIndicator";
 import { useTheme } from "@/theme";
+import { captureChatError, captureDataFetchError, captureNetworkError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
@@ -46,7 +47,7 @@ export default function ChatDetail() {
         error: userError,
       } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error("No user:", userError);
+        captureDataFetchError(userError || new Error("No user found"), "chat", "get_user", "critical");
         Alert.alert("Error", "No user found");
         setPlanLoading(false);
         return;
@@ -61,7 +62,7 @@ export default function ChatDetail() {
         .single();
 
       if (profileError) {
-        console.error("Error fetching user profile:", profileError);
+        captureDataFetchError(profileError, "chat", "fetch_profile", "critical");
         Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
         setPlanLoading(false);
         return;
@@ -173,8 +174,13 @@ export default function ChatDetail() {
       );
 
       if (!res.ok) {
+        captureNetworkError(new Error(`HTTP error! status: ${res.status}`), {
+          feature: "chat",
+          action: "send_message",
+          statusCode: res.status,
+        });
         displayErrorMessage(typingMessage);
-        throw new Error(`HTTP error! status: ${res.status}`);
+        return;
       }
 
       const data = await res.json();
@@ -185,7 +191,7 @@ export default function ChatDetail() {
         );
       });
     } catch (error) {
-      console.error("Error getting response from lambda: ", error);
+      captureChatError(error, "send_message");
       displayErrorMessage(typingMessage);
     }
   }

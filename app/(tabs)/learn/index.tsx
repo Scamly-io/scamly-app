@@ -6,6 +6,7 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/access";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { captureError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
@@ -77,7 +78,7 @@ export default function Learn() {
         const { data: featuredArticle, error: featuredArticleError } = await query.single();
 
         if (featuredArticleError || !featuredArticle) {
-          console.error("Error fetching featured article:", featuredArticleError);
+          captureWarning(featuredArticleError || new Error("No featured article"), "learn", "fetch_featured_article");
           return;
         }
 
@@ -105,7 +106,7 @@ export default function Learn() {
         const { data: trendingArticles, error: trendingArticlesError } = await query;
 
         if (trendingArticlesError || !trendingArticles) {
-          console.error("Error fetching trending articles:", trendingArticlesError);
+          captureWarning(trendingArticlesError || new Error("No trending articles"), "learn", "fetch_trending_articles");
           return;
         }
 
@@ -138,7 +139,7 @@ export default function Learn() {
         const { data: quickTips, error: quickTipsError } = await query;
 
         if (quickTipsError || !quickTips) {
-          console.error("Error fetching quick tips:", quickTipsError);
+          captureWarning(quickTipsError || new Error("No quick tips"), "learn", "fetch_quick_tips");
           return;
         }
 
@@ -199,9 +200,13 @@ export default function Learn() {
         Alert.alert("No results found", `We couldn't find any articles related to ${searchInput.trim()}`);
       }
     } catch (error) {
-      console.error("Error searching articles: ", error);
-      // Track user-visible error: search failure
       trackUserVisibleError("learn", "search_failed", true);
+      captureError(error, {
+        feature: "learn",
+        action: "search_articles",
+        severity: "critical",
+        extra: { searchInput },
+      });
       Alert.alert("Error", "Failed to search articles. Please try again later.");
     } finally {
       setSearchLoading(false);

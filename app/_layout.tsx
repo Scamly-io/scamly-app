@@ -1,13 +1,18 @@
 import { ThemeProvider, useTheme } from "@/theme";
 import { initializePostHog, initializeSessionTracking } from "@/utils/analytics";
+import { initializeSentry } from "@/utils/sentry";
+import * as Sentry from "@sentry/react-native";
 import { useFonts } from "expo-font";
 import { Slot } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { PostHogProvider, usePostHog } from "posthog-react-native";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+
+// Initialize Sentry as early as possible
+initializeSentry();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -69,21 +74,34 @@ export default function Layout() {
   }
 
   return (
-    <PostHogProvider
-      apiKey={POSTHOG_API_KEY}
-      options={{ host: POSTHOG_HOST }}
-      autocapture={{
-        captureTouches: true,
-        ignoreLabels: [],
-        customLabelProp: 'ph-label',
-        noCaptureProp: 'ph-no-capture',
-      }}
+    <Sentry.ErrorBoundary
+      fallback={({ error }) => (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
+          <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>
+            Something went wrong
+          </Text>
+          <Text style={{ textAlign: "center", color: "#666" }}>
+            We've been notified and are working to fix the issue. Please restart the app.
+          </Text>
+        </View>
+      )}
     >
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <AppContent />
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </PostHogProvider>
+      <PostHogProvider
+        apiKey={POSTHOG_API_KEY}
+        options={{ host: POSTHOG_HOST }}
+        autocapture={{
+          captureTouches: true,
+          ignoreLabels: [],
+          customLabelProp: 'ph-label',
+          noCaptureProp: 'ph-no-capture',
+        }}
+      >
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <AppContent />
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </PostHogProvider>
+    </Sentry.ErrorBoundary>
   );
 }

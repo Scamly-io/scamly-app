@@ -2,6 +2,7 @@ import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { identifyUser, trackUserVisibleError, type UserPlan } from "@/utils/analytics";
+import { captureError, setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useRouter } from "expo-router";
 import { Lock, Mail } from "lucide-react-native";
@@ -58,13 +59,13 @@ export default function Login() {
 
       if (error) {
         Alert.alert("Error", error.message);
-        // Track login failure as user-visible error
         trackUserVisibleError("login", "auth_error", true);
+        // Auth errors (wrong credentials) are expected user behavior, not logged to Sentry
         setLoading(false);
         return;
       }
 
-      // Identify user for analytics after successful login
+      // Identify user for analytics and Sentry after successful login
       if (data.user) {
         try {
           const { data: profile } = await supabase
@@ -74,20 +75,27 @@ export default function Login() {
             .single();
 
           if (profile) {
+            const planCategory = getPlanCategory(profile.subscription_plan);
             // Identify user with PostHog using Supabase user ID and plan
-            identifyUser(data.user.id, getPlanCategory(profile.subscription_plan));
+            identifyUser(data.user.id, planCategory);
+            // Set Sentry user context for error tracking
+            setUserContext(data.user.id, planCategory);
           }
         } catch (profileError) {
-          // Continue login even if identification fails
-          console.error("Error identifying user:", profileError);
+          // Continue login even if identification fails - non-blocking
         }
       }
 
       router.replace("/home");
     } catch (error) {
       Alert.alert("Error", "Something went wrong while logging in. Please try again.");
-      // Track unexpected login error
       trackUserVisibleError("login", "unexpected_error", true);
+      // Only capture truly unexpected errors
+      captureError(error, {
+        feature: "login",
+        action: "login_attempt",
+        severity: "critical",
+      });
       setLoading(false);
     }
   };

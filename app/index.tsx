@@ -1,6 +1,7 @@
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { identifyUser, type UserPlan } from "@/utils/analytics";
+import { setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
@@ -60,12 +61,14 @@ export default function Index() {
             .single();
 
           if (profile) {
+            const planCategory = getPlanCategory(profile.subscription_plan);
             // Identify user with PostHog using Supabase user ID and plan
-            identifyUser(session.user.id, getPlanCategory(profile.subscription_plan));
+            identifyUser(session.user.id, planCategory);
+            // Set Sentry user context for error tracking
+            setUserContext(session.user.id, planCategory);
           }
         } catch (error) {
-          // Continue navigation even if identification fails
-          console.error("Error identifying user:", error);
+          // Continue navigation even if identification fails - non-blocking
         }
         router.replace("/home");
       };

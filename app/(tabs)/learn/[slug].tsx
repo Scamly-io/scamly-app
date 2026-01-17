@@ -7,6 +7,7 @@ import {
   trackArticleViewed,
   trackUserVisibleError,
 } from "@/utils/analytics";
+import { captureDataFetchError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import Markdown from "@ronradtke/react-native-markdown-display";
 import { router, useLocalSearchParams } from "expo-router";
@@ -104,9 +105,8 @@ export default function ArticleDetail() {
         .single();
 
       if (articleError || !article) {
-        console.error("Error fetching article:", articleError);
-        // Track user-visible error: article not found
         trackUserVisibleError("learn", "article_not_found", false);
+        captureDataFetchError(articleError || new Error("Article not found"), "learn", "fetch_article", "critical", { slug });
         Alert.alert("Error", "We couldn't find the article you were looking for.", [
           {
             text: "Back",
@@ -137,7 +137,8 @@ export default function ArticleDetail() {
       try {
         await supabase.rpc("increment_article_views", { article_id: article.id });
       } catch (error) {
-        console.error("Error incrementing article views:", error);
+        // Non-blocking error - doesn't affect user experience
+        captureWarning(error, "learn", "increment_views", { articleId: article.id });
       }
     }
 

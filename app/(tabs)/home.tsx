@@ -5,6 +5,7 @@ import QuickTipTile from "@/components/QuickTipTile";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { resetUser, trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { captureDataFetchError, captureError, captureWarning, clearUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
@@ -66,9 +67,8 @@ export default function Home() {
         } = await supabase.auth.getUser();
 
         if (userError || !user) {
-          console.error("No user:", userError);
-          // Track user-visible error: account issue requiring logout
           trackUserVisibleError("home", "session_invalid", false);
+          captureDataFetchError(userError || new Error("No user found"), "home", "get_user", "critical");
           Alert.alert(
             "Error",
             "There has been an issue with your account and you have been logged out. Please log in again.",
@@ -93,9 +93,8 @@ export default function Home() {
           .single();
 
         if (profileError || !profileData) {
-          console.error("Error fetching profile:", profileError);
-          // Track user-visible error: profile fetch failure
           trackUserVisibleError("home", "profile_fetch_failed", false);
+          captureDataFetchError(profileError || new Error("No profile data"), "home", "fetch_profile", "critical");
           setUserName("");
           return false;
         }
@@ -121,7 +120,7 @@ export default function Home() {
         const { data: trendingArticles, error: trendingArticlesError } = await query;
 
         if (!trendingArticles || trendingArticlesError) {
-          console.error("Error fetching trending articles:", trendingArticlesError);
+          captureWarning(trendingArticlesError || new Error("No trending articles"), "home", "fetch_trending_articles");
         } else {
           setTrendingArticles(
             trendingArticles.map((article: any) => ({
@@ -153,7 +152,7 @@ export default function Home() {
         const { data: quickTips, error: quickTipsError } = await query;
 
         if (!quickTips || quickTipsError) {
-          console.error("Error fetching quick tips:", quickTipsError);
+          captureWarning(quickTipsError || new Error("No quick tips"), "home", "fetch_quick_tips");
         } else {
           setQuickTips(
             quickTips.map((quickTip: any) => ({
@@ -178,14 +177,18 @@ export default function Home() {
 
   async function handleSignOut() {
     try {
-      // Reset analytics identity on logout
+      // Reset analytics and Sentry identity on logout
       resetUser();
+      clearUserContext();
       await supabase.auth.signOut();
       router.replace("/login");
     } catch (err) {
-      console.error("Error signing user out:", err);
-      // Track user-visible error: sign out failure
       trackUserVisibleError("home", "signout_failed", true);
+      captureError(err, {
+        feature: "home",
+        action: "sign_out",
+        severity: "critical",
+      });
       Alert.alert("Error", "There was an error signing you out. Please try again.");
     }
   }

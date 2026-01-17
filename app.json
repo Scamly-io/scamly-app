@@ -39,7 +39,14 @@
           }
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "scamly",
+          "project": "scamly-app"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

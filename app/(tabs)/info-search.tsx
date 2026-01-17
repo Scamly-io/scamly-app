@@ -3,22 +3,23 @@ import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { captureDataFetchError, captureNetworkError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import { Check, ContactRound, Copy, ExternalLink, Globe, Info, Lock, Phone, Search } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Linking,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -51,9 +52,8 @@ export default function PhoneSearch() {
         error: userError,
       } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error("No user:", userError);
-        // Track user-visible error: no user found
         trackUserVisibleError("info_search", "session_invalid", false);
+        captureDataFetchError(userError || new Error("No user found"), "info_search", "get_user", "critical");
         Alert.alert("Error", "No user found");
         setPlanLoading(false);
         return;
@@ -68,9 +68,8 @@ export default function PhoneSearch() {
         .single();
 
       if (profileError) {
-        console.error("Error fetching user profile:", profileError);
-        // Track user-visible error: profile fetch failure
         trackUserVisibleError("info_search", "profile_fetch_failed", false);
+        captureDataFetchError(profileError, "info_search", "fetch_profile", "critical");
         Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
         setPlanLoading(false);
         return;
@@ -113,9 +112,11 @@ export default function PhoneSearch() {
       setResultData(result);
       setShowResults(true);
     } catch (err) {
-      console.error("Error searching: ", err);
-      // Track user-visible error: search failure
       trackUserVisibleError("info_search", "search_failed", true);
+      captureNetworkError(err, {
+        feature: "info_search",
+        action: "search_company",
+      });
       setError("Failed to fetch company information. Please try again later.");
     } finally {
       setIsLoading(false);
