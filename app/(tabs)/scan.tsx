@@ -2,16 +2,17 @@ import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
+import { ScanResult } from "@/types/scanResult";
+import { ScanError, scanImage } from "@/utils/ai/scan";
 import {
   trackFeatureOpened,
   trackResultViewed,
   trackScanCompleted,
-  trackScanFailed,
   trackScanStarted,
   trackUserVisibleError,
   type ResultCategory,
 } from "@/utils/analytics";
-import { captureDataFetchError, captureScanError } from "@/utils/sentry";
+import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -31,19 +32,6 @@ import {
 } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-type ScanResults = {
-  is_scam: boolean;
-  risk_level: "low" | "medium" | "high";
-  confidence: number;
-  detections: {
-    category: string;
-    description: string;
-    severity: "low" | "medium" | "high";
-  }[];
-  scan_successful: boolean;
-  scan_failure_reason: string | null;
-};
 
 function getUserBillingPeriod(createdAt: string | Date) {
   const created = new Date(createdAt);
@@ -74,7 +62,7 @@ function getUserBillingPeriod(createdAt: string | Date) {
   return { periodStart, nextPeriodStart };
 }
 
-const FREE_USER_SCAN_QUOTA = 4;
+const FREE_USER_SCAN_QUOTA = 6;
 
 /**
  * Map scan results to analytics result category.
@@ -95,7 +83,7 @@ export default function Scan() {
   const [loading, setLoading] = useState<boolean>(false);
   const [pageLoading, setPageLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<ScanResults | null>(null);
+  const [results, setResults] = useState<ScanResult | null>(null);
   const [aspectRatio, setAspectRatio] = useState<number>(1);
   const [userId, setUserId] = useState<string | null>(null);
   const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
@@ -192,73 +180,6 @@ export default function Scan() {
     return blob;
   }
 
-  async function uploadImageToS3(imageBlob: Blob, fileName: string) {
-    let mainUploadUrl = "";
-    let tempUploadUrl = "";
-
-    const response = await fetch(
-      "https://0i3wpw1lxk.execute-api.ap-southeast-2.amazonaws.com/dev/upload",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName }),
-      }
-    );
-
-    const data = await response.json();
-    mainUploadUrl = data.upload_url_main;
-    tempUploadUrl = data.upload_url_temp;
-
-    const [uploadMainResponse, uploadTempResponse] = await Promise.all([
-      fetch(mainUploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "image/jpeg" },
-        body: imageBlob,
-      }),
-      fetch(tempUploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "image/jpeg" },
-        body: imageBlob,
-      }),
-    ]);
-
-    if (!uploadMainResponse.ok || !uploadTempResponse.ok) {
-      throw new Error("Failed to upload images to S3");
-    }
-  }
-
-  async function scanImage(imageUrl: string, userId: string, scanStartTime: number) {
-    const response = await fetch(
-      "https://ab16q62v9b.execute-api.ap-southeast-2.amazonaws.com/dev/scan",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageUrl,
-          userId,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Failed to scan image, status code: " + response.status);
-    }
-
-    const json = await response.json();
-    const data: ScanResults = typeof json === "string" ? JSON.parse(json) : json;
-
-    // Track successful scan completion with result category and processing time
-    const processingTimeMs = Date.now() - scanStartTime;
-    const resultCategory = getResultCategory(data.is_scam, data.risk_level);
-    trackScanCompleted("screenshot", resultCategory, processingTimeMs);
-
-    // Track that the user is viewing the result
-    trackResultViewed(resultCategory);
-    hasTrackedResultView.current = true;
-
-    setResults(data);
-  }
-
   async function handleScan() {
     if (!image) return;
     if (!userId) return;
@@ -281,28 +202,45 @@ export default function Scan() {
     const imageBlob = await convertImageToBlob(image.uri!);
 
     try {
-      await uploadImageToS3(imageBlob, cleanFileName);
-    } catch (err) {
-      captureScanError(err, "upload_image", { fileName: cleanFileName });
-      // Track scan failure at upload stage
-      trackScanFailed("upload_failed", "upload");
-      trackUserVisibleError("scan", "upload_failed", true);
-      Alert.alert("Error", "Your image failed to upload to the AI agent. Please try again later");
-      setLoading(false);
-      return;
-    }
+      const scanResults = await scanImage(
+        publicUrl, 
+        userId, 
+        imageBlob, 
+        cleanFileName, 
+        FREE_USER_SCAN_QUOTA
+      );
 
-    try {
-      await scanImage(publicUrl, userId, scanStartTime);
-      setLoading(false);
+      // Track successful scan completion with result category and processing time
+      const processingTimeMs = Date.now() - scanStartTime;
+      const resultCategory = getResultCategory(scanResults.is_scam, scanResults.risk_level);
+      trackScanCompleted("screenshot", resultCategory, processingTimeMs);
+
+      // Track that the user is viewing the result
+      trackResultViewed(resultCategory);
+      hasTrackedResultView.current = true;
+
+      setResults(scanResults);
     } catch (err) {
-      captureScanError(err, "scan_image", { imageUrl: publicUrl });
-      // Track scan failure at processing/response stage
-      trackScanFailed("scan_api_error", "processing");
-      trackUserVisibleError("scan", "scan_api_error", true);
-      Alert.alert("Error", "We failed to scan your image. Please try again later");
+      // Track user-visible error for analytics
+      trackUserVisibleError("scan", "scan_failed", true);
+
+      // Show appropriate error message based on error type
+      if (err instanceof ScanError) {
+        if (err.stage === "quota_exceeded") {
+          // Refresh the page state to show quota warning
+          handlePageMount();
+          Alert.alert("Scan Limit Reached", "You've reached your monthly scan limit. Please upgrade or wait for your quota to reset.");
+        } else if (err.stage === "upload") {
+          Alert.alert("Upload Failed", "We couldn't upload your image. Please check your connection and try again.");
+        } else {
+          Alert.alert("Scan Failed", "We couldn't complete your scan. Please try again later.");
+        }
+      } else {
+        // Generic error for unexpected failures
+        Alert.alert("Scan Failed", "Something went wrong while scanning your image. Please try again later.");
+      }
+    } finally {
       setLoading(false);
-      return;
     }
   }
 
@@ -367,6 +305,17 @@ export default function Scan() {
         return <XCircle size={20} color={colors.error} />;
       default:
         return null;
+    }
+  }
+
+  function getResultTitle(riskLevel: string) {
+    switch (riskLevel) {
+      case "low":
+        return "Looks Safe";
+      case "medium":
+        return "Possibly a Scam";
+      case "high":
+        return "Likely a Scam";
     }
   }
 
@@ -526,7 +475,7 @@ export default function Scan() {
                             { color: getRiskColor(results.risk_level) },
                           ]}
                         >
-                          {results.is_scam ? "Likely a Scam" : "Looks Safe"}
+                          {getResultTitle(results.risk_level)}
                         </Text>
                       </View>
                       <Text
