@@ -10,7 +10,7 @@ const openai = new OpenAI({
 
 /**
  * Custom error class for scan-related errors.
- * Allows us to distinguish between different failure stages.
+ * Allows distinguishing between different failure stages.
  */
 export class ScanError extends Error {
     stage: 'upload' | 'processing' | 'quota_exceeded';
@@ -116,7 +116,7 @@ const JSONSchema = {
   "additionalProperties": false
 }
 
-const model = "gpt-5-mini" // Snapshot model that will not change behaviour. Can be updated if OpenAI release new models.
+const model = "gpt-5-mini"
 
 function getUserBillingPeriod(createdAt: string | Date): { periodStart: Date, nextPeriodStart: Date } {
     const created = new Date(createdAt);

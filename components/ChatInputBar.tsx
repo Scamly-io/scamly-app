@@ -37,10 +37,11 @@ export default function ChatInputBar({ value, onChangeText, onSend, placeholder,
         value={value}
         onChangeText={onChangeText}
         multiline
-        numberOfLines={1}
+        numberOfLines={2}
         blurOnSubmit={false}
         returnKeyType="send"
         onSubmitEditing={canSend ? onSend : undefined}
+        textAlignVertical="top"
       />
       <TouchableOpacity
         style={[
@@ -72,9 +73,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: "Poppins-Regular",
     fontSize: 15,
-    paddingVertical: 8,
+    lineHeight: 22,
+    paddingVertical: 4,
     paddingHorizontal: 4,
-    maxHeight: 120,
+    minHeight: 44,
+    maxHeight: 60,
   },
   sendButton: {
     width: 42,

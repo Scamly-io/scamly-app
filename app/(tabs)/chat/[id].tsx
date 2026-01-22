@@ -3,7 +3,9 @@ import MessageBlock, { ChatMessage } from "@/components/MessageBlock";
 import ThemedBackground from "@/components/ThemedBackground";
 import ThinkingIndicator from "@/components/ThinkingIndicator";
 import { useTheme } from "@/theme";
-import { captureChatError, captureDataFetchError, captureNetworkError } from "@/utils/sentry";
+import { ChatError, generateResponse } from "@/utils/ai/chat";
+import { trackUserVisibleError } from "@/utils/analytics";
+import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
@@ -12,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -48,6 +51,7 @@ export default function ChatDetail() {
       } = await supabase.auth.getUser();
       if (userError || !user) {
         captureDataFetchError(userError || new Error("No user found"), "chat", "get_user", "critical");
+        trackUserVisibleError("chat", "session_invalid", false);
         Alert.alert("Error", "No user found");
         setPlanLoading(false);
         return;
@@ -63,6 +67,7 @@ export default function ChatDetail() {
 
       if (profileError) {
         captureDataFetchError(profileError, "chat", "fetch_profile", "critical");
+        trackUserVisibleError("chat", "profile_fetch_failed", false);
         Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
         setPlanLoading(false);
         return;
@@ -128,14 +133,42 @@ export default function ChatDetail() {
     return () => clearTimeout(timeout);
   }, [messages]);
 
-  function displayErrorMessage(typingMessage: ChatMessage) {
+  // Scroll to bottom when keyboard opens
+  useEffect(() => {
+    const keyboardEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const subscription = Keyboard.addListener(keyboardEvent, () => {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  function displayErrorMessage(typingMessage: ChatMessage, errorMessage: string) {
     setMessages((prev) => {
       return prev.map((msg) =>
         msg.id === typingMessage.id
-          ? { ...msg, content: "Sorry, I encountered an error. Please try again later." }
+          ? { ...msg, content: errorMessage }
           : msg
       );
     });
+  }
+
+  function getErrorMessage(error: unknown): string {
+    if (error instanceof ChatError) {
+      switch (error.stage) {
+        case "subscription_check":
+          return "Sorry, I couldn't verify your account. Please try again.";
+        case "db_write":
+          return "Sorry, I couldn't save your message. Please check your connection and try again.";
+        case "ai_response":
+          return "Sorry, I encountered an error generating a response. Please try again.";
+        default:
+          return "Sorry, something went wrong. Please try again later.";
+      }
+    }
+    return "Sorry, something went wrong. Please try again later.";
   }
 
   async function processMessage() {
@@ -164,35 +197,18 @@ export default function ChatDetail() {
     setInput("");
 
     try {
-      const res = await fetch(
-        `https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/get-ai-response`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content, chatId, conversationId, userId }),
-        }
-      );
-
-      if (!res.ok) {
-        captureNetworkError(new Error(`HTTP error! status: ${res.status}`), {
-          feature: "chat",
-          action: "send_message",
-          statusCode: res.status,
-        });
-        displayErrorMessage(typingMessage);
-        return;
-      }
-
-      const data = await res.json();
+      const response = await generateResponse(content, chatId, conversationId, userId);
 
       setMessages((prev) => {
         return prev.map((msg) =>
-          msg.id === typingMessage.id ? { ...msg, content: data.fullText } : msg
+          msg.id === typingMessage.id ? { ...msg, content: response } : msg
         );
       });
     } catch (error) {
-      captureChatError(error, "send_message");
-      displayErrorMessage(typingMessage);
+      // Error is already captured to Sentry and tracked in PostHog by chat.ts
+      // Just display the appropriate error message to the user
+      const errorMessage = getErrorMessage(error);
+      displayErrorMessage(typingMessage, errorMessage);
     }
   }
 
