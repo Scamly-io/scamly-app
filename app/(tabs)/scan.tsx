@@ -2,7 +2,6 @@ import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
-import { ScanResult } from "@/types/scanResult";
 import { ScanError, scanImage } from "@/utils/ai/scan";
 import {
   trackFeatureOpened,
@@ -14,6 +13,7 @@ import {
 } from "@/utils/analytics";
 import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
+import { ScanResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";

@@ -2,12 +2,14 @@ import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
+import { search, SearchError } from "@/utils/ai/search";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
-import { captureDataFetchError, captureNetworkError } from "@/utils/sentry";
+import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
+import { SearchResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
-import { Check, ContactRound, Copy, ExternalLink, Globe, Info, Lock, Phone, Search } from "lucide-react-native";
+import { Check, ContactRound, Copy, ExternalLink, Globe, Info, Lock, Phone, Search as SearchIcon } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -29,12 +31,12 @@ export default function PhoneSearch() {
   const [searchInput, setSearchInput] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [resultData, setResultData] = useState<any>(null);
+  const [resultData, setResultData] = useState<SearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [planLoading, setPlanLoading] = useState(true);
-  const [isFreePlan, setIsFreePlan] = useState<Boolean>(false);
-  const [userId, setUserId] = useState<String>("");
+  const [isFreePlan, setIsFreePlan] = useState<boolean>(false);
+  const [userId, setUserId] = useState<string>("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Track feature discovery when info search tab is focused
@@ -82,6 +84,22 @@ export default function PhoneSearch() {
     fetchSubscriptionPlan();
   }, []);
 
+  function getErrorMessage(err: unknown): string {
+    if (err instanceof SearchError) {
+      switch (err.stage) {
+        case "subscription_check":
+          return "There was an issue verifying your account. Please try again.";
+        case "validation":
+          return "Please enter a valid company name.";
+        case "ai_response":
+          return "Failed to fetch company information. Please try again later.";
+        default:
+          return "Something went wrong. Please try again later.";
+      }
+    }
+    return "Something went wrong. Please try again later.";
+  }
+
   async function handleSearch() {
     if (isFreePlan) {
       Alert.alert("Feature Locked", "This feature is not available on free accounts.");
@@ -94,36 +112,21 @@ export default function PhoneSearch() {
     setShowResults(false);
 
     try {
-      const response = await fetch(
-        "https://1tee7jgtpg.execute-api.ap-southeast-2.amazonaws.com/dev/search",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ companyName: searchInput.trim(), userId }),
-        }
-      );
+      const result = await search(searchInput.trim(), userId);
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error);
-      }
-
-      setResultData(result);
+      setResultData(result.data);
       setShowResults(true);
     } catch (err) {
-      trackUserVisibleError("info_search", "search_failed", true);
-      captureNetworkError(err, {
-        feature: "info_search",
-        action: "search_company",
-      });
-      setError("Failed to fetch company information. Please try again later.");
+      // Error is already captured to Sentry and tracked in PostHog by search.ts
+      // Just display the appropriate error message to the user
+      const errorMessage = getErrorMessage(err);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   }
 
-  const company = resultData?.data || null;
+  const company = resultData;
 
   // Clean domain by removing www., https://, or http:// prefixes
   const cleanDomain = (domain: string) => {
@@ -151,7 +154,12 @@ export default function PhoneSearch() {
         >
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Info Search</Text>
+            <View style={styles.headerTitleRow}>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Info Search</Text>
+              <View style={[styles.betaTag, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)' }]}>
+                <Text style={[styles.betaTagText, { color: colors.accent }]}>Beta</Text>
+              </View>
+            </View>
             <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
               Find contact info for any organisation worldwide
             </Text>
@@ -177,7 +185,7 @@ export default function PhoneSearch() {
                   },
                 ]}
               >
-                <Search size={20} color={colors.textTertiary} />
+                <SearchIcon size={20} color={colors.textTertiary} />
                 <TextInput
                   style={[styles.searchInput, { color: colors.textPrimary }]}
                   placeholder="Enter a company name"
@@ -395,7 +403,7 @@ export default function PhoneSearch() {
                   <View
                     style={[styles.emptyIconContainer, { backgroundColor: colors.accentMuted }]}
                   >
-                    <Search size={28} color={colors.accent} />
+                    <SearchIcon size={28} color={colors.accent} />
                   </View>
                   <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                     Your results will appear here
@@ -465,10 +473,26 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
   headerTitle: {
     fontFamily: "Poppins-Bold",
     fontSize: 28,
-    marginBottom: 4,
+  },
+  betaTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  betaTagText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   headerSubtitle: {
     fontFamily: "Poppins-Regular",
