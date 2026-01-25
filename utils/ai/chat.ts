@@ -12,9 +12,9 @@ const openai = new OpenAI({
  * Allows distinguishing between different failure stages.
  */
 export class ChatError extends Error {
-    stage: 'subscription_check' | 'db_write' | 'ai_response';
+    stage: 'subscription_check' | 'db_read' | 'db_write' | 'ai_response';
     
-    constructor(message: string, stage: 'subscription_check' | 'db_write' | 'ai_response') {
+    constructor(message: string, stage: 'subscription_check' | 'db_read' | 'db_write' | 'ai_response') {
         super(message);
         this.name = 'ChatError';
         this.stage = stage;
@@ -42,8 +42,70 @@ const systemPrompt = `
   Your priority: stay relevant, concise, and cautious.
 `;
 
+export async function createConversationID(chatId: string): Promise<string> {
+
+    const conversation = await openai.conversations.create()
+    const conversationId = conversation.id;
+
+    const { error: updateError } = await supabase
+        .from("chats")
+        .update({ openai_conversation_id: conversationId })
+        .eq("id", chatId);
+
+    if (updateError) {
+        captureDataFetchError(updateError, "chat", "update_chat_conversation_id", "warning", { chat_id: chatId });
+        throw new ChatError("Error updating chat conversation ID", "db_write");
+    }
+
+    return conversationId;
+
+}
+
+export async function deleteConversationId(chatId: string): Promise<void> {
+    const { data: conversationData, error: conversationError } = await supabase
+        .from("chats")
+        .select("openai_conversation_id")
+        .eq("id", chatId)
+        .single();
+
+    if (conversationError) {
+        captureDataFetchError(conversationError || new Error("Error fetching conversation ID for chat"), "chat", "get_conversation_id", "critical");
+        throw new ChatError("Error fetching conversation ID for chat", "db_read");
+    }
+
+    // If the conversationData is null, there is no need to return an error - its just deleting nothing
+    if (!conversationData) {
+        return;
+    }
+
+    // Delete the conversation from OpenAI
+    const conversationId = conversationData.openai_conversation_id;
+    if (conversationId) {
+        await openai.conversations.delete(conversationId);
+    }
+
+    // Delete the conversation from Supabase
+    const { error: deleteError } = await supabase
+        .from("chats")
+        .delete()
+        .eq("id", chatId);
+
+    if (deleteError) {
+        captureDataFetchError(deleteError, "chat", "delete_conversation_id", "warning", { chat_id: chatId });
+        throw new ChatError("Error deleting conversation ID from chat", "db_write");
+    }
+}
+
+/**
+ * Generates a response from the AI based on the user's message.
+ * 
+ * @param content {string} The user's message
+ * @param chatId {string} The ID of the chat
+ * @param conversationId {string} The ID of the conversation
+ * @param userId {string} The ID of the user
+ * @returns {string} The generated response from the AI
+ */
 export async function generateResponse(content: string, chatId: string, conversationId: string, userId: string): Promise<string> {
-    
     // Check for a free user - Free users can't use the chat feature.
     try {
         const { data: profile, error } = await supabase

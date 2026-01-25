@@ -2,8 +2,9 @@ import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
+import { ChatError, createConversationID, deleteConversationId } from "@/utils/ai/chat";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
-import { captureChatError, captureDataFetchError, captureNetworkError } from "@/utils/sentry";
+import { captureChatError, captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
@@ -174,21 +175,17 @@ export default function ChatIndex() {
     router.push(`/chat/${data.id}`);
 
     try {
-      fetch("https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/create-cid", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId: data.id }),
-      });
-    } catch (error) {
-      trackUserVisibleError("chat", "cid_create_failed", false);
-      captureNetworkError(error, {
-        feature: "chat",
-        action: "create_conversation_id",
-      });
-      Alert.alert(
-        "Error",
-        "There was an error creating your new chat. Please exit and try again."
-      );
+      await createConversationID(data.id);
+    } catch (err) {
+      // Error is already captured in chat.ts
+      // Show user-friendly error based on error type
+      if (err instanceof ChatError) {
+        Alert.alert("Error", "There was an error setting up your chat. Please exit and try again.");
+      } else {
+        trackUserVisibleError("chat", "cid_create_failed", false);
+        captureChatError(err, "create_conversation_id");
+        Alert.alert("Error", "There was an error creating your new chat. Please exit and try again.");
+      }
     }
   }
 
@@ -203,23 +200,25 @@ export default function ChatIndex() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
+          // Optimistically remove from UI
+          const previousChats = chats;
+          setChats((prevChats) => prevChats.filter((chat) => chat.id !== chatId));
+
           try {
-            setChats((prevChats) => prevChats.filter((chat) => chat.id !== chatId));
-
-            await fetch(
-              "https://27ui2kcryi.execute-api.ap-southeast-2.amazonaws.com/dev/delete-cid",
-              {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chatId: chatId }),
-              }
-            );
-
-            await supabase.from("chats").delete().eq("id", chatId);
-          } catch (error) {
-            trackUserVisibleError("chat", "chat_delete_failed", true);
-            captureChatError(error, "delete_chat");
-            Alert.alert("Error", "Could not delete chat");
+            // deleteConversationId handles both OpenAI cleanup and Supabase deletion
+            await deleteConversationId(chatId);
+          } catch (err) {
+            // Restore chats on failure
+            setChats(previousChats);
+            
+            // Error is already captured in chat.ts for ChatError instances
+            if (err instanceof ChatError) {
+              Alert.alert("Error", "Could not delete chat. Please try again.");
+            } else {
+              trackUserVisibleError("chat", "chat_delete_failed", true);
+              captureChatError(err, "delete_chat");
+              Alert.alert("Error", "Could not delete chat");
+            }
           }
         },
       },
