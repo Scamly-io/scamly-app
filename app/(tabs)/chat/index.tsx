@@ -1,6 +1,7 @@
 import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { ChatError, createConversationID, deleteConversationId } from "@/utils/ai/chat";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
@@ -31,6 +32,7 @@ type Chat = {
 
 export default function ChatIndex() {
   const { colors, radius, shadows, isDark } = useTheme();
+  const { user } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [planLoading, setPlanLoading] = useState(true);
@@ -50,14 +52,8 @@ export default function ChatIndex() {
 
   const fetchSubscriptionPlan = async () => {
     setPlanLoading(true);
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
+    if (!user) {
       trackUserVisibleError("chat", "session_invalid", false);
-      captureDataFetchError(userError || new Error("No user found"), "chat", "get_user", "critical");
-      Alert.alert("Error", "No user found");
       setPlanLoading(false);
       return null;
     }
@@ -84,14 +80,8 @@ export default function ChatIndex() {
   const fetchChats = async () => {
     setLoading(true);
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
+    if (!user) {
       trackUserVisibleError("chat", "session_invalid", false);
-      captureDataFetchError(userError || new Error("No user found"), "chat", "get_user_for_chats", "critical");
-      Alert.alert("Error", "No user found");
       setLoading(false);
       return;
     }
@@ -112,6 +102,8 @@ export default function ChatIndex() {
   };
 
   useEffect(() => {
+    if (!user) return;
+    
     fetchSubscriptionPlan().then(() => fetchChats());
 
     const channel = supabase
@@ -126,14 +118,16 @@ export default function ChatIndex() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user]);
 
   useFocusEffect(
     React.useCallback(() => {
       // Track feature discovery when chat tab is focused
       trackFeatureOpened("chat");
-      fetchSubscriptionPlan().then(() => fetchChats());
-    }, [])
+      if (user) {
+        fetchSubscriptionPlan().then(() => fetchChats());
+      }
+    }, [user])
   );
 
   const sortedChats = useMemo(() => {
@@ -147,13 +141,8 @@ export default function ChatIndex() {
       Alert.alert("Feature Locked", "This feature is not available on free accounts.");
       return;
     }
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
+    if (!user) {
       trackUserVisibleError("chat", "session_invalid", false);
-      captureDataFetchError(userError || new Error("No user found"), "chat", "get_user_for_create", "critical");
       Alert.alert("Error", "No user found");
       return;
     }

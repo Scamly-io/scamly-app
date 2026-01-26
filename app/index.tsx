@@ -1,82 +1,28 @@
 import ThemedBackground from "@/components/ThemedBackground";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
-import { identifyUser, type UserPlan } from "@/utils/analytics";
-import { setUserContext } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
-import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 /**
- * Determine the user plan category from subscription_plan string.
- * Maps Supabase subscription_plan values to analytics plan types.
- */
-function getPlanCategory(subscriptionPlan: string): UserPlan {
-  if (subscriptionPlan === "free") return "free";
-  if (subscriptionPlan.includes("trial")) return "trial";
-  return "paid";
-}
-
-/**
  * Root index screen component that handles initial authentication routing.
- * Checks if user is authenticated and redirects to home or login accordingly.
- * Also handles user identification for analytics on existing sessions.
+ * Uses the global auth context to check authentication state and redirects accordingly.
  */
 export default function Index() {
   const { colors } = useTheme();
   const router = useRouter();
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    let mounted = true;
+    if (loading) return;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      setSession(session ?? null);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (!mounted) return;
-      setSession(newSession ?? null);
-    });
-
-    return () => {
-      mounted = false;
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (session === undefined) return;
-
-    if (session) {
-      // User has existing session - identify them for analytics before navigating
-      const identifyAndNavigate = async () => {
-        try {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("subscription_plan")
-            .eq("id", session.user.id)
-            .single();
-
-          if (profile) {
-            const planCategory = getPlanCategory(profile.subscription_plan);
-            // Identify user with PostHog using Supabase user ID and plan
-            identifyUser(session.user.id, planCategory);
-            // Set Sentry user context for error tracking
-            setUserContext(session.user.id, planCategory);
-          }
-        } catch (error) {
-          // Continue navigation even if identification fails - non-blocking
-        }
-        router.replace("/home");
-      };
-      identifyAndNavigate();
+    if (user) {
+      router.replace("/home");
     } else {
       router.replace("/login");
     }
-  }, [session, router]);
+  }, [user, loading, router]);
 
   return (
     <ThemedBackground>

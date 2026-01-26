@@ -3,9 +3,10 @@ import Button from "@/components/Button";
 import Card from "@/components/Card";
 import QuickTipTile from "@/components/QuickTipTile";
 import ThemedBackground from "@/components/ThemedBackground";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
-import { resetUser, trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
-import { captureDataFetchError, captureError, captureWarning, clearUserContext } from "@/utils/sentry";
+import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { captureDataFetchError, captureError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
@@ -41,6 +42,7 @@ type Article = {
 
 export default function Home() {
   const { colors, radius, shadows, isDark } = useTheme();
+  const { user, signOut } = useAuth();
   const [userName, setUserName] = useState<string | null>("");
   const [trendingArticles, setTrendingArticles] = useState<Article[]>([]);
   const [quickTips, setQuickTips] = useState<Article[]>([]);
@@ -60,29 +62,9 @@ export default function Home() {
 
   useEffect(() => {
     async function fetchPageData() {
-      async function getUser(): Promise<boolean> {
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError || !user) {
+      async function getUserProfile(): Promise<boolean> {
+        if (!user) {
           trackUserVisibleError("home", "session_invalid", false);
-          captureDataFetchError(userError || new Error("No user found"), "home", "get_user", "critical");
-          Alert.alert(
-            "Error",
-            "There has been an issue with your account and you have been logged out. Please log in again.",
-            [
-              {
-                text: "Ok",
-                style: "destructive",
-                onPress: () => {
-                  supabase.auth.signOut();
-                  router.replace("/login");
-                },
-              },
-            ]
-          );
           return false;
         }
 
@@ -168,19 +150,16 @@ export default function Home() {
         }
       }
 
-      const premium = await getUser();
+      const premium = await getUserProfile();
       await Promise.all([getTrendingArticles(premium), getQuickTips(premium)]);
       setLoading(false);
     }
     fetchPageData();
-  }, []);
+  }, [user]);
 
   async function handleSignOut() {
     try {
-      // Reset analytics and Sentry identity on logout
-      resetUser();
-      clearUserContext();
-      await supabase.auth.signOut();
+      await signOut();
       router.replace("/login");
     } catch (err) {
       trackUserVisibleError("home", "signout_failed", true);

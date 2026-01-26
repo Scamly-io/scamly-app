@@ -1,6 +1,7 @@
 import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ThemedBackground from "@/components/ThemedBackground";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { ScanError, scanImage } from "@/utils/ai/scan";
 import {
@@ -77,6 +78,7 @@ function getResultCategory(isScam: boolean, riskLevel: string): ResultCategory {
 
 export default function Scan() {
   const { colors, radius, shadows, isDark } = useTheme();
+  const { user } = useAuth();
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -85,7 +87,6 @@ export default function Scan() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<ScanResult | null>(null);
   const [aspectRatio, setAspectRatio] = useState<number>(1);
-  const [userId, setUserId] = useState<string | null>(null);
   const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
   const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
 
@@ -95,19 +96,11 @@ export default function Scan() {
   async function handlePageMount() {
     setPageLoading(true);
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
+    if (!user) {
       trackUserVisibleError("scan", "session_invalid", false);
-      captureDataFetchError(userError || new Error("No user found"), "scan", "get_user", "critical");
       Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
       return;
     }
-
-    setUserId(user.id);
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
@@ -128,7 +121,7 @@ export default function Scan() {
       const { count, error: countError } = await supabase
         .from("scans")
         .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
+        .eq("user_id", user!.id)
         .gte("created_at", periodStart.toISOString())
         .lt("created_at", nextPeriodStart.toISOString());
 
@@ -148,15 +141,19 @@ export default function Scan() {
   }
 
   useEffect(() => {
-    handlePageMount();
-  }, []);
+    if (user) {
+      handlePageMount();
+    }
+  }, [user]);
 
   useFocusEffect(
     React.useCallback(() => {
       // Track feature discovery when scan tab is focused
       trackFeatureOpened("scan");
-      handlePageMount();
-    }, [])
+      if (user) {
+        handlePageMount();
+      }
+    }, [user])
   );
 
   function makeId(length: number): string {
@@ -182,7 +179,7 @@ export default function Scan() {
 
   async function handleScan() {
     if (!image) return;
-    if (!userId) return;
+    if (!user) return;
 
     setResults(null);
     setLoading(true);
@@ -204,7 +201,7 @@ export default function Scan() {
     try {
       const scanResults = await scanImage(
         publicUrl, 
-        userId, 
+        user.id, 
         imageBlob, 
         cleanFileName, 
         FREE_USER_SCAN_QUOTA
@@ -319,7 +316,7 @@ export default function Scan() {
     }
   }
 
-  const scanButtonDisabled = !image || loading || !userId || scanQuotaReached;
+  const scanButtonDisabled = !image || loading || !user || scanQuotaReached;
 
   return (
     <ThemedBackground>

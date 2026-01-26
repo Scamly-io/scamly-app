@@ -1,3 +1,4 @@
+import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider, useTheme } from "@/theme";
 import { initializePostHog, initializeSessionTracking } from "@/utils/analytics";
 import { initializeSentry } from "@/utils/sentry";
@@ -98,7 +99,9 @@ export default function Layout() {
       >
         <SafeAreaProvider>
           <ThemeProvider>
-            <AppContent />
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
           </ThemeProvider>
         </SafeAreaProvider>
       </PostHogProvider>
