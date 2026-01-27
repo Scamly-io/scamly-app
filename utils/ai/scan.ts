@@ -1,11 +1,23 @@
+/**
+ * Scan image Utility Module for Scamly
+ *
+ * Centralizes functions related to scanning images for scams.
+ * Used within (tabs)/scan.tsx
+ *  
+ * Key principles:
+ * - Handles uploading images to S3
+ * - Handles Scanning images using Google GenAI
+ * - Current model: Gemini 3 Flash Preview
+ */
+
 import { ScanResult } from "@/types/scanResult";
 import { trackScanFailed } from "@/utils/analytics";
 import { captureDataFetchError, captureScanError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
-import OpenAI from "openai";
+import { GoogleGenAI, createPartFromUri } from "@google/genai";
 
-const openai = new OpenAI({
-    apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
+const ai = new GoogleGenAI({
+    apiKey: process.env.EXPO_PUBLIC_GOOGLE_GENAI_API_SCAN_KEY,
 });
 
 /**
@@ -265,35 +277,25 @@ export async function scanImage(
     }
 
     // ===============================
-    // Scan image with OpenAI
+    // Scan image with Google GenAI
     // ===============================
     try {
-        const response = await openai.responses.create({
-            model: model,
-            instructions: systemPrompt,
-            input: [
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "input_image",
-                            image_url: imageUrl
-                        }
-                    ]
-                }
+
+        const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: [
+                createPartFromUri(imageUrl, "image/jpeg"),
+                "Scan this screenshot for scams according to the system instructions, return the result in JSON format accoridng to the provided Schema."
             ],
-            text: {
-                format: {
-                    type: "json_schema",
-                    name: "ScanResults",
-                    schema: JSONSchema,
-                    strict: true
-                }
+            config: {
+                systemInstruction: systemPrompt,
+                responseMimeType: "application/json",
+                responseJsonSchema: JSONSchema,
             }
-        });
+        })
         
-        if (!response || !response.output_text) {
-            throw new ScanError("OpenAI returned no data", "processing");
+        if (!response || !response.text) {
+            throw new ScanError("Google GenAI returned no data", "processing");
         }
 
         // Store scan result in database (non-blocking - errors are logged but don't fail the scan)
@@ -301,7 +303,7 @@ export async function scanImage(
             .from("scans")
             .insert({
                 user_id: userId,
-                output: response.output_text,
+                output: response.text  ,
                 response_id: response.id
             });
     
@@ -309,8 +311,8 @@ export async function scanImage(
             captureDataFetchError(scanInsertError, "scan", "insert_scan", "warning", { user_id: userId, response_id: response.id });
         }
         
-        // Parse the response - output_text is already a JSON string
-        const scanResults: ScanResult = JSON.parse(response.output_text);
+        // Parse the response - text    is already a JSON string
+        const scanResults: ScanResult = JSON.parse(response.text   );
 
         return scanResults;
 

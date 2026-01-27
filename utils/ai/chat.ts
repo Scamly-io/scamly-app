@@ -1,3 +1,17 @@
+/**
+ * Chat Utility Module for Scamly
+ *
+ * Centralizes functions related to handling the Chat feature.
+ * Used within (tabs)/chat/[id].tsx and (tabs)/chat/index.tsx
+ *  
+ * Key principles:
+ * - Handles creating and deleting conversation IDs
+ * - Handles generating responses from the AI
+ * - Current model: GPT-5 Mini
+ * 
+ * Plan to migrate this to Google GenAI in the future.
+ */
+
 import { trackUserVisibleError } from "@/utils/analytics";
 import { captureChatError, captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
