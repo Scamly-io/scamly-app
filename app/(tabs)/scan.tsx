@@ -80,7 +80,6 @@ export default function Scan() {
   const { colors, radius, shadows, isDark } = useTheme();
   const { user } = useAuth();
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const [publicImageUrl, setPublicImageUrl] = useState<string | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [pageLoading, setPageLoading] = useState<boolean>(true);
@@ -166,15 +165,14 @@ export default function Scan() {
     return result;
   }
 
-  async function convertImageToBlob(imageUri: string): Promise<Blob> {
+  async function convertImageToB64(imageUri: string): Promise<string> {
+
     const result = await ImageManipulator.manipulateAsync(imageUri, [], {
       compress: 0.6,
-      format: ImageManipulator.SaveFormat.JPEG,
-    });
-
-    const fileRequest = await fetch(result.uri);
-    const blob = await fileRequest.blob();
-    return blob;
+      base64: true,
+      format: ImageManipulator.SaveFormat.JPEG
+    })
+    return result.base64
   }
 
   async function handleScan() {
@@ -191,21 +189,10 @@ export default function Scan() {
 
     const scanStartTime = Date.now();
 
-    const scrubbedFileName = image?.fileName?.split(".")[0] || makeId(12);
-    const cleanFileName = `${scrubbedFileName}_${Date.now()}.jpeg`;
-    const publicUrl = `https://temp-scamly-ai-images.s3.ap-southeast-2.amazonaws.com/${cleanFileName}`;
-    setPublicImageUrl(publicUrl);
-
-    const imageBlob = await convertImageToBlob(image.uri!);
+    const imageB64 = await convertImageToB64(image.uri!);
 
     try {
-      const scanResults = await scanImage(
-        publicUrl, 
-        user.id, 
-        imageBlob, 
-        cleanFileName, 
-        FREE_USER_SCAN_QUOTA
-      );
+      const scanResults = await scanImage(imageB64);
 
       // Track successful scan completion with result category and processing time
       const processingTimeMs = Date.now() - scanStartTime;
