@@ -114,7 +114,7 @@ export default function PhoneSearch() {
     try {
       const result = await search(searchInput.trim(), userId);
 
-      setResultData(result.data);
+      setResultData(result);
       setShowResults(true);
     } catch (err) {
       // Error is already captured to Sentry and tracked in PostHog by search.ts
