@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -37,6 +38,7 @@ export default function ChatIndex() {
   const [loading, setLoading] = useState(true);
   const [planLoading, setPlanLoading] = useState(true);
   const [isFreePlan, setIsFreePlan] = useState(false);
+  const [showLoadingModal, setShowLoadingModal] = useState(false);
 
   const formatDate = (iso?: string) => {
     if (!iso) return "";
@@ -137,11 +139,14 @@ export default function ChatIndex() {
   }, [chats]);
 
   async function createNewChat() {
+    setShowLoadingModal(true);
     if (isFreePlan) {
       Alert.alert("Feature Locked", "This feature is not available on free accounts.");
+      setShowLoadingModal(false);
       return;
     }
     if (!user) {
+      setShowLoadingModal(false);
       trackUserVisibleError("chat", "session_invalid", false);
       Alert.alert("Error", "No user found");
       return;
@@ -154,14 +159,12 @@ export default function ChatIndex() {
       .single();
 
     if (error) {
+      setShowLoadingModal(false);
       trackUserVisibleError("chat", "chat_create_failed", true);
       captureChatError(error, "create_chat");
       Alert.alert("Error", "Could not create new chat");
       return null;
     }
-
-    setChats([...chats, data]);
-    router.push(`/chat/${data.id}`);
 
     try {
       await createConversationID(data.id);
@@ -171,11 +174,16 @@ export default function ChatIndex() {
       if (err instanceof ChatError) {
         Alert.alert("Error", "There was an error setting up your chat. Please exit and try again.");
       } else {
+        setShowLoadingModal(false);
         trackUserVisibleError("chat", "cid_create_failed", false);
         captureChatError(err, "create_conversation_id");
         Alert.alert("Error", "There was an error creating your new chat. Please exit and try again.");
       }
     }
+
+    setShowLoadingModal(false);
+    setChats([...chats, data]);
+    router.push(`/chat/${data.id}`);
   }
 
   async function deleteChat(chatId: string) {
@@ -369,6 +377,29 @@ export default function ChatIndex() {
             </View>
           )}
         </View>
+
+        {/* Loading wheel modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showLoadingModal}
+        >
+          <View style={styles.modalOverlay}>
+            <Animated.View
+              entering={FadeIn.duration(200)}
+              style={[
+                styles.modalContainer,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius["lg"],
+                  ...shadows.xl,
+                },
+              ]}
+            >
+              <ActivityIndicator size="large" color={colors.accent} />
+            </Animated.View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ThemedBackground>
   );
@@ -505,5 +536,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContainer: {
+    width: "100%",
+    height: "100%",
+    maxWidth: 90,
+    maxHeight: 90,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
