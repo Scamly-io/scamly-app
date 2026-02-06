@@ -80,72 +80,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => {
-        if (!mounted) return;
-        setSession(session);
+    // Use onAuthStateChange as the single source of truth for session state.
+    // The INITIAL_SESSION event handles restoring the session from storage,
+    // which avoids the race condition between getSession() and onAuthStateChange
+    // that could leave `loading` stuck at true on cold starts.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!mounted) return;
 
-        // Identify user for analytics if session exists
-        if (session?.user) {
-          identifyUserForTracking(session.user.id);
+      // Handle the initial session load from storage
+      if (event === "INITIAL_SESSION") {
+        setSession(newSession);
+
+        if (newSession?.user) {
+          identifyUserForTracking(newSession.user.id);
         }
 
         setLoading(false);
-      })
-      .catch(async (error) => {
-        // Silently handle invalid refresh token errors - this happens when
-        // the stored token is expired/invalid. Treating as no session is correct.
-        if (error?.name === "AuthApiError" && error?.message?.includes("Refresh Token")) {
-          // Clear the invalid session from storage to prevent future errors
-          await supabase.auth.signOut().catch(() => {});
-          if (mounted) {
-            setSession(null);
-            setLoading(false);
-          }
-          return;
-        }
-        // Re-throw unexpected errors
-        throw error;
-      });
+        return;
+      }
 
-    // Listen for auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        if (!mounted) return;
+      // Handle token refresh errors silently - user will be redirected to login
+      if (event === "TOKEN_REFRESHED" && !newSession) {
+        setSession(null);
+        resetUser();
+        clearUserContext();
+        return;
+      }
 
-        // Handle token refresh errors silently - user will be redirected to login
-        if (event === "TOKEN_REFRESHED" && !newSession) {
-          setSession(null);
-          resetUser();
-          clearUserContext();
-          return;
-        }
+      setSession(newSession);
 
-        const previousSession = session;
-        setSession(newSession);
-
-        // Handle user identification on sign in
-        if (newSession?.user && !previousSession) {
-          try {
-            await identifyUserForTracking(newSession.user.id);
-          } catch {
-            // Non-blocking - continue even if identification fails
-          }
-        }
-
-        // Handle cleanup on sign out
-        if (!newSession && previousSession) {
-          resetUser();
-          clearUserContext();
+      // Handle user identification on sign in
+      if (event === "SIGNED_IN" && newSession?.user) {
+        try {
+          await identifyUserForTracking(newSession.user.id);
+        } catch {
+          // Non-blocking - continue even if identification fails
         }
       }
-    );
+
+      // Handle cleanup on sign out
+      if (event === "SIGNED_OUT") {
+        resetUser();
+        clearUserContext();
+      }
+    });
 
     return () => {
       mounted = false;
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
