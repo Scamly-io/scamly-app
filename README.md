@@ -6,7 +6,7 @@ A mobile application for scam detection and prevention, helping users identify a
 
 - **Scanner**: Upload images or screenshots to detect potential scams using AI analysis
 - **AI Chat**: Interactive chat interface to ask questions and get advice about scams
-- **Info Search**: Search for information about specific scams and threats
+- **Contact Search**: Search for contact information for any organisation worldwide
 - **Learning Center**: Browse educational articles and quick tips about scam prevention
 - **User Authentication**: Secure login and user profile management
 - **Scan History**: Track and review past scan results
@@ -95,7 +95,7 @@ Scamly follows a file-based routing architecture using Expo Router, which maps t
   - `home.tsx` - Home dashboard
   - `scan.tsx` - Scam scanner
   - `chat/` - AI chat interface (with nested routes for individual chats)
-  - `info-search.tsx` - Information search
+  - `contact-search.tsx` - Contact search
   - `learn/` - Learning center with articles and quick tips
 
 ### Data Flow

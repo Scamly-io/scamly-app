@@ -187,8 +187,8 @@ export default function Home() {
     },
     {
       icon: Search,
-      label: "Info Search",
-      route: "/info-search",
+      label: "Contact Search",
+      route: "/contact-search",
       color: colors.accent,
     },
   ];

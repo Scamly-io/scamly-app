@@ -292,7 +292,7 @@ Valid feature names used throughout error tracking:
 | `scan`         | Scam scanning functionality           |
 | `chat`         | AI chat conversations                 |
 | `home`         | Home screen/dashboard                 |
-| `info_search`  | Information search feature            |
+| `contact_search`  | Contact search feature            |
 | `learn`        | Learning center/educational content   |
 | `login`        | Authentication/login flow             |
 | `auth`         | General authentication                |
@@ -341,7 +341,7 @@ Valid feature names used throughout error tracking:
 - All chat errors are critical (chat is a core feature)
 - Session validation tracked separately
 
-### Info Search Feature (`app/(tabs)/info-search.tsx`)
+### Contact Search Feature (`app/(tabs)/contact-search.tsx`)
 
 | Action           | Function Used            | Severity   | Description                      |
 |------------------|--------------------------|------------|----------------------------------|

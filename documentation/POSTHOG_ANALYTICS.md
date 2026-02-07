@@ -321,11 +321,11 @@ trackArticleEngaged('how-to-spot-phishing', 125);
 - `app/(tabs)/home.tsx`
 - `app/(tabs)/scan.tsx`
 - `app/(tabs)/chat/index.tsx`
-- `app/(tabs)/info-search.tsx`
+- `app/(tabs)/contact-search.tsx`
 - `app/(tabs)/learn/index.tsx`
 
 **Properties:**
-- `feature_name`: `'home'` | `'scan'` | `'chat'` | `'info_search'` | `'learning_center'` | `'article'` | `'settings'` | `'history'`
+- `feature_name`: `'home'` | `'scan'` | `'chat'` | `'contact_search'` | `'learning_center'` | `'article'` | `'settings'` | `'history'`
 
 **Usage:**
 ```typescript
@@ -436,15 +436,15 @@ trackUserVisibleError('chat', 'session_invalid', false);
 
 ---
 
-### Info Search Feature
+### Contact Search Feature
 
-**File:** `app/(tabs)/info-search.tsx`, `utils/ai/search.ts`
+**File:** `app/(tabs)/contact-search.tsx`, `utils/ai/search.ts`
 
 | Event                  | Trigger                           | Properties                                           |
 |------------------------|-----------------------------------|------------------------------------------------------|
-| `feature_opened`       | Tab focused                       | `feature_name: 'info_search'`                        |
-| `user_visible_error`   | Session invalid                   | `feature: 'info_search'`, `error_type: 'session_invalid'` |
-| `user_visible_error`   | Profile fetch failed              | `feature: 'info_search'`, `error_type: 'profile_fetch_failed'` |
+| `feature_opened`       | Tab focused                       | `feature_name: 'contact_search'`                        |
+| `user_visible_error`   | Session invalid                   | `feature: 'contact_search'`, `error_type: 'session_invalid'` |
+| `user_visible_error`   | Profile fetch failed              | `feature: 'contact_search'`, `error_type: 'profile_fetch_failed'` |
 | `user_visible_error`   | Search failed                     | `feature: 'search'`, `error_type: 'search_failed'`   |
 
 **Usage Pattern:**
@@ -603,7 +603,7 @@ type FeatureName =
   | 'home'
   | 'scan'
   | 'chat'
-  | 'info_search'
+  | 'contact_search'
   | 'learning_center'
   | 'article'
   | 'settings'
@@ -785,7 +785,7 @@ console.log('PostHog client:', getPostHogClient());
 - Home (4 tracking points)
 - Scan (9 tracking points)
 - Chat (8 tracking points)
-- Info Search (3 tracking points)
+- Contact Search (3 tracking points)
 - Learning Center (5 tracking points)
 - Login (2 tracking points)
 

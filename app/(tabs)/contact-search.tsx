@@ -39,10 +39,10 @@ export default function PhoneSearch() {
   const [userId, setUserId] = useState<string>("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Track feature discovery when info search tab is focused
+  // Track feature discovery when contact search tab is focused
   useFocusEffect(
     React.useCallback(() => {
-      trackFeatureOpened("info_search");
+      trackFeatureOpened("contact_search");
     }, [])
   );
 
@@ -54,8 +54,8 @@ export default function PhoneSearch() {
         error: userError,
       } = await supabase.auth.getUser();
       if (userError || !user) {
-        trackUserVisibleError("info_search", "session_invalid", false);
-        captureDataFetchError(userError || new Error("No user found"), "info_search", "get_user", "critical");
+        trackUserVisibleError("contact_search", "session_invalid", false);
+        captureDataFetchError(userError || new Error("No user found"), "contact_search", "get_user", "critical");
         Alert.alert("Error", "No user found");
         setPlanLoading(false);
         return;
@@ -70,8 +70,8 @@ export default function PhoneSearch() {
         .single();
 
       if (profileError) {
-        trackUserVisibleError("info_search", "profile_fetch_failed", false);
-        captureDataFetchError(profileError, "info_search", "fetch_profile", "critical");
+        trackUserVisibleError("contact_search", "profile_fetch_failed", false);
+        captureDataFetchError(profileError, "contact_search", "fetch_profile", "critical");
         Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
         setPlanLoading(false);
         return;
@@ -155,7 +155,7 @@ export default function PhoneSearch() {
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
             <View style={styles.headerTitleRow}>
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Info Search</Text>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Contact Search</Text>
               <View style={[styles.betaTag, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)' }]}>
                 <Text style={[styles.betaTagText, { color: colors.accent }]}>Beta</Text>
               </View>
