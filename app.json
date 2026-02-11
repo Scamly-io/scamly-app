@@ -52,7 +52,8 @@
           "organization": "scamly",
           "project": "scamly-app"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

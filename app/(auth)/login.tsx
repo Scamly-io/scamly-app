@@ -12,6 +12,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -203,8 +204,13 @@ export default function Login() {
 
               <View style={[styles.disclaimer, { borderTopColor: colors.divider }]}>
                 <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
-                  New here? You'll need to create an account through our online dashboard.
+                  New here?{" "}
                 </Text>
+                <Pressable onPress={() => router.push("/signup")}>
+                  <Text style={[styles.disclaimerLink, { color: colors.accent }]}>
+                    Create an account
+                  </Text>
+                </Pressable>
               </View>
             </Animated.View>
           </ScrollView>
@@ -279,11 +285,16 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     borderTopWidth: 1,
     width: "100%",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
   },
   disclaimerText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Poppins-Regular",
-    textAlign: "center",
-    lineHeight: 19,
+  },
+  disclaimerLink: {
+    fontSize: 14,
+    fontFamily: "Poppins-SemiBold",
   },
 });
