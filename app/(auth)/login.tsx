@@ -3,13 +3,17 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { identifyUser, trackUserVisibleError, type UserPlan } from "@/utils/analytics";
-import { configureGoogleSignIn, isGoogleSignInCancelled, signInWithGoogle } from "@/utils/google-auth";
 import { checkProfileComplete } from "@/utils/onboarding";
 import { captureError, setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
+import {
+  GoogleSignin,
+  isSuccessResponse,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { useRouter } from "expo-router";
 import { Lock, Mail } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Image,
@@ -48,11 +52,6 @@ export default function Login() {
 
   const router = useRouter();
   const { checkOnboarding } = useAuth();
-
-  // Configure Google Sign-In on mount
-  useEffect(() => {
-    configureGoogleSignIn();
-  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -116,35 +115,54 @@ export default function Login() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
 
+    GoogleSignin.configure({
+      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    });
+
     try {
-      const result = await signInWithGoogle();
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
 
-      // Check if required profile data exists
-      const profileComplete = await checkProfileComplete(result.userId);
 
-      if (!profileComplete) {
-        // Profile is incomplete - redirect to onboarding webview
-        // The session is already established by signInWithIdToken,
-        // so AuthContext will have the session. Navigate to onboarding.
-        router.replace("/onboarding");
-      } else {
-        // Profile is complete - let AuthContext handle the routing
-        // The SIGNED_IN event will fire and check onboarding_completed
-        router.replace("/");
+      if (isSuccessResponse(response)) {
+
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: response.data.idToken,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        const profileComplete = await checkProfileComplete(data.user.id);
+
+        if (!profileComplete) {
+          router.replace("/onboarding");
+        } else {
+          router.replace("/");
+        }
       }
     } catch (error) {
-      // Don't show error for user cancellation
-      if (!isGoogleSignInCancelled(error)) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         Alert.alert(
           "Sign In Error",
           "Something went wrong signing in with Google. Please try again."
         );
-        trackUserVisibleError("login", "google_auth_error", true);
+        // Add error tracking
+      } else {
+        console.log(error.code);
+        Alert.alert(
+          "Sign In Error",
+          "Something went wrong signing in with Google. Please try again."
+        );
         captureError(error, {
           feature: "login",
           action: "google_sign_in",
           severity: "critical",
         });
+        setGoogleLoading(false);
       }
     } finally {
       setGoogleLoading(false);
@@ -286,7 +304,7 @@ export default function Login() {
                     { color: colors.textPrimary },
                   ]}
                 >
-                  {googleLoading ? "Signing in..." : "Sign in with Google"}
+                  {googleLoading ? "Signing in..." : "Continue with Google"}
                 </Text>
               </Pressable>
 

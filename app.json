@@ -54,11 +54,12 @@
         }
       ],
       [
-        "@react-native-google-signin/google-signin", 
+        "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.70395534373-qvv18ad8a50r7a0cdt3mt1lafteuu5d6"
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,
