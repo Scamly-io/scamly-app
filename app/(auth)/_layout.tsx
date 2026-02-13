@@ -9,6 +9,7 @@ export default function AuthLayout() {
         <Stack.Screen name="signup" options={{ title: "Sign Up" }} />
         <Stack.Screen name="signup-profile" options={{ title: "Profile" }} />
         <Stack.Screen name="signup-confirm" options={{ title: "Confirm" }} />
+        <Stack.Screen name="onboarding" options={{ title: "Onboarding", gestureEnabled: false }} />
       </Stack>
     </SignUpProvider>
   );

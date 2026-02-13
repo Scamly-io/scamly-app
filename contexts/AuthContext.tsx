@@ -3,10 +3,11 @@
  *
  * Provides global authentication state management using Supabase Auth.
  * Centralizes session handling, user identification for analytics/error tracking,
- * and sign-out logic to eliminate code duplication across pages.
+ * onboarding completion gate, and sign-out logic.
  */
 
 import { identifyUser, resetUser, type UserPlan } from "@/utils/analytics";
+import { checkOnboardingStatus } from "@/utils/onboarding";
 import { clearUserContext, setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import type { Session, User } from "@supabase/supabase-js";
@@ -20,6 +21,8 @@ type AuthContextType = {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  onboardingComplete: boolean | null; // null = still checking
+  checkOnboarding: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -76,6 +79,27 @@ type AuthProviderProps = {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+
+  /**
+   * Check onboarding status for the current user.
+   * Can be called externally (e.g., after webview onboarding completes).
+   */
+  const checkOnboarding = async (): Promise<void> => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setOnboardingComplete(null);
+      return;
+    }
+
+    try {
+      const isComplete = await checkOnboardingStatus(userId);
+      setOnboardingComplete(isComplete);
+    } catch {
+      // Default to false if check fails - user will be sent to onboarding
+      setOnboardingComplete(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -95,6 +119,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (newSession?.user) {
           identifyUserForTracking(newSession.user.id);
+
+          // Check onboarding status on initial session load
+          try {
+            const isComplete = await checkOnboardingStatus(newSession.user.id);
+            if (mounted) setOnboardingComplete(isComplete);
+          } catch {
+            if (mounted) setOnboardingComplete(false);
+          }
         }
 
         setLoading(false);
@@ -104,6 +136,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Handle token refresh errors silently - user will be redirected to login
       if (event === "TOKEN_REFRESHED" && !newSession) {
         setSession(null);
+        setOnboardingComplete(null);
         resetUser();
         clearUserContext();
         return;
@@ -111,17 +144,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       setSession(newSession);
 
-      // Handle user identification on sign in
+      // Handle user identification and onboarding check on sign in
       if (event === "SIGNED_IN" && newSession?.user) {
         try {
           await identifyUserForTracking(newSession.user.id);
         } catch {
           // Non-blocking - continue even if identification fails
         }
+
+        // Check onboarding status on sign in
+        try {
+          const isComplete = await checkOnboardingStatus(newSession.user.id);
+          if (mounted) setOnboardingComplete(isComplete);
+        } catch {
+          if (mounted) setOnboardingComplete(false);
+        }
       }
 
       // Handle cleanup on sign out
       if (event === "SIGNED_OUT") {
+        setOnboardingComplete(null);
         resetUser();
         clearUserContext();
       }
@@ -140,6 +182,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = async (): Promise<void> => {
     resetUser();
     clearUserContext();
+    setOnboardingComplete(null);
     await supabase.auth.signOut();
   };
 
@@ -147,6 +190,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     session,
     user: session?.user ?? null,
     loading,
+    onboardingComplete,
+    checkOnboarding,
     signOut,
   };
 
@@ -161,14 +206,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
  * Hook to access authentication state and methods.
  * Must be used within an AuthProvider.
  *
- * @returns {AuthContextType} The auth context with session, user, loading, and signOut
+ * @returns {AuthContextType} The auth context with session, user, loading, onboardingComplete, checkOnboarding, and signOut
  * @throws {Error} If used outside of AuthProvider
  *
  * @example
- * const { user, loading, signOut } = useAuth();
+ * const { user, loading, onboardingComplete, signOut } = useAuth();
  *
  * if (loading) return <ActivityIndicator />;
  * if (!user) return <Navigate to="/login" />;
+ * if (!onboardingComplete) return <Navigate to="/onboarding" />;
  */
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);

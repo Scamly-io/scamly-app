@@ -1,9 +1,10 @@
 /**
  * Protected Route Component
  *
- * Wraps content that requires authentication.
- * Shows a loading spinner while checking auth state,
- * redirects to login if not authenticated.
+ * Wraps content that requires authentication and completed onboarding.
+ * Shows a loading spinner while checking auth/onboarding state,
+ * redirects to login if not authenticated, and redirects to onboarding
+ * if the user hasn't completed the onboarding flow.
  */
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,7 +18,7 @@ type ProtectedRouteProps = {
 };
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, onboardingComplete } = useAuth();
   const { colors } = useTheme();
   const router = useRouter();
   const segments = useSegments();
@@ -32,13 +33,26 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       // User is not authenticated and trying to access a protected route
       router.replace("/login");
     } else if (user && inAuthGroup) {
-      // User is authenticated but on an auth route, redirect to home
-      router.replace("/home");
+      // User is authenticated but on an auth route
+      // Allow the onboarding screen to stay in the auth group
+      const currentScreen = segments[1];
+      if (currentScreen !== "onboarding") {
+        // Check onboarding status before redirecting to home
+        if (onboardingComplete === false) {
+          router.replace("/onboarding");
+        } else if (onboardingComplete === true) {
+          router.replace("/home");
+        }
+        // If onboardingComplete is null (still checking), don't redirect yet
+      }
+    } else if (user && !inAuthGroup && onboardingComplete === false) {
+      // User is authenticated, on a protected route, but hasn't completed onboarding
+      router.replace("/onboarding");
     }
-  }, [user, loading, segments, router]);
+  }, [user, loading, onboardingComplete, segments, router]);
 
-  // Show loading spinner while checking auth
-  if (loading) {
+  // Show loading spinner while checking auth or onboarding status
+  if (loading || (user && onboardingComplete === null)) {
     return (
       <View
         style={{

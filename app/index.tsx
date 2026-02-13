@@ -6,23 +6,37 @@ import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 /**
- * Root index screen component that handles initial authentication routing.
- * Uses the global auth context to check authentication state and redirects accordingly.
+ * Root index screen component that handles initial authentication and onboarding routing.
+ * Uses the global auth context to check authentication state and onboarding completion,
+ * then redirects accordingly:
+ *
+ * - Not authenticated -> /login
+ * - Authenticated, onboarding status unknown (null) -> show spinner
+ * - Authenticated, onboarding incomplete (false) -> /onboarding
+ * - Authenticated, onboarding complete (true) -> /home
  */
 export default function Index() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, onboardingComplete } = useAuth();
 
   useEffect(() => {
     if (loading) return;
 
-    if (user) {
-      router.replace("/home");
-    } else {
+    if (!user) {
       router.replace("/login");
+      return;
     }
-  }, [user, loading, router]);
+
+    // Wait until onboarding status is determined
+    if (onboardingComplete === null) return;
+
+    if (onboardingComplete === false) {
+      router.replace("/onboarding");
+    } else {
+      router.replace("/home");
+    }
+  }, [user, loading, onboardingComplete, router]);
 
   return (
     <ThemedBackground>

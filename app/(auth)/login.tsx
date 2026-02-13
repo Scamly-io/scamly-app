@@ -1,12 +1,15 @@
 import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { identifyUser, trackUserVisibleError, type UserPlan } from "@/utils/analytics";
+import { configureGoogleSignIn, isGoogleSignInCancelled, signInWithGoogle } from "@/utils/google-auth";
+import { checkProfileComplete } from "@/utils/onboarding";
 import { captureError, setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useRouter } from "expo-router";
 import { Lock, Mail } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -39,10 +42,17 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
   const router = useRouter();
+  const { checkOnboarding } = useAuth();
+
+  // Configure Google Sign-In on mount
+  useEffect(() => {
+    configureGoogleSignIn();
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -87,7 +97,9 @@ export default function Login() {
         }
       }
 
-      router.replace("/home");
+      // The AuthContext SIGNED_IN handler will check onboarding status
+      // and update onboardingComplete, which drives routing in app/index.tsx
+      router.replace("/");
     } catch (error) {
       Alert.alert("Error", "Something went wrong while logging in. Please try again.");
       trackUserVisibleError("login", "unexpected_error", true);
@@ -101,10 +113,50 @@ export default function Login() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+
+    try {
+      const result = await signInWithGoogle();
+
+      // Check if required profile data exists
+      const profileComplete = await checkProfileComplete(result.userId);
+
+      if (!profileComplete) {
+        // Profile is incomplete - redirect to onboarding webview
+        // The session is already established by signInWithIdToken,
+        // so AuthContext will have the session. Navigate to onboarding.
+        router.replace("/onboarding");
+      } else {
+        // Profile is complete - let AuthContext handle the routing
+        // The SIGNED_IN event will fire and check onboarding_completed
+        router.replace("/");
+      }
+    } catch (error) {
+      // Don't show error for user cancellation
+      if (!isGoogleSignInCancelled(error)) {
+        Alert.alert(
+          "Sign In Error",
+          "Something went wrong signing in with Google. Please try again."
+        );
+        trackUserVisibleError("login", "google_auth_error", true);
+        captureError(error, {
+          feature: "login",
+          action: "google_sign_in",
+          severity: "critical",
+        });
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   const getInputStyle = (focused: boolean) => ({
     backgroundColor: focused ? colors.surface : colors.backgroundSecondary,
     borderColor: focused ? colors.accent : colors.border,
   });
+
+  const isAnyLoading = loading || googleLoading;
 
   return (
     <ThemedBackground>
@@ -166,6 +218,7 @@ export default function Login() {
                     onChangeText={setEmail}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    editable={!isAnyLoading}
                     onFocus={() => setEmailFocused(true)}
                     onBlur={() => setEmailFocused(false)}
                   />
@@ -186,6 +239,7 @@ export default function Login() {
                     value={password}
                     onChangeText={setPassword}
                     autoCapitalize="none"
+                    editable={!isAnyLoading}
                     onFocus={() => setPasswordFocused(true)}
                     onBlur={() => setPasswordFocused(false)}
                   />
@@ -195,18 +249,52 @@ export default function Login() {
               <Button
                 onPress={handleLogin}
                 loading={loading}
-                disabled={loading}
+                disabled={isAnyLoading}
                 fullWidth
                 size="lg"
               >
                 Sign in
               </Button>
 
+              {/* Divider */}
+              <View style={styles.dividerContainer}>
+                <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
+                <Text style={[styles.dividerText, { color: colors.textTertiary }]}>or</Text>
+                <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
+              </View>
+
+              {/* Google Sign-In Button */}
+              <Pressable
+                onPress={handleGoogleSignIn}
+                disabled={isAnyLoading}
+                style={[
+                  styles.googleButton,
+                  {
+                    borderRadius: radius.lg,
+                    borderColor: colors.border,
+                    backgroundColor: colors.backgroundSecondary,
+                    opacity: isAnyLoading ? 0.6 : 1,
+                  },
+                ]}
+              >
+                <View style={styles.googleIconContainer}>
+                  <Text style={styles.googleIconText}>G</Text>
+                </View>
+                <Text
+                  style={[
+                    styles.googleButtonText,
+                    { color: colors.textPrimary },
+                  ]}
+                >
+                  {googleLoading ? "Signing in..." : "Sign in with Google"}
+                </Text>
+              </Pressable>
+
               <View style={[styles.disclaimer, { borderTopColor: colors.divider }]}>
                 <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
                   New here?{" "}
                 </Text>
-                <Pressable onPress={() => router.push("/signup")}>
+                <Pressable onPress={() => router.push("/signup")} disabled={isAnyLoading}>
                   <Text style={[styles.disclaimerLink, { color: colors.accent }]}>
                     Create an account
                   </Text>
@@ -279,6 +367,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Poppins-Regular",
     height: "100%",
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    marginVertical: 20,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Regular",
+  },
+  googleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    height: 52,
+    borderWidth: 1.5,
+    gap: 10,
+  },
+  googleIconContainer: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 0.5,
+    borderColor: "#ddd",
+  },
+  googleIconText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Bold",
+    color: "#4285F4",
+    lineHeight: 18,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontFamily: "Poppins-SemiBold",
   },
   disclaimer: {
     marginTop: 24,
