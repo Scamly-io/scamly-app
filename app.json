@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.scamly.scamlyapp",
+      "bundleIdentifier": "io.scamly.app",
       "icon": "./assets/images/icons/ios.icon",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -25,7 +25,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.scamly.scamlyapp"
+      "package": "io.scamly.app"
     },
     "web": {
       "output": "static",
@@ -52,8 +52,7 @@
           "organization": "scamly",
           "project": "scamly-app"
         }
-      ],
-      "@react-native-community/datetimepicker"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

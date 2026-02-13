@@ -244,6 +244,69 @@ export function captureEvent(
 }
 
 // ============================================================================
+// Pre-Auth Event Capture
+// ============================================================================
+
+/**
+ * Capture an event that occurs before authentication (e.g., signup flow).
+ * Bypasses the isAnalyticsEnabled check since the user isn't logged in yet.
+ * Requires PostHog client to be initialized.
+ */
+export function capturePreAuthEvent(
+  eventName: string,
+  properties?: Record<string, unknown>
+): void {
+  if (!posthogClient) return;
+
+  posthogClient.capture(eventName, properties);
+}
+
+// ============================================================================
+// Signup Funnel Events
+// ============================================================================
+
+/**
+ * Track when a user opens the signup page (step 1).
+ * Marks the top of the signup funnel.
+ */
+export function trackSignupStarted(): void {
+  capturePreAuthEvent('signup_started');
+}
+
+/**
+ * Track when the Supabase signUp API call is initiated.
+ * Includes referral source and country for acquisition insights.
+ * No PII (no email, name, or DOB).
+ */
+export function trackSignupAttempted(referralSource: string, country: string): void {
+  capturePreAuthEvent('signup_attempted', {
+    referral_source: referralSource,
+    country,
+  });
+}
+
+/**
+ * Track when signup completes successfully (Supabase returns no error).
+ * Includes referral source and country for acquisition dashboards.
+ */
+export function trackSignupCompleted(referralSource: string, country: string): void {
+  capturePreAuthEvent('signup_completed', {
+    referral_source: referralSource,
+    country,
+  });
+}
+
+/**
+ * Track when signup fails due to a Supabase auth error.
+ * Includes error type (e.g., "User already registered") but no PII.
+ */
+export function trackSignupFailed(errorType: string): void {
+  capturePreAuthEvent('signup_failed', {
+    error_type: errorType,
+  });
+}
+
+// ============================================================================
 // Scan Events
 // ============================================================================
 

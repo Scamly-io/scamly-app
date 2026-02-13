@@ -3,6 +3,12 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { countries } from "@/constants/countries";
 import { useSignUp } from "@/contexts/SignUpContext";
 import { useTheme } from "@/theme";
+import {
+  trackSignupAttempted,
+  trackSignupCompleted,
+  trackSignupFailed,
+} from "@/utils/analytics";
+import { captureError, addActionBreadcrumb } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import {
   genderOptions,
@@ -342,6 +348,8 @@ export default function SignUpProfile() {
 
     setErrors({});
     setLoading(true);
+    trackSignupAttempted(referralSource, country);
+    addActionBreadcrumb("signup_attempted", "signup");
 
     try {
       const { error } = await supabase.auth.signUp({
@@ -361,17 +369,28 @@ export default function SignUpProfile() {
 
       if (error) {
         Alert.alert("Error", error.message);
+        trackSignupFailed(error.message);
+        // Auth errors (email already registered, etc.) are expected user behavior, not logged to Sentry
         setLoading(false);
         return;
       }
 
+      trackSignupCompleted(referralSource, country);
+      addActionBreadcrumb("signup_completed", "signup");
       resetSignUpData();
       router.replace("/signup-confirm");
-    } catch {
+    } catch (error) {
       Alert.alert(
         "Error",
         "Something went wrong while creating your account. Please try again."
       );
+      trackSignupFailed("unexpected_error");
+      // Only capture truly unexpected errors to Sentry
+      captureError(error, {
+        feature: "signup",
+        action: "signup_attempt",
+        severity: "critical",
+      });
       setLoading(false);
     }
   };

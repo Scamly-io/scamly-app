@@ -27,6 +27,7 @@ export type FeatureName =
   | 'contact_search'
   | 'learn'
   | 'login'
+  | 'signup'
   | 'auth';
 
 export type ErrorContext = {

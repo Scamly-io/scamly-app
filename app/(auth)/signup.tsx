@@ -2,10 +2,12 @@ import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useSignUp } from "@/contexts/SignUpContext";
 import { useTheme } from "@/theme";
+import { trackSignupStarted } from "@/utils/analytics";
+import { addActionBreadcrumb } from "@/utils/sentry";
 import { signUpStep1Schema } from "@/utils/validation/auth";
 import { useRouter } from "expo-router";
 import { Lock, Mail } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -30,6 +32,12 @@ export default function SignUp() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Track signup funnel entry
+  useEffect(() => {
+    trackSignupStarted();
+    addActionBreadcrumb("signup_started", "signup");
+  }, []);
+
   const handleNext = () => {
     const result = signUpStep1Schema.safeParse({ email, password });
 
@@ -47,6 +55,7 @@ export default function SignUp() {
 
     setErrors({});
     updateSignUpData({ email, password });
+    addActionBreadcrumb("signup_step1_completed", "signup");
     router.push("/signup-profile");
   };
 

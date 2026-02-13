@@ -489,6 +489,26 @@ trackUserVisibleError('chat', 'session_invalid', false);
 
 ---
 
+### Signup Flow
+
+**File:** `app/(auth)/signup.tsx`, `app/(auth)/signup-profile.tsx`
+
+| Event                  | Trigger                           | Properties                                           |
+|------------------------|-----------------------------------|------------------------------------------------------|
+| `signup_started`       | User opens signup page (step 1)   | _(none)_                                             |
+| `signup_attempted`     | User presses "Create Account" and passes validation | `referral_source`, `country`      |
+| `signup_completed`     | Supabase signUp returns success   | `referral_source`, `country`                         |
+| `signup_failed`        | Supabase signUp returns an error, or unexpected crash | `error_type`                     |
+
+**Note:** These events use `capturePreAuthEvent()` which bypasses the post-login analytics gate, since the user does not have an account yet. Only requires the PostHog client to be initialized (which happens at app startup).
+
+**Usage Pattern:**
+- Full signup funnel tracking (start → attempt → complete/fail)
+- Acquisition insights via `referral_source` and `country`
+- No PII captured (no email, name, or DOB)
+
+---
+
 ## Control Functions
 
 ### Enable/Disable Analytics
@@ -521,11 +541,25 @@ captureEvent('custom_event', {
 
 **Note:** Only captures if analytics are enabled
 
+### Pre-Auth Event Capture
+
+**Function:** `capturePreAuthEvent(eventName: string, properties?: Record<string, unknown>)`
+
+**Purpose:** Capture events that occur before user authentication (e.g., signup flow). Bypasses the `isAnalyticsEnabled` check but still requires the PostHog client to be initialized.
+
+**Usage:**
+```typescript
+capturePreAuthEvent('signup_started');
+capturePreAuthEvent('signup_completed', { referral_source: 'Google', country: 'Australia' });
+```
+
+**Note:** Only use for flows where the user is not yet authenticated. For post-auth events, use `captureEvent()` instead.
+
 ---
 
 ## Event Summary
 
-### Total Events: 9 event types
+### Total Events: 13 event types
 
 **By Category:**
 
@@ -545,6 +579,12 @@ captureEvent('custom_event', {
 
 **Error Events (1):**
 9. `user_visible_error`
+
+**Signup Events (4 - pre-auth):**
+10. `signup_started`
+11. `signup_attempted`
+12. `signup_completed`
+13. `signup_failed`
 
 **Session Events (2):**
 - `session_started` (automatic)
@@ -567,6 +607,7 @@ Based on typical user journey:
 - `article_engaged` - Only deep engagement (75%+ scroll + 60s+)
 - `scan_failed` - Only on errors
 - `result_rated` - When implemented
+- `signup_started` / `signup_completed` / `signup_failed` - Once per new user
 
 ---
 
@@ -734,6 +775,13 @@ console.log('PostHog client:', getPostHogClient());
 - Error types: Group by `error_type`
 - Retry success: Track retry-available vs. non-retry errors
 
+**Signup & Acquisition:**
+- Signup conversion rate: `signup_completed` / `signup_started`
+- Drop-off rate: `signup_started` minus `signup_attempted` (users who abandon before submitting)
+- Acquisition by referral: Break down `signup_completed` by `referral_source`
+- Acquisition by country: Break down `signup_completed` by `country`
+- Signup failure reasons: Break down `signup_failed` by `error_type`
+
 ### Funnels to Build
 
 **Scan Funnel:**
@@ -746,6 +794,11 @@ console.log('PostHog client:', getPostHogClient());
 1. `feature_opened` (feature_name: 'learning_center')
 2. `article_viewed`
 3. `article_engaged`
+
+**Signup Funnel:**
+1. `signup_started`
+2. `signup_attempted`
+3. `signup_completed` OR `signup_failed`
 
 **User Onboarding:**
 1. User identified (identifyUser)
@@ -777,9 +830,9 @@ console.log('PostHog client:', getPostHogClient());
 
 ## Summary Statistics
 
-**Total Event Types:** 9 (+ 2 automatic session events)
+**Total Event Types:** 13 (+ 2 automatic session events)
 
-**Event Tracking Locations:** 30+ across codebase
+**Event Tracking Locations:** 34+ across codebase
 
 **Features with Analytics:**
 - Home (4 tracking points)
@@ -788,6 +841,7 @@ console.log('PostHog client:', getPostHogClient());
 - Contact Search (3 tracking points)
 - Learning Center (5 tracking points)
 - Login (2 tracking points)
+- Signup (4 tracking points - pre-auth)
 
 **Most Tracked Feature:** Scan (comprehensive funnel tracking)
 

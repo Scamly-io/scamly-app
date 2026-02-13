@@ -279,9 +279,10 @@ addNavigationBreadcrumb('/home', '/scan');
 **Usage:**
 ```typescript
 addActionBreadcrumb('scan_started', 'scan', { scanType: 'image' });
+addActionBreadcrumb('signup_started', 'signup');
 ```
 
-**Note:** Currently defined but not used in the codebase.
+**Used in:** Signup flow (`app/(auth)/signup.tsx`, `app/(auth)/signup-profile.tsx`) to trace the user journey through the multi-step signup process.
 
 ## Feature Names
 
@@ -295,6 +296,7 @@ Valid feature names used throughout error tracking:
 | `contact_search`  | Contact search feature            |
 | `learn`        | Learning center/educational content   |
 | `login`        | Authentication/login flow             |
+| `signup`       | Account creation/signup flow          |
 | `auth`         | General authentication                |
 
 ## Error Tracking by Feature
@@ -378,6 +380,23 @@ Valid feature names used throughout error tracking:
 **Additional Context:**
 - Auth errors (invalid credentials) are filtered automatically
 - Only unexpected errors are captured
+
+### Signup Flow (`app/(auth)/signup.tsx`, `app/(auth)/signup-profile.tsx`)
+
+| Action              | Function Used    | Severity   | Description                                  |
+|---------------------|------------------|------------|----------------------------------------------|
+| `signup_attempt`    | `captureError`   | `critical` | Unexpected error during account creation     |
+
+**Breadcrumbs Added:**
+- `signup_started` (action breadcrumb) - User opens signup page
+- `signup_step1_completed` (action breadcrumb) - Email/password validated, navigating to step 2
+- `signup_attempted` (action breadcrumb) - Create Account button pressed, API call started
+- `signup_completed` (action breadcrumb) - Supabase signUp returned success
+
+**Additional Context:**
+- Supabase auth errors (e.g., "User already registered") are **not** reported to Sentry — these are expected user behavior, matching the login pattern
+- Only truly unexpected errors (catch block) are captured as critical
+- Breadcrumbs provide full signup journey context if an error does occur
 
 ## Control Functions
 
@@ -525,7 +544,7 @@ captureScanError(error, 'scan_image_failed', {
 
 ## Summary Statistics
 
-**Total Error Capture Locations:** 33+ across codebase
+**Total Error Capture Locations:** 34+ across codebase
 
 **Features with Error Tracking:**
 - Home (4 locations)
@@ -534,6 +553,7 @@ captureScanError(error, 'scan_image_failed', {
 - Info Search (2 locations)
 - Learning Center (6 locations)
 - Login (1 location)
+- Signup (1 location + 4 breadcrumbs)
 - AI Utilities (9 locations)
 
 **Most Common Error Types:**
