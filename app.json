@@ -53,9 +53,12 @@
           "project": "scamly-app"
         }
       ],
-      ["@react-native-google-signin/google-signin", {
-        "iosUrlScheme": "com.googleusercontent.apps.70395534373-qvv18ad8a50r7a0cdt3mt1lafteuu5d6"
-      }]
+      [
+        "@react-native-google-signin/google-signin", 
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.70395534373-qvv18ad8a50r7a0cdt3mt1lafteuu5d6"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
