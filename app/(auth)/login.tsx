@@ -1,6 +1,5 @@
 import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
-import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { identifyUser, trackUserVisibleError, type UserPlan } from "@/utils/analytics";
 import { checkProfileComplete } from "@/utils/onboarding";
@@ -11,6 +10,7 @@ import {
   isSuccessResponse,
   statusCodes,
 } from "@react-native-google-signin/google-signin";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
 import { Lock, Mail } from "lucide-react-native";
 import { useState } from "react";
@@ -47,11 +47,11 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
   const router = useRouter();
-  const { checkOnboarding } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -169,12 +169,160 @@ export default function Login() {
     }
   };
 
+  const redirectAfterSocialAuth = async (userId: string) => {
+    const profileComplete = await checkProfileComplete(userId);
+    if (!profileComplete) {
+      router.replace("/onboarding");
+      return;
+    }
+    router.replace("/");
+  };
+
+  const handleAppleSignIn = async () => {
+    setAppleLoading(true);
+    try {
+      if (Platform.OS === "ios") {
+        const isAppleAuthAvailable = await AppleAuthentication.isAvailableAsync();
+        if (!isAppleAuthAvailable) {
+          Alert.alert("Apple Sign In Unavailable", "Apple Sign In is not available on this device.");
+          return;
+        }
+
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+
+        if (!credential.identityToken) {
+          throw new Error("No identity token returned by Apple.");
+        }
+
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: "apple",
+          token: credential.identityToken,
+        });
+
+        if (error || !data.user) {
+          throw error ?? new Error("Failed to authenticate with Apple.");
+        }
+
+        await redirectAfterSocialAuth(data.user.id);
+        return;
+      }
+
+      if (Platform.OS === "android") {
+        // Currently this is not supported on android
+        // The code below does not work. It fails when redirecting back to the app.
+        // A future update will fix this. MVP will not release with it.
+
+        /*
+        const redirectTo = "scamlyapp://auth/callback";
+        console.log("redirectTo:", redirectTo);
+
+        // Get the OAuth URL from Supabase (don't let it auto-redirect)
+        const { data: oauthData, error: oauthError } =
+          await supabase.auth.signInWithOAuth({
+            provider: "apple",
+            options: {
+              redirectTo,
+              skipBrowserRedirect: true,
+            },
+          });
+
+        if (oauthError) {
+          throw oauthError;
+        }
+
+        if (!oauthData?.url) {
+          throw new Error("No OAuth URL returned from Supabase.");
+        }
+
+        // Open the URL in an in-app browser; it will close automatically
+        // when Supabase redirects back to the scamlyapp:// scheme.
+        console.log("oauthData.url:", oauthData.url);
+        const browserResult = await WebBrowser.openAuthSessionAsync(
+          oauthData.url,
+          redirectTo
+        );
+
+        console.log("browserResult:", browserResult);
+
+        // 3. User cancelled / dismissed the browser
+        if (browserResult.type === "cancel" || browserResult.type === "dismiss") {
+          return;
+        }
+
+        // 4. Extract tokens from the URL hash fragment
+        //    Supabase redirects to: scamlyapp://auth/callback#access_token=...&refresh_token=...
+        if (browserResult.type === "success" && browserResult.url) {
+          const hashFragment = browserResult.url.split("#")[1];
+          cosnole.log("hashFragment:", hashFragment);
+          if (hashFragment) {
+            const params = new URLSearchParams(hashFragment);
+            const accessToken = params.get("access_token");
+            const refreshToken = params.get("refresh_token");
+            console.log("accessToken:", accessToken);
+            console.log("refreshToken:", refreshToken);
+            if (accessToken && refreshToken) {
+              const { error: sessionError } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+
+              if (sessionError) {
+                console.log("sessionError:", sessionError);
+                throw sessionError;
+              }
+
+              // 5 & 6. Check profile and redirect
+              const { data: userData } = await supabase.auth.getUser();
+              if (userData.user) {
+                console.log("userData:", userData);
+                await redirectAfterSocialAuth(userData.user.id);
+                return;
+              }
+            }
+          }
+        }
+
+        // If we reach here, something went wrong extracting the session
+        throw new Error("Failed to complete Apple sign in. No session was returned.");
+
+        */
+      }
+
+      Alert.alert("Unavailable", "Apple Sign In is only available on iOS.");
+    } catch (error: any) {
+      if (error?.code === "ERR_REQUEST_CANCELED") {
+        return;
+      }
+
+      console.log("error:", error.code);
+
+      Alert.alert(
+        "Sign In Error",
+        "Something went wrong signing in with Apple. Please try again."
+      );
+
+      captureError(error, {
+        feature: "login",
+        action: "apple_sign_in",
+        severity: "critical",
+      });
+    } finally {
+      setAppleLoading(false);
+    }
+  };
+
   const getInputStyle = (focused: boolean) => ({
     backgroundColor: focused ? colors.surface : colors.backgroundSecondary,
     borderColor: focused ? colors.accent : colors.border,
   });
 
-  const isAnyLoading = loading || googleLoading;
+  const isAnyLoading = loading || googleLoading || appleLoading;
+  const showAppleButton = Platform.OS === "ios";
 
   return (
     <ThemedBackground>
@@ -308,6 +456,34 @@ export default function Login() {
                 </Text>
               </Pressable>
 
+              {showAppleButton ? (
+                <Pressable
+                  onPress={handleAppleSignIn}
+                  disabled={isAnyLoading}
+                  style={[
+                    styles.appleButton,
+                    {
+                      borderRadius: radius.lg,
+                      borderColor: colors.border,
+                      backgroundColor: colors.backgroundSecondary,
+                      opacity: isAnyLoading ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <View style={styles.appleIconContainer}>
+                    <Text style={styles.appleIconText}>A</Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.appleButtonText,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    {appleLoading ? "Signing in..." : "Continue with Apple"}
+                  </Text>
+                </Pressable>
+              ) : null}
+
               <View style={[styles.disclaimer, { borderTopColor: colors.divider }]}>
                 <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
                   New here?{" "}
@@ -427,6 +603,34 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   googleButtonText: {
+    fontSize: 16,
+    fontFamily: "Poppins-SemiBold",
+  },
+  appleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    height: 52,
+    borderWidth: 1.5,
+    gap: 10,
+    marginTop: 12,
+  },
+  appleIconContainer: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appleIconText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Bold",
+    color: "#fff",
+    lineHeight: 18,
+  },
+  appleButtonText: {
     fontSize: 16,
     fontFamily: "Poppins-SemiBold",
   },
