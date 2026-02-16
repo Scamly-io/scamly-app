@@ -87,6 +87,7 @@ export default function Scan() {
   const [results, setResults] = useState<ScanResult | null>(null);
   const [aspectRatio, setAspectRatio] = useState<number>(1);
   const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
+  const [scanQuotaJustReached, setScanQuotaJustReached] = useState<boolean>(false);
   const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
 
   // Track whether we've already fired result_viewed for the current results
@@ -155,6 +156,35 @@ export default function Scan() {
     }, [user])
   );
 
+  async function checkQuotaAfterScan() {
+    if (!user) return;
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("subscription_plan, created_at")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || profile.subscription_plan !== "free") return;
+
+    const { periodStart, nextPeriodStart } = getUserBillingPeriod(profile.created_at);
+
+    const { count, error: countError } = await supabase
+      .from("scans")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("created_at", periodStart.toISOString())
+      .lt("created_at", nextPeriodStart.toISOString());
+
+    if (countError) return;
+
+    if (count !== null && count >= FREE_USER_SCAN_QUOTA) {
+      setScanQuotaJustReached(true);
+      setScanQuotaResetDate(nextPeriodStart.toLocaleDateString());
+      Alert.alert("Scan Limit Reached", "You've reached the monthly scan limit for your account. Your quota will reset on " + nextPeriodStart.toLocaleDateString());
+    }
+  }
+
   function makeId(length: number): string {
     let result = "";
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -204,6 +234,9 @@ export default function Scan() {
       hasTrackedResultView.current = true;
 
       setResults(scanResults);
+
+      // Check if this scan exhausted the user's free quota
+      await checkQuotaAfterScan();
     } catch (err) {
       // Track user-visible error for analytics
       trackUserVisibleError("scan", "scan_failed", true);
@@ -303,7 +336,7 @@ export default function Scan() {
     }
   }
 
-  const scanButtonDisabled = !image || loading || !user || scanQuotaReached;
+  const scanButtonDisabled = !image || loading || !user || scanQuotaReached || scanQuotaJustReached;
 
   return (
     <ThemedBackground>
@@ -328,7 +361,7 @@ export default function Scan() {
           ) : (
             <>
               {/* Quota Warning */}
-              {scanQuotaReached && (
+              {(scanQuotaReached || scanQuotaJustReached) && (
                 <Animated.View entering={FadeIn.duration(300)}>
                   <Card
                     style={[styles.quotaCard, { backgroundColor: colors.errorMuted }]}
@@ -374,6 +407,10 @@ export default function Scan() {
                         onPress={() => {
                           setImage(null);
                           setResults(null);
+                          if (scanQuotaJustReached) {
+                            setScanQuotaJustReached(false);
+                            setScanQuotaReached(true);
+                          }
                         }}
                       >
                         <Text style={[styles.clearButtonText, { color: colors.error }]}>
