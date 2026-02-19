@@ -52,7 +52,7 @@ export async function scanImage(
             })
         })
 
-        const response = await result.json()
+        const response = await result.json();
 
         if (!response.success) {
             captureScanError(response.error, "scan_image_failed", { details: response.error.details });

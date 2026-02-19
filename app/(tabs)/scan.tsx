@@ -197,11 +197,15 @@ export default function Scan() {
 
   async function convertImageToB64(imageUri: string): Promise<string> {
 
-    const result = await ImageManipulator.manipulateAsync(imageUri, [], {
-      compress: 0.6,
-      base64: true,
-      format: ImageManipulator.SaveFormat.JPEG
-    })
+    const result = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [{ resize: { height: 1024 } }], 
+      {
+        compress: 0.7,
+        base64: true,
+        format: ImageManipulator.SaveFormat.JPEG
+      }
+    )
     return result.base64
   }
 
@@ -412,6 +416,7 @@ export default function Scan() {
                             setScanQuotaReached(true);
                           }
                         }}
+                        disabled={loading}
                       >
                         <Text style={[styles.clearButtonText, { color: colors.error }]}>
                           Clear
@@ -624,7 +629,7 @@ export default function Scan() {
               <Text style={[styles.modalText, { color: colors.textSecondary }]}>
                 For the best results:{"\n\n"}• Include the main message or section to analyze
                 {"\n"}• Capture contact details if relevant{"\n"}• Focus on the most suspicious
-                parts{"\n"}• Ensure text is easy to read
+                parts{"\n"}• Ensure text is easy to read{"\n\n"}Allow up to 10 seconds for results to appear.
               </Text>
               <Button onPress={() => setShowModal(false)}>Got it</Button>
             </Animated.View>
