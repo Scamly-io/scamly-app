@@ -18,7 +18,7 @@ import { ScanResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { CheckCircle, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
+import { CheckCircle, ChevronDown, ChevronUp, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -89,6 +89,7 @@ export default function Scan() {
   const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
   const [scanQuotaJustReached, setScanQuotaJustReached] = useState<boolean>(false);
   const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
+  const [expandedDetections, setExpandedDetections] = useState<Set<number>>(new Set());
 
   // Track whether we've already fired result_viewed for the current results
   const hasTrackedResultView = useRef<boolean>(false);
@@ -238,6 +239,7 @@ export default function Scan() {
       hasTrackedResultView.current = true;
 
       setResults(scanResults);
+      setExpandedDetections(new Set());
 
       // Check if this scan exhausted the user's free quota
       await checkQuotaAfterScan();
@@ -542,22 +544,62 @@ export default function Scan() {
                       Key Detections
                     </Text>
                     <View style={styles.detectionsList}>
-                      {results.detections.map((detection, index) => (
-                        <View
-                          key={index}
-                          style={[
-                            styles.detectionItem,
-                            { backgroundColor: colors.backgroundSecondary },
-                          ]}
-                        >
-                          {getSeverityIcon(detection.severity)}
-                          <Text
-                            style={[styles.detectionText, { color: colors.textPrimary }]}
+                      {results.detections.map((detection, index) => {
+                        const isExpanded = expandedDetections.has(index);
+                        return (
+                          <View
+                            key={index}
+                            style={[
+                              styles.detectionWrapper,
+                              { backgroundColor: colors.backgroundSecondary, borderRadius: radius.lg },
+                            ]}
                           >
-                            {detection.description}
-                          </Text>
-                        </View>
-                      ))}
+                            <TouchableOpacity
+                              style={[
+                                styles.detectionItem,
+                                { backgroundColor: colors.backgroundSecondary },
+                              ]}
+                              onPress={() => {
+                                setExpandedDetections((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(index)) next.delete(index);
+                                  else next.add(index);
+                                  return next;
+                                });
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              {getSeverityIcon(detection.severity)}
+                              <Text
+                                style={[styles.detectionDescription, { color: colors.textPrimary }]}
+                                numberOfLines={isExpanded ? undefined : 1}
+                              >
+                                {detection.description}
+                              </Text>
+                              
+                              {isExpanded ? (
+                                <ChevronUp size={20} color={colors.textSecondary} />
+                              ) : (
+                                <ChevronDown size={20} color={colors.textSecondary} />
+                              )}
+                            </TouchableOpacity>
+                            {isExpanded && (
+                              <View
+                                style={[
+                                  styles.detectionDetailsContainer,
+                                  { borderTopColor: colors.border },
+                                ]}
+                              >
+                                <Text
+                                  style={[styles.detectionDetailsText, { color: colors.textSecondary }]}
+                                >
+                                  {detection.details}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
                     </View>
                   </Card>
 
@@ -806,17 +848,38 @@ const styles = StyleSheet.create({
   detectionsList: {
     gap: 10,
   },
+  detectionWrapper: {
+    overflow: "hidden",
+  },
   detectionItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     padding: 14,
-    borderRadius: 12,
   },
-  detectionText: {
-    fontFamily: "Poppins-Regular",
+  detectionDescription: {
+    fontFamily: "Poppins-SemiBold",
     fontSize: 14,
     flex: 1,
+    lineHeight: 20,
+  },
+  detectionSeverityBadge: {
+    marginRight: 4,
+  },
+  detectionSeverityText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 12,
+    textTransform: "capitalize",
+  },
+  detectionDetailsContainer: {
+    paddingVertical: 12,
+    paddingLeft: 46,
+    paddingRight: 14,
+    borderTopWidth: 1,
+  },
+  detectionDetailsText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
     lineHeight: 20,
   },
   tipsCard: {

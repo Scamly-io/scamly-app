@@ -11,8 +11,8 @@ export interface ScanResult {
     risk_level: "low" | "medium" | "high";
     confidence: number;
     detections: {
-        category: string;
         description: string;
+        details: string;
         severity: "low" | "medium" | "high";
     }[];
     scan_successful: boolean;
