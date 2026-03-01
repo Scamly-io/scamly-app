@@ -475,7 +475,7 @@ export default function Scan() {
                   fullWidth
                   size="lg"
                 >
-                  Scan for Scams
+                  Scan
                 </Button>
               </Animated.View>
 

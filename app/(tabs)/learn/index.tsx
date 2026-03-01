@@ -235,7 +235,7 @@ export default function Learn() {
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-              Learning Center
+              Library
             </Text>
             <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
               Stay informed, stay aware, stay safe

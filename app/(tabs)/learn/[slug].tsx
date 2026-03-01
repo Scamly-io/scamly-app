@@ -163,7 +163,7 @@ export default function ArticleDetail() {
       fontFamily: "Poppins-Bold",
       fontSize: 26,
       color: colors.textPrimary,
-      marginTop: 24,
+      paddingTop: 24,
       marginBottom: 12,
     },
     heading2: {
