@@ -1,5 +1,6 @@
 import Button from "@/components/Button";
 import Card from "@/components/Card";
+import ShimmerRow from "@/components/ShimmerRow";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
@@ -12,6 +13,7 @@ import {
   trackUserVisibleError,
   type ResultCategory,
 } from "@/utils/analytics";
+//import { promptReview } from "@/utils/review";
 import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { ScanResult } from "@/utils/types";
@@ -31,7 +33,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 function getUserBillingPeriod(createdAt: string | Date) {
@@ -76,12 +78,33 @@ function getResultCategory(isScam: boolean, riskLevel: string): ResultCategory {
   return "unsure";
 }
 
+type ScanPhase = "idle" | "scanning" | "complete";
+
+const STAGE_OPTIONS = {
+  upload: ["Uploading your image"],
+  analysis: [
+    "Analysing content",
+    "Examining message patterns",
+    "Scanning for red flags",
+    "Reviewing message content",
+  ],
+  research: [
+    "Researching contact information",
+    "Cross-referencing known scam patterns",
+    "Verifying sender details",
+    "Checking against scam databases",
+  ],
+};
+
+function pickRandom(arr: string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 export default function Scan() {
   const { colors, radius, shadows, isDark } = useTheme();
   const { user } = useAuth();
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false);
   const [pageLoading, setPageLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<ScanResult | null>(null);
@@ -89,10 +112,34 @@ export default function Scan() {
   const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
   const [scanQuotaJustReached, setScanQuotaJustReached] = useState<boolean>(false);
   const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
+  const [scanFailureWarning, setScanFailureWarning] = useState<string | null>(null);
   const [expandedDetections, setExpandedDetections] = useState<Set<number>>(new Set());
+
+  const [scanPhase, setScanPhase] = useState<ScanPhase>("idle");
+  const [scanStage, setScanStage] = useState<number>(0);
+  const [stageTexts, setStageTexts] = useState<string[]>(["", "", ""]);
+
+  const loading = scanPhase === "scanning";
 
   // Track whether we've already fired result_viewed for the current results
   const hasTrackedResultView = useRef<boolean>(false);
+  const stageTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    if (scanPhase === "scanning") {
+      setScanStage(0);
+      const t1 = setTimeout(() => {
+        setScanStage(1);
+        const t2 = setTimeout(() => setScanStage(2), 5000);
+        stageTimersRef.current.push(t2);
+      }, 1000);
+      stageTimersRef.current.push(t1);
+    }
+    return () => {
+      stageTimersRef.current.forEach(clearTimeout);
+      stageTimersRef.current = [];
+    };
+  }, [scanPhase]);
 
   async function handlePageMount() {
     setPageLoading(true);
@@ -215,42 +262,57 @@ export default function Scan() {
     if (!user) return;
 
     setResults(null);
-    setLoading(true);
-    // Reset result view tracking for new scan
+    setScanFailureWarning(null);
+    setExpandedDetections(new Set());
     hasTrackedResultView.current = false;
 
-    // Track scan initiation - source is always 'upload' since camera is not yet implemented
+    setStageTexts([
+      STAGE_OPTIONS.upload[0],
+      pickRandom(STAGE_OPTIONS.analysis),
+      pickRandom(STAGE_OPTIONS.research),
+    ]);
+
+    setScanPhase("scanning");
     trackScanStarted("screenshot", "upload");
 
-    const scanStartTime = Date.now();
-
     const imageB64 = await convertImageToB64(image.uri!);
+    const scanStartTime = Date.now();
 
     try {
       const scanResults = await scanImage(imageB64);
-
-      // Track successful scan completion with result category and processing time
       const processingTimeMs = Date.now() - scanStartTime;
+
+      if (!scanResults.scan_successful) {
+        const failureReason =
+          scanResults.scan_failure_reason?.trim() ||
+          "We couldn't analyze this image confidently. Try uploading a clearer screenshot.";
+
+        setScanFailureWarning(failureReason);
+        setResults(null);
+
+        trackUserVisibleError("scan", "scan_unsuccessful", false);
+        setScanPhase("complete");
+        await checkQuotaAfterScan();
+        //await promptReview();
+        return;
+      }
+
       const resultCategory = getResultCategory(scanResults.is_scam, scanResults.risk_level);
       trackScanCompleted("screenshot", resultCategory, processingTimeMs);
 
-      // Track that the user is viewing the result
       trackResultViewed(resultCategory);
       hasTrackedResultView.current = true;
 
       setResults(scanResults);
-      setExpandedDetections(new Set());
-
-      // Check if this scan exhausted the user's free quota
+      setScanPhase("complete");
       await checkQuotaAfterScan();
+      //await promptReview();
     } catch (err) {
-      // Track user-visible error for analytics
       trackUserVisibleError("scan", "scan_failed", true);
+      console.log(err);
 
-      // Show appropriate error message based on error type
       if (err instanceof ScanError) {
         if (err.stage === "quota_exceeded") {
-          // Refresh the page state to show quota warning
           handlePageMount();
           Alert.alert("Scan Limit Reached", "You've reached your monthly scan limit. Please upgrade or wait for your quota to reset.");
         } else if (err.stage === "upload") {
@@ -259,11 +321,23 @@ export default function Scan() {
           Alert.alert("Scan Failed", "We couldn't complete your scan. Please try again later.");
         }
       } else {
-        // Generic error for unexpected failures
+        console.log(err);
         Alert.alert("Scan Failed", "Something went wrong while scanning your image. Please try again later.");
       }
-    } finally {
-      setLoading(false);
+
+      setScanPhase("idle");
+    }
+  }
+
+  function resetScan() {
+    setImage(null);
+    setResults(null);
+    setScanFailureWarning(null);
+    setExpandedDetections(new Set());
+    setScanPhase("idle");
+    if (scanQuotaJustReached) {
+      setScanQuotaJustReached(false);
+      setScanQuotaReached(true);
     }
   }
 
@@ -286,6 +360,7 @@ export default function Scan() {
     if (result.canceled) return;
 
     setImage(result.assets[0]);
+    setScanFailureWarning(null);
 
     Image.getSize(result.assets[0].uri!, (width, height) => {
       setAspectRatio(width / height);
@@ -386,101 +461,194 @@ export default function Scan() {
                 </Animated.View>
               )}
 
-              {/* Upload Card */}
-              <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-                <Card style={styles.uploadCard} pressable={false}>
-                  <TouchableOpacity
-                    style={styles.howToUseButton}
-                    onPress={() => setShowModal(true)}
-                  >
-                    <Info size={16} color={colors.accent} />
-                    <Text style={[styles.howToUseText, { color: colors.accent }]}>
-                      How to use this feature
-                    </Text>
-                  </TouchableOpacity>
-
-                  {image ? (
-                    <View style={styles.uploadedImageContainer}>
-                      <Image
-                        source={{ uri: image.uri }}
-                        style={[
-                          styles.uploadedImage,
-                          { aspectRatio: aspectRatio, borderRadius: radius.lg },
-                        ]}
-                        resizeMode="contain"
-                      />
-                      <TouchableOpacity
-                        onPress={() => {
-                          setImage(null);
-                          setResults(null);
-                          if (scanQuotaJustReached) {
-                            setScanQuotaJustReached(false);
-                            setScanQuotaReached(true);
-                          }
-                        }}
-                        disabled={loading}
-                      >
-                        <Text style={[styles.clearButtonText, { color: colors.error }]}>
-                          Clear
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
+              {/* Idle Phase: Upload Card + Scan Button */}
+              {scanPhase === "idle" && (
+                <Animated.View
+                  entering={FadeInDown.duration(400).delay(100)}
+                  exiting={FadeOut.duration(250)}
+                >
+                  <Card style={styles.uploadCard} pressable={false}>
                     <TouchableOpacity
+                      style={styles.howToUseButton}
+                      onPress={() => setShowModal(true)}
+                    >
+                      <Info size={16} color={colors.accent} />
+                      <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                        How to use this feature
+                      </Text>
+                    </TouchableOpacity>
+
+                    {image ? (
+                      <View style={styles.uploadedImageContainer}>
+                        <Image
+                          source={{ uri: image.uri }}
+                          style={[
+                            styles.uploadedImage,
+                            { aspectRatio: aspectRatio, borderRadius: radius.lg },
+                          ]}
+                          resizeMode="contain"
+                        />
+                        <TouchableOpacity
+                          onPress={() => {
+                            setImage(null);
+                            setResults(null);
+                            setScanFailureWarning(null);
+                            if (scanQuotaJustReached) {
+                              setScanQuotaJustReached(false);
+                              setScanQuotaReached(true);
+                            }
+                          }}
+                        >
+                          <Text style={[styles.clearButtonText, { color: colors.error }]}>
+                            Clear
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={[
+                          styles.uploadPlaceholder,
+                          {
+                            borderColor: colors.border,
+                            backgroundColor: colors.backgroundSecondary,
+                            borderRadius: radius.xl,
+                          },
+                        ]}
+                        onPress={() => {
+                          if (!scanQuotaReached) pickImage();
+                        }}
+                        disabled={scanQuotaReached}
+                      >
+                        <View
+                          style={[
+                            styles.uploadIconContainer,
+                            { backgroundColor: colors.accentMuted },
+                          ]}
+                        >
+                          <Upload size={28} color={colors.accent} />
+                        </View>
+                        <Text style={[styles.uploadTitle, { color: colors.textPrimary }]}>
+                          Upload a Screenshot
+                        </Text>
+                        <Text style={[styles.uploadSubtitle, { color: colors.textSecondary }]}>
+                          Tap to select an image
+                        </Text>
+                        {scanQuotaReached && (
+                          <View
+                            style={[styles.uploadOverlay, { backgroundColor: "rgba(0,0,0,0.6)" }]}
+                          >
+                            <Lock size={28} color="white" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </Card>
+
+                  <View style={styles.scanButtonContainer}>
+                    <Button
+                      onPress={handleScan}
+                      disabled={scanButtonDisabled}
+                      fullWidth
+                      size="lg"
+                    >
+                      Scan
+                    </Button>
+                  </View>
+                </Animated.View>
+              )}
+
+              {/* Scanning / Complete Phase: Compact Header */}
+              {(scanPhase === "scanning" || scanPhase === "complete") && image && (
+                <Animated.View
+                  entering={FadeIn.duration(350).delay(150)}
+                  style={styles.scanningContainer}
+                >
+                  <View style={styles.scanningHeader}>
+                    <Image
+                      source={{ uri: image.uri }}
                       style={[
-                        styles.uploadPlaceholder,
+                        styles.thumbnailImage,
                         {
-                          borderColor: colors.border,
+                          borderRadius: radius.md,
                           backgroundColor: colors.backgroundSecondary,
-                          borderRadius: radius.xl,
                         },
                       ]}
-                      onPress={() => {
-                        if (!scanQuotaReached) pickImage();
-                      }}
-                      disabled={scanQuotaReached}
-                    >
-                      <View
-                        style={[
-                          styles.uploadIconContainer,
-                          { backgroundColor: colors.accentMuted },
-                        ]}
-                      >
-                        <Upload size={28} color={colors.accent} />
-                      </View>
-                      <Text style={[styles.uploadTitle, { color: colors.textPrimary }]}>
-                        Upload a Screenshot
-                      </Text>
-                      <Text style={[styles.uploadSubtitle, { color: colors.textSecondary }]}>
-                        Tap to select an image
-                      </Text>
-                      {scanQuotaReached && (
-                        <View
-                          style={[styles.uploadOverlay, { backgroundColor: "rgba(0,0,0,0.6)" }]}
-                        >
-                          <Lock size={28} color="white" />
+                    />
+                    <View style={styles.scanningTextContainer}>
+                      {scanPhase === "scanning" && (
+                        <View>
+                          <ShimmerRow
+                            text={stageTexts[0]}
+                            isActive={scanStage === 0}
+                            isVisible={true}
+                          />
+                          <ShimmerRow
+                            text={stageTexts[1]}
+                            isActive={scanStage === 1}
+                            isVisible={scanStage >= 1}
+                          />
+                          <ShimmerRow
+                            text={stageTexts[2]}
+                            isActive={scanStage === 2}
+                            isVisible={scanStage >= 2}
+                          />
                         </View>
                       )}
-                    </TouchableOpacity>
-                  )}
-                </Card>
-              </Animated.View>
 
-              {/* Scan Button */}
-              <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.scanButtonContainer}>
-                <Button
-                  onPress={handleScan}
-                  disabled={scanButtonDisabled}
-                  loading={loading}
-                  fullWidth
-                  size="lg"
-                >
-                  Scan
-                </Button>
-              </Animated.View>
+                      {scanPhase === "complete" && (
+                        <Animated.View entering={FadeIn.duration(300)}>
+                          <Text
+                            style={[
+                              styles.scanCompleteText,
+                              { color: colors.textPrimary },
+                            ]}
+                          >
+                            Scan Complete
+                          </Text>
+                          <View style={styles.scanCompleteActions}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onPress={resetScan}
+                            >
+                              Clear Results
+                            </Button>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onPress={handleScan}
+                            >
+                              Rescan
+                            </Button>
+                          </View>
+                        </Animated.View>
+                      )}
+                    </View>
+                  </View>
+                </Animated.View>
+              )}
 
-              {/* Results */}
-              {results && (
+              {/* Scan Failure Warning */}
+              {scanFailureWarning && scanPhase === "complete" && (
+                <Animated.View entering={FadeIn.duration(300)}>
+                  <Card
+                    style={[styles.scanFailureCard, { backgroundColor: colors.warningMuted }]}
+                    pressable={false}
+                  >
+                    <View style={styles.scanFailureHeader}>
+                      <TriangleAlert size={20} color={colors.warning} />
+                      <Text style={[styles.scanFailureTitle, { color: colors.warning }]}>
+                        We couldn't complete this scan
+                      </Text>
+                    </View>
+                    <Text style={[styles.scanFailureReason, { color: colors.textPrimary }]}>
+                      {scanFailureWarning}
+                    </Text>
+                  </Card>
+                </Animated.View>
+              )}
+
+              {results && scanPhase === "complete" && (
                 <Animated.View entering={FadeIn.duration(400)}>
                   {/* Risk Level Card */}
                   <Card
@@ -793,6 +961,26 @@ const styles = StyleSheet.create({
   scanButtonContainer: {
     marginBottom: 24,
   },
+  scanFailureCard: {
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  scanFailureHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  scanFailureTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 16,
+  },
+  scanFailureReason: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
   resultCard: {
     marginBottom: 16,
   },
@@ -950,5 +1138,30 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: "left",
     width: "100%",
+  },
+  scanningContainer: {
+    marginBottom: 24,
+  },
+  scanningHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14,
+  },
+  thumbnailImage: {
+    width: 56,
+    height: 74,
+  },
+  scanningTextContainer: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  scanCompleteText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  scanCompleteActions: {
+    flexDirection: "row",
+    gap: 10,
   },
 });

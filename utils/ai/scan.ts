@@ -10,7 +10,7 @@
  * - Current model: Gemini 3 Flash Preview
  */
 
-import { ScanResult } from "@/types/scanResult";
+import { ScanResult } from "@/utils/types";
 import { trackScanFailed } from "@/utils/analytics";
 import { captureScanError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";

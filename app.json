@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "appStoreUrl": "itms-apps://itunes.apple.com/app/idXXXX", // TODO: Add the app store URL here.
       "supportsTablet": true,
       "bundleIdentifier": "io.scamly.app",
       "icon": "./assets/images/icons/ios.icon",
@@ -26,7 +27,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "io.scamly.app"
+      "package": "io.scamly.app",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=io.scamly.app"
     },
     "web": {
       "output": "static",

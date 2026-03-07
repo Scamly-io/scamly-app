@@ -8,7 +8,7 @@ import {
   trackSignupCompleted,
   trackSignupFailed,
 } from "@/utils/analytics";
-import { captureError, addActionBreadcrumb } from "@/utils/sentry";
+import { addActionBreadcrumb, captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import {
   genderOptions,
@@ -363,6 +363,7 @@ export default function SignUpProfile() {
             gender,
             country,
             referral_source: referralSource,
+            onboarding_completed: true
           },
         },
       });
