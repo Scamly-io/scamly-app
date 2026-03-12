@@ -9,7 +9,6 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "appStoreUrl": "itms-apps://itunes.apple.com/app/idXXXX", // TODO: Add the app store URL here.
       "supportsTablet": true,
       "bundleIdentifier": "io.scamly.app",
       "icon": "./assets/images/icons/ios.icon",

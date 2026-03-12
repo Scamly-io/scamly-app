@@ -13,7 +13,7 @@ import {
   trackUserVisibleError,
   type ResultCategory,
 } from "@/utils/analytics";
-//import { promptReview } from "@/utils/review";
+import { promptReview } from "@/utils/review";
 import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { ScanResult } from "@/utils/types";
@@ -293,7 +293,6 @@ export default function Scan() {
         trackUserVisibleError("scan", "scan_unsuccessful", false);
         setScanPhase("complete");
         await checkQuotaAfterScan();
-        //await promptReview();
         return;
       }
 
@@ -306,7 +305,7 @@ export default function Scan() {
       setResults(scanResults);
       setScanPhase("complete");
       await checkQuotaAfterScan();
-      //await promptReview();
+      await promptReview(user.id);
     } catch (err) {
       trackUserVisibleError("scan", "scan_failed", true);
       console.log(err);

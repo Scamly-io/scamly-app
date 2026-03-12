@@ -10,7 +10,7 @@ import { captureError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import { ChevronRight, Clock, Search, Sparkles, TrendingUp } from "lucide-react-native";
+import { ChevronRight, Clock, Search, Sparkles, TrendingUp, X } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -213,6 +213,11 @@ export default function Learn() {
     }
   }
 
+  function clearSearch() {
+    setSearchInput("");
+    setSearchResults([]);
+  }
+
   if (pageLoading) {
     return (
       <ThemedBackground>
@@ -256,6 +261,16 @@ export default function Learn() {
                   onSubmitEditing={handleSearch}
                   returnKeyType="search"
                 />
+                {(searchInput.length > 0 || searchResults.length > 0) && (
+                  <TouchableOpacity
+                    onPress={clearSearch}
+                    style={styles.searchClearButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear search"
+                  >
+                    <X size={16} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               {searchLoading && (
@@ -462,6 +477,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: "Poppins-Regular",
     fontSize: 15,
+  },
+  searchClearButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   searchLoadingContainer: {
     padding: 16,

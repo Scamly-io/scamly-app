@@ -146,100 +146,91 @@ export default function PhoneSearch() {
   return (
     <ThemedBackground>
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardDismissMode="on-drag"
-        >
-          {/* Header */}
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
-            <View style={styles.headerTitleRow}>
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Contact Search</Text>
-              <View style={[styles.betaTag, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)' }]}>
-                <Text style={[styles.betaTagText, { color: colors.accent }]}>Beta</Text>
-              </View>
+        {/* Header */}
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+          <View style={styles.headerTitleRow}>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Contact Search</Text>
+            <View style={[styles.betaTag, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)' }]}>
+              <Text style={[styles.betaTagText, { color: colors.accent }]}>Beta</Text>
             </View>
-            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-              Find contact info for any organisation worldwide
-            </Text>
-          </Animated.View>
+          </View>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+            Find contact info for any organisation worldwide
+          </Text>
+        </Animated.View>
 
-          {/* Search Card */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-            <Card style={styles.searchCard} pressable={false}>
-              <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
-                <Info size={16} color={colors.accent} />
-                <Text style={[styles.howToUseText, { color: colors.accent }]}>
-                  How to use this feature
-                </Text>
-              </TouchableOpacity>
-
-              <View
-                style={[
-                  styles.searchInputContainer,
-                  {
-                    backgroundColor: colors.backgroundSecondary,
-                    borderColor: colors.border,
-                    borderRadius: radius.lg,
-                  },
-                ]}
-              >
-                <SearchIcon size={20} color={colors.textTertiary} />
-                <TextInput
-                  style={[styles.searchInput, { color: colors.textPrimary }]}
-                  placeholder="Enter a company name"
-                  placeholderTextColor={colors.textTertiary}
-                  returnKeyType="search"
-                  value={searchInput}
-                  onChangeText={setSearchInput}
-                  onSubmitEditing={handleSearch}
-                  editable={!isFreePlan}
-                  selectTextOnFocus={!isFreePlan}
-                />
-              </View>
-
-              <Button
-                onPress={handleSearch}
-                disabled={!searchInput.trim() || !!isFreePlan}
-                loading={isLoading}
-                fullWidth
-              >
-                Search
-              </Button>
-
-              {isFreePlan && !planLoading && (
-                <View style={[styles.lockOverlay, { borderRadius: radius.xl }]}>
-                  <Lock size={28} color="white" />
-                  <Text style={styles.lockTitle}>Feature Locked</Text>
-                  <Text style={styles.lockSubtitle}>
-                    Scamly's advanced contact information search tool is not available on free accounts.
+        <View style={styles.content}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+          >
+            {/* Search Card */}
+            <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+              <Card style={styles.searchCard} pressable={false}>
+                <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
+                  <Info size={16} color={colors.accent} />
+                  <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                    How to use this feature
                   </Text>
-                </View>
-              )}
-            </Card>
-          </Animated.View>
+                </TouchableOpacity>
 
-          {/* Results Card */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-            <Card style={styles.resultsCard} pressable={false}>
-              {isLoading || planLoading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={colors.accent} />
+                <View
+                  style={[
+                    styles.searchInputContainer,
+                    {
+                      backgroundColor: colors.backgroundSecondary,
+                      borderColor: colors.border,
+                      borderRadius: radius.lg,
+                    },
+                  ]}
+                >
+                  <SearchIcon size={20} color={colors.textTertiary} />
+                  <TextInput
+                    style={[styles.searchInput, { color: colors.textPrimary }]}
+                    placeholder="Enter a company name"
+                    placeholderTextColor={colors.textTertiary}
+                    returnKeyType="search"
+                    value={searchInput}
+                    onChangeText={setSearchInput}
+                    onSubmitEditing={handleSearch}
+                    editable={!isFreePlan}
+                    selectTextOnFocus={!isFreePlan}
+                  />
                 </View>
-              ) : error ? (
-                <View style={styles.errorContainer}>
-                  <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-                </View>
-              ) : showResults && company ? (
-                <Animated.View entering={FadeIn.duration(300)}>
-                  <Text style={[styles.companyName, { color: colors.textPrimary }]}>
-                    {company.company_name}
-                  </Text>
 
-                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <Button
+                  onPress={handleSearch}
+                  disabled={!searchInput.trim() || !!isFreePlan}
+                  loading={isLoading}
+                  fullWidth
+                >
+                  Search
+                </Button>
+              </Card>
+            </Animated.View>
 
-                  <View style={styles.infoList}>
+            {/* Results Card */}
+            <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+              <Card style={styles.resultsCard} pressable={false}>
+                {isLoading || planLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={colors.accent} />
+                  </View>
+                ) : error ? (
+                  <View style={styles.errorContainer}>
+                    <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+                  </View>
+                ) : showResults && company ? (
+                  <Animated.View entering={FadeIn.duration(300)}>
+                    <Text style={[styles.companyName, { color: colors.textPrimary }]}>
+                      {company.company_name}
+                    </Text>
+
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                    <View style={styles.infoList}>
                     {/* Website */}
                     <View
                       style={[
@@ -385,45 +376,56 @@ export default function PhoneSearch() {
                     </View>
                   </View>
 
-                  {!company.found_all_fields && (
+                    {!company.found_all_fields && (
+                      <View
+                        style={[
+                          styles.warningBox,
+                          { backgroundColor: colors.warningMuted, borderRadius: radius.md },
+                        ]}
+                      >
+                        <Text style={[styles.warningText, { color: colors.warning }]}>
+                          Some information could not be found: {company.missing_fields.join(", ")}.
+                        </Text>
+                      </View>
+                    )}
+                  </Animated.View>
+                ) : (
+                  <View style={styles.emptyContainer}>
                     <View
-                      style={[
-                        styles.warningBox,
-                        { backgroundColor: colors.warningMuted, borderRadius: radius.md },
-                      ]}
+                      style={[styles.emptyIconContainer, { backgroundColor: colors.accentMuted }]}
                     >
-                      <Text style={[styles.warningText, { color: colors.warning }]}>
-                        Some information could not be found: {company.missing_fields.join(", ")}.
-                      </Text>
+                      <SearchIcon size={28} color={colors.accent} />
                     </View>
-                  )}
-                </Animated.View>
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <View
-                    style={[styles.emptyIconContainer, { backgroundColor: colors.accentMuted }]}
-                  >
-                    <SearchIcon size={28} color={colors.accent} />
+                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                      Your results will appear here
+                    </Text>
                   </View>
-                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                    Your results will appear here
-                  </Text>
-                </View>
-              )}
-            </Card>
-          </Animated.View>
+                )}
+              </Card>
+            </Animated.View>
 
-          {/* Disclaimer */}
-          <View style={styles.disclaimer}>
-            <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>
-              Disclaimer
-            </Text>
-            <Text style={[styles.disclaimerText, { color: colors.textTertiary }]}>
-              This tool uses AI to locate public company contact information. Results may not
-              always be complete or accurate. Please verify through official sources before use.
-            </Text>
-          </View>
-        </ScrollView>
+            {/* Disclaimer */}
+            <View style={styles.disclaimer}>
+              <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>
+                Disclaimer
+              </Text>
+              <Text style={[styles.disclaimerText, { color: colors.textTertiary }]}>
+                This tool uses AI to locate public company contact information. Results may not
+                always be complete or accurate. Please verify through official sources before use.
+              </Text>
+            </View>
+          </ScrollView>
+
+          {isFreePlan && !planLoading && (
+            <View style={[styles.lockOverlay, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
+              <Lock size={40} color="white" />
+              <Text style={styles.lockTitle}>Feature Locked</Text>
+              <Text style={styles.lockSubtitle}>
+                Scamly's advanced contact information search tool is not available on free accounts.
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* How to Use Modal */}
         <Modal
@@ -463,14 +465,20 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  content: {
+    flex: 1,
+    position: "relative",
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   header: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
     marginBottom: 24,
   },
   headerTitleRow: {
@@ -528,22 +536,24 @@ const styles = StyleSheet.create({
   },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.7)",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingHorizontal: 24,
+    gap: 16,
+    paddingHorizontal: 32,
+    borderRadius: 20,
   },
   lockTitle: {
     color: "white",
     fontFamily: "Poppins-Bold",
-    fontSize: 18,
+    fontSize: 20,
+    textAlign: "center",
   },
   lockSubtitle: {
     color: "rgba(255,255,255,0.8)",
     fontFamily: "Poppins-Regular",
     fontSize: 14,
     textAlign: "center",
+    lineHeight: 20,
   },
   resultsCard: {
     marginBottom: 24,
