@@ -24,10 +24,18 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": false,
+      "distribution": "store"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "companyName": "Scamly Pty Ltd"
+      },
+      "android": {
+        "track": "Production"
+      }
+    }
   }
 }
