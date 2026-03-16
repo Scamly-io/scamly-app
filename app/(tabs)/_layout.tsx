@@ -3,11 +3,16 @@ import { useTheme } from "@/theme";
 import { Tabs, usePathname } from "expo-router";
 import { BookOpen, House, MessageCircle, SearchCode, Sparkles } from "lucide-react-native";
 import { Platform, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
   const pathName = usePathname();
   const isChatDetail = pathName.includes("/chat/") && pathName !== "/chat";
+  const insets = useSafeAreaInsets();
+
+  const bottomPadding = Platform.OS === "ios" ? 24 : Math.max(12, insets.bottom + 6);
+  const tabBarHeight = Platform.OS === "ios" ? 88 : 56 + bottomPadding;
 
   return (
     <ProtectedRoute>
@@ -20,8 +25,8 @@ export default function TabsLayout() {
                 borderTopColor: colors.tabBarBorder,
                 borderTopWidth: StyleSheet.hairlineWidth,
                 paddingTop: 8,
-                paddingBottom: Platform.OS === "ios" ? 24 : 12,
-                height: Platform.OS === "ios" ? 88 : 68,
+                paddingBottom: bottomPadding,
+                height: tabBarHeight,
               },
           headerShown: false,
           tabBarActiveTintColor: colors.tabActive,

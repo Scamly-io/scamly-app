@@ -37,16 +37,16 @@ export default function CollapsibleHeaderScreen({
   const isScrollable = contentHeight > containerHeight + 1;
 
   const animatedHeaderStyle = useAnimatedStyle(() => {
-    const shadowOpacity = interpolate(
+    const shadowAlpha = interpolate(
       scrollY.value,
       [0, 20],
-      [0, 1],
+      [0, 0.08],
       Extrapolation.CLAMP
     );
-    
+
     return {
       transform: [{ translateY: headerTranslateY.value }],
-      shadowOpacity: shadowOpacity * 0.08,
+      boxShadow: `0px 4px 12px rgba(0, 0, 0, ${shadowAlpha})`,
     };
   }, []);
 
@@ -111,10 +111,6 @@ export default function CollapsibleHeaderScreen({
             animatedHeaderStyle,
             {
               backgroundColor: colors.surface,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 4 },
-              shadowRadius: 12,
-              elevation: 4,
             },
           ]}
           onLayout={(e) => {
