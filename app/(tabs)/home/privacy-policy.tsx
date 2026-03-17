@@ -105,7 +105,7 @@ We are headquartered in Australia, however we access servers globally and mainta
 
 The hosting facilities for our website are situated in the United States of America and Sweden. Transfers to each of these countries will be protected by appropriate safeguards.
 
-Our third-party service providers, including those providing analytics, data processing, and user information management tools, are situated in Australia, European Union member states, Singapore, and United States of America. Transfers to each of these countries will be protected by appropriate safeguards.
+Our third-party service providers, including those providing analytics, data processing, and user information management tools, are situated in Australia, European Union member states, Singapore, and United States of America. Transfers to each of these countries will be protected by appropriate safeguards, these include one or more of the following: the use of standard data protection clauses adopted or approved by the European Commission which you can obtain from the European Commission Website; the use of binding corporate rules, a copy of which you can obtain from Scamly Pty Ltd's Data Protection Officer.
 
 You acknowledge that personal data that you submit for publication through our website or services may be available, via the internet, around the world. We cannot prevent the use (or misuse) of such personal data by others.`,
   },
