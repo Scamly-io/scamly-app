@@ -249,6 +249,7 @@ export default function SignUpProfile() {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [showReferralPicker, setShowReferralPicker] = useState(false);
+  const [showCountryInfoModal, setShowCountryInfoModal] = useState(false);
 
   const clearError = (field: string) => {
     if (errors[field]) {
@@ -302,14 +303,12 @@ export default function SignUpProfile() {
 
   const handleCreateAccount = async () => {
     // Validate DOB before building form data
-    let dobIso = "";
+    let dobIso: string | undefined;
     const fieldErrors: Record<string, string> = {};
 
-    if (!dobText) {
-      fieldErrors.dob = "Date of birth is required";
-    } else if (dobText.length < 10) {
+    if (dobText && dobText.length < 10) {
       fieldErrors.dob = "Please enter a complete date (DD/MM/YYYY)";
-    } else {
+    } else if (dobText) {
       const parsed = parseDob(dobText);
       if (!parsed) {
         fieldErrors.dob = "Please enter a valid date";
@@ -324,9 +323,9 @@ export default function SignUpProfile() {
       email: signUpData.email,
       password: signUpData.password,
       firstName,
-      dob: dobIso,
+      ...(dobIso ? { dob: dobIso } : {}),
       country,
-      gender,
+      ...(gender ? { gender } : {}),
       referralSource,
     };
 
@@ -352,19 +351,33 @@ export default function SignUpProfile() {
     addActionBreadcrumb("signup_attempted", "signup");
 
     try {
+      const profileData: {
+        first_name: string;
+        country: string;
+        referral_source: string;
+        onboarding_completed: boolean;
+        dob?: string;
+        gender?: string;
+      } = {
+        first_name: firstName,
+        country,
+        referral_source: referralSource,
+        onboarding_completed: true,
+      };
+
+      if (dobIso) {
+        profileData.dob = dobIso;
+      }
+      if (gender) {
+        profileData.gender = gender;
+      }
+
       const { error } = await supabase.auth.signUp({
         email: signUpData.email,
         password: signUpData.password,
         options: {
           emailRedirectTo: "https://test.scamly.io/portal", // Test environment
-          data: {
-            first_name: firstName,
-            dob: dobIso,
-            gender,
-            country,
-            referral_source: referralSource,
-            onboarding_completed: true
-          },
+          data: profileData,
         },
       });
 
@@ -406,6 +419,21 @@ export default function SignUpProfile() {
     borderColor: colors.border,
   });
 
+  const renderFieldLabel = (label: string, required = true) => (
+    <View style={styles.fieldLabelRow}>
+      <Text style={[styles.fieldLabelText, { color: colors.textSecondary }]}>
+        {label}
+      </Text>
+      {required ? (
+        <Text style={[styles.requiredAsterisk, { color: colors.error }]}>*</Text>
+      ) : (
+        <Text style={[styles.optionalTag, { color: colors.textTertiary }]}>
+          (optional)
+        </Text>
+      )}
+    </View>
+  );
+
   return (
     <ThemedBackground>
       <SafeAreaView style={styles.safeArea}>
@@ -444,10 +472,14 @@ export default function SignUpProfile() {
               <Text style={[styles.subHeaderText, { color: colors.textSecondary }]}>
                 Tell us a bit about yourself
               </Text>
+              <Text style={[styles.requiredHint, { color: colors.textSecondary }]}>
+                <Text style={{ color: colors.error }}>*</Text> Required fields
+              </Text>
 
               <View style={styles.inputContainer}>
                 {/* First Name */}
                 <View>
+                  {renderFieldLabel("First name")}
                   <View
                     style={[
                       styles.inputWrapper,
@@ -490,6 +522,7 @@ export default function SignUpProfile() {
 
                 {/* Date of Birth */}
                 <View>
+                  {renderFieldLabel("Date of birth", false)}
                   <View
                     style={[
                       styles.inputWrapper,
@@ -530,6 +563,14 @@ export default function SignUpProfile() {
 
                 {/* Country */}
                 <View>
+                  <View style={styles.fieldLabelWithAction}>
+                    {renderFieldLabel("Country")}
+                    <Pressable onPress={() => setShowCountryInfoModal(true)} hitSlop={8}>
+                      <Text style={[styles.countryInfoLink, { color: colors.accent }]}>
+                        Why is this collected?
+                      </Text>
+                    </Pressable>
+                  </View>
                   <Pressable
                     onPress={() => setShowCountryPicker(true)}
                     disabled={loading}
@@ -565,6 +606,7 @@ export default function SignUpProfile() {
 
                 {/* Gender */}
                 <View>
+                  {renderFieldLabel("Gender", false)}
                   <Pressable
                     onPress={() => setShowGenderPicker(true)}
                     disabled={loading}
@@ -600,6 +642,7 @@ export default function SignUpProfile() {
 
                 {/* Referral Source */}
                 <View>
+                  {renderFieldLabel("How did you hear about us?")}
                   <Pressable
                     onPress={() => setShowReferralPicker(true)}
                     disabled={loading}
@@ -684,6 +727,40 @@ export default function SignUpProfile() {
           clearError("referralSource");
         }}
       />
+
+      <Modal
+        visible={showCountryInfoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCountryInfoModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowCountryInfoModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.infoModalContent,
+              { backgroundColor: colors.surface, borderRadius: radius["2xl"] },
+            ]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.infoModalTitle, { color: colors.textPrimary }]}>
+              Why is this collected?
+            </Text>
+            <Text style={[styles.infoModalBody, { color: colors.textSecondary }]}>
+              Country data is collected to provide Scamly's AI with contextual
+              information that may be relevant to detecting scams. For example, if
+              you receive a text message claiming to be from a US bank, and you live
+              in Australia, this adds suspicion. {"\n\n"}All data collected is done
+              so in line with our privacy policy, available on our website.
+            </Text>
+            <Button onPress={() => setShowCountryInfoModal(false)} fullWidth size="lg">
+              Got it
+            </Button>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedBackground>
   );
 }
@@ -722,7 +799,13 @@ const styles = StyleSheet.create({
   subHeaderText: {
     fontSize: 15,
     fontFamily: "Poppins-Regular",
-    marginBottom: 28,
+    marginBottom: 10,
+  },
+  requiredHint: {
+    width: "100%",
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    marginBottom: 14,
   },
   inputContainer: {
     width: "100%",
@@ -736,6 +819,37 @@ const styles = StyleSheet.create({
     height: 56,
     borderWidth: 1.5,
     gap: 12,
+  },
+  fieldLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+    marginLeft: 4,
+    gap: 4,
+  },
+  fieldLabelWithAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  fieldLabelText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Medium",
+  },
+  requiredAsterisk: {
+    fontSize: 13,
+    fontFamily: "Poppins-SemiBold",
+    lineHeight: 16,
+  },
+  optionalTag: {
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    lineHeight: 16,
+  },
+  countryInfoLink: {
+    fontSize: 12,
+    fontFamily: "Poppins-Medium",
+    textDecorationLine: "underline",
   },
   input: {
     flex: 1,
@@ -767,6 +881,22 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     maxHeight: "70%",
     padding: 20,
+  },
+  infoModalContent: {
+    width: "100%",
+    maxWidth: 400,
+    padding: 22,
+  },
+  infoModalTitle: {
+    fontSize: 18,
+    fontFamily: "Poppins-SemiBold",
+    marginBottom: 12,
+  },
+  infoModalBody: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontFamily: "Poppins-Regular",
+    marginBottom: 18,
   },
   modalHeader: {
     flexDirection: "row",

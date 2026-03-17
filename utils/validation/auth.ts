@@ -12,9 +12,9 @@ export const signUpSchema = z.object({
     .string()
     .min(1, "First name is required")
     .max(50, "First name is too long"),
-  dob: z.string().min(1, "Date of birth is required"),
+  dob: z.string().optional(),
   country: z.string().min(1, "Country is required"),
-  gender: z.string().min(1, "Gender is required"),
+  gender: z.string().optional(),
   referralSource: z.string().min(1, "Please select how you heard about us"),
 });
 
