@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Calendar,
+  Check,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -82,6 +83,7 @@ export default function Profile() {
   const [dobText, setDobText] = useState("");
   const [country, setCountry] = useState("");
   const [gender, setGender] = useState("");
+  const [dataSharingConsent, setDataSharingConsent] = useState(false);
   const [subscriptionPlan, setSubscriptionPlan] = useState("free");
 
   const [originalData, setOriginalData] = useState({
@@ -89,6 +91,7 @@ export default function Profile() {
     dobText: "",
     country: "",
     gender: "",
+    dataSharingConsent: false,
   });
 
   const [firstNameFocused, setFirstNameFocused] = useState(false);
@@ -114,7 +117,8 @@ export default function Profile() {
     firstName !== originalData.firstName ||
     dobText !== originalData.dobText ||
     country !== originalData.country ||
-    gender !== originalData.gender;
+    gender !== originalData.gender ||
+    dataSharingConsent !== originalData.dataSharingConsent;
   const canConfirmDeletion =
     deleteConfirmationText.trim() === DELETE_CONFIRMATION_PHRASE;
 
@@ -124,7 +128,7 @@ export default function Profile() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("first_name, dob, country, gender, subscription_plan")
+        .select("first_name, dob, country, gender, subscription_plan, data_sharing_consent")
         .eq("id", user.id)
         .single();
 
@@ -142,13 +146,21 @@ export default function Profile() {
       const dob = data.dob ? isoToDobDisplay(data.dob) : "";
       const c = data.country ?? "";
       const g = data.gender ?? "";
+      const consent = Boolean(data.data_sharing_consent);
 
       setFirstName(name);
       setDobText(dob);
       setCountry(c);
       setGender(g);
+      setDataSharingConsent(consent);
       setSubscriptionPlan(data.subscription_plan ?? "free");
-      setOriginalData({ firstName: name, dobText: dob, country: c, gender: g });
+      setOriginalData({
+        firstName: name,
+        dobText: dob,
+        country: c,
+        gender: g,
+        dataSharingConsent: consent,
+      });
       setLoading(false);
     }
 
@@ -238,11 +250,12 @@ export default function Profile() {
     setSaving(true);
 
     try {
-      const updateData: Record<string, string | null> = {
+      const updateData: Record<string, string | null | boolean> = {
         first_name: firstName.trim(),
         country,
         gender: gender || null,
         dob: dobIso,
+        data_sharing_consent: dataSharingConsent,
       };
 
       const { error } = await supabase
@@ -266,6 +279,7 @@ export default function Profile() {
         dobText,
         country,
         gender,
+        dataSharingConsent,
       });
       await refreshAuth();
       Alert.alert("Success", "Your profile has been updated.");
@@ -579,6 +593,41 @@ export default function Profile() {
                   </Pressable>
                 </View>
               </View>
+            </View>
+
+            {/* Privacy */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                Privacy
+              </Text>
+
+              <Card style={styles.card} pressable={false}>
+                <Pressable
+                  onPress={() => {
+                    if (!saving) {
+                      setDataSharingConsent((prev) => !prev);
+                    }
+                  }}
+                  style={styles.checkboxRow}
+                >
+                  <View
+                    style={[
+                      styles.checkbox,
+                      {
+                        borderColor: dataSharingConsent ? colors.accent : colors.border,
+                        backgroundColor: dataSharingConsent
+                          ? colors.accent
+                          : colors.backgroundSecondary,
+                      },
+                    ]}
+                  >
+                    {dataSharingConsent ? <Check size={14} color={colors.textInverse} /> : null}
+                  </View>
+                  <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>
+                    Allow data sharing to third party AI tools for scan functionality
+                  </Text>
+                </Pressable>
+              </Card>
             </View>
 
             {/* Subscription */}
@@ -1002,6 +1051,27 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: "Poppins-Medium",
     fontSize: 15,
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 20,
   },
   saveSection: {
     marginTop: 4,

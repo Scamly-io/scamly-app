@@ -13,7 +13,8 @@
       "bundleIdentifier": "io.scamly.app",
       "icon": "./assets/images/icons/ios.icon",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Allow access to your photos so you can upload screenshots to the scanning tool."
       },
       "usesAppleSignIn": true
     },

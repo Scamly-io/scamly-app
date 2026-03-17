@@ -358,11 +358,77 @@ export default function Scan() {
 
     if (result.canceled) return;
 
-    setImage(result.assets[0]);
+    const selectedImage = result.assets[0];
+    setImage(selectedImage);
     setScanFailureWarning(null);
 
-    Image.getSize(result.assets[0].uri!, (width, height) => {
+    Image.getSize(selectedImage.uri!, (width, height) => {
       setAspectRatio(width / height);
+    });
+
+    const hasConsent = await checkDataSharingConsent();
+    if (!hasConsent) {
+      const agreed = await showDataSharingConsentPrompt();
+      if (!agreed) {
+        setImage(null);
+      }
+    }
+  }
+
+  async function checkDataSharingConsent(): Promise<boolean> {
+    if (!user) return false;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("data_sharing_consent")
+      .eq("id", user.id)
+      .single();
+
+    if (error || !data) {
+      trackUserVisibleError("scan", "consent_check_failed", false);
+      captureDataFetchError(error || new Error("No profile data"), "scan", "check_data_sharing_consent", "critical");
+      Alert.alert("Error", "There was an issue checking your data sharing settings. Please try again.");
+      return false;
+    }
+
+    return Boolean(data.data_sharing_consent);
+  }
+
+  async function showDataSharingConsentPrompt(): Promise<boolean> {
+    if (!user) return false;
+
+    return new Promise((resolve) => {
+      Alert.alert(
+        "Data Sharing Permission",
+        "By using the scanning tool, you agree to allow Scamly to share images you upload, as well as your country data with OpenAI for scan processing.",
+        [
+          {
+            text: "Reject",
+            style: "destructive",
+            onPress: () => resolve(false),
+          },
+          {
+            text: "Agree",
+            onPress: async () => {
+              const { error } = await supabase
+                .from("profiles")
+                .update({ data_sharing_consent: true })
+                .eq("id", user.id);
+
+              if (error) {
+                trackUserVisibleError("scan", "consent_update_failed", false);
+                captureDataFetchError(error, "scan", "update_data_sharing_consent", "critical");
+                Alert.alert("Error", "We couldn't save your consent. Please try again.");
+                resolve(false);
+                return;
+              }
+
+              resolve(true);
+            },
+          },
+        ],
+        { cancelable: false }
+      );
     });
   }
 
