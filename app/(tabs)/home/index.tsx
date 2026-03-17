@@ -10,7 +10,7 @@ import { captureDataFetchError, captureError, captureWarning } from "@/utils/sen
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import { LogOut, MessageCircle, Scan, Search, Sparkles, TrendingUp } from "lucide-react-native";
+import { ChevronRight, LogOut, MessageCircle, Scan, Search, Sparkles, TrendingUp, User } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -355,8 +355,31 @@ export default function Home() {
             </Card>
           </Animated.View>
 
+          {/* Profile & Settings */}
+          <Animated.View entering={FadeInDown.duration(400).delay(500)}>
+            <Card
+              onPress={() => router.push("/home/profile")}
+              style={styles.profileBanner}
+            >
+              <View style={styles.profileBannerContent}>
+                <View style={[styles.profileIconContainer, { backgroundColor: colors.accentMuted }]}>
+                  <User size={22} color={colors.accent} />
+                </View>
+                <View style={styles.profileTextContainer}>
+                  <Text style={[styles.profileBannerTitle, { color: colors.textPrimary }]}>
+                    Profile & Settings
+                  </Text>
+                  <Text style={[styles.profileBannerDescription, { color: colors.textSecondary }]}>
+                    Manage your account
+                  </Text>
+                </View>
+                <ChevronRight size={20} color={colors.textTertiary} />
+              </View>
+            </Card>
+          </Animated.View>
+
           {/* Sign Out */}
-          <Animated.View entering={FadeInDown.duration(400).delay(500)} style={styles.signOutSection}>
+          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={styles.signOutSection}>
             <Button
               onPress={handleSignOut}
               variant="danger"
@@ -503,6 +526,33 @@ const styles = StyleSheet.create({
   premiumDescription: {
     fontFamily: "Poppins-Regular",
     fontSize: 14,
+  },
+  profileBanner: {
+    marginBottom: 20,
+  },
+  profileBannerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  profileIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileTextContainer: {
+    flex: 1,
+  },
+  profileBannerTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 16,
+    marginBottom: 1,
+  },
+  profileBannerDescription: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 13,
   },
   signOutSection: {
     alignItems: "center",

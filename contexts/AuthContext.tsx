@@ -23,6 +23,7 @@ type AuthContextType = {
   loading: boolean;
   onboardingComplete: boolean | null; // null = still checking
   checkOnboarding: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -98,6 +99,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch {
       // Default to false if check fails - user will be sent to onboarding
       setOnboardingComplete(false);
+    }
+  };
+
+  /**
+   * Refresh the auth session and derived context values.
+   * Useful after profile/account changes so dependent screens can re-render.
+   */
+  const refreshAuth = async (): Promise<void> => {
+    try {
+      const {
+        data: { session: refreshedSession },
+      } = await supabase.auth.getSession();
+
+      setSession(refreshedSession);
+
+      if (!refreshedSession?.user) {
+        setOnboardingComplete(null);
+        return;
+      }
+
+      await identifyUserForTracking(refreshedSession.user.id);
+
+      try {
+        const isComplete = await checkOnboardingStatus(refreshedSession.user.id);
+        setOnboardingComplete(isComplete);
+      } catch {
+        setOnboardingComplete(false);
+      }
+    } catch {
+      // Non-blocking refresh failure; keep existing auth state
     }
   };
 
@@ -192,6 +223,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     onboardingComplete,
     checkOnboarding,
+    refreshAuth,
     signOut,
   };
 

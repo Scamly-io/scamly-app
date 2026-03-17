@@ -9,6 +9,8 @@ export default function TabsLayout() {
   const { colors, isDark } = useTheme();
   const pathName = usePathname();
   const isChatDetail = pathName.includes("/chat/") && pathName !== "/chat";
+  const isHomeSubPage = pathName.startsWith("/home/") && pathName !== "/home";
+  const hideTabBar = isChatDetail || isHomeSubPage;
   const insets = useSafeAreaInsets();
 
   const bottomPadding = Platform.OS === "ios" ? 24 : Math.max(12, insets.bottom + 6);
@@ -18,7 +20,7 @@ export default function TabsLayout() {
     <ProtectedRoute>
       <Tabs
         screenOptions={{
-          tabBarStyle: isChatDetail
+          tabBarStyle: hideTabBar
             ? { display: "none" }
             : {
                 backgroundColor: colors.tabBar,

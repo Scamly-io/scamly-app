@@ -1,4 +1,5 @@
 import Button from "@/components/Button";
+import PickerModal from "@/components/PickerModal";
 import ThemedBackground from "@/components/ThemedBackground";
 import { countries } from "@/constants/countries";
 import { useSignUp } from "@/contexts/SignUpContext";
@@ -8,6 +9,7 @@ import {
   trackSignupCompleted,
   trackSignupFailed,
 } from "@/utils/analytics";
+import { formatDobInput, parseDob, toISODate } from "@/utils/date";
 import { addActionBreadcrumb, captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import {
@@ -22,15 +24,12 @@ import {
   ChevronDown,
   Globe,
   Megaphone,
-  Search,
   User,
   Users,
-  X,
 } from "lucide-react-native";
 import { useState } from "react";
 import {
   Alert,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -43,189 +42,6 @@ import {
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-// ─── Date helpers ──────────────────────────────────────────
-
-/**
- * Auto-format a raw digit string into DD/MM/YYYY as the user types.
- * Only digits are kept; slashes are inserted automatically.
- */
-function formatDobInput(raw: string, previous: string): string {
-  // Strip everything except digits
-  const digits = raw.replace(/\D/g, "").slice(0, 8);
-
-  // Build formatted string with slashes
-  let formatted = "";
-  for (let i = 0; i < digits.length; i++) {
-    if (i === 2 || i === 4) formatted += "/";
-    formatted += digits[i];
-  }
-
-  return formatted;
-}
-
-/**
- * Parse a DD/MM/YYYY string into a Date, or return null if invalid.
- * Validates that the date actually exists (no 31 Feb, etc.).
- */
-function parseDob(value: string): Date | null {
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!match) return null;
-
-  const day = parseInt(match[1], 10);
-  const month = parseInt(match[2], 10);
-  const year = parseInt(match[3], 10);
-
-  if (month < 1 || month > 12) return null;
-  if (day < 1) return null;
-
-  // Construct the date and verify it round-trips (catches invalid days like 31 Feb)
-  const date = new Date(year, month - 1, day);
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-
-  return date;
-}
-
-/** Format a Date object to ISO date string "YYYY-MM-DD" */
-function toISODate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-// ─── Generic Picker Modal ──────────────────────────────────
-
-type PickerModalProps = {
-  visible: boolean;
-  onClose: () => void;
-  title: string;
-  options: readonly string[];
-  onSelect: (value: string) => void;
-  searchable?: boolean;
-};
-
-function PickerModal({
-  visible,
-  onClose,
-  title,
-  options,
-  onSelect,
-  searchable = false,
-}: PickerModalProps) {
-  const { colors, radius } = useTheme();
-  const [search, setSearch] = useState("");
-
-  const filtered = searchable
-    ? options.filter((o) => o.toLowerCase().includes(search.toLowerCase()))
-    : options;
-
-  const handleSelect = (value: string) => {
-    onSelect(value);
-    setSearch("");
-    onClose();
-  };
-
-  const handleClose = () => {
-    setSearch("");
-    onClose();
-  };
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={handleClose}
-    >
-      <Pressable style={styles.modalOverlay} onPress={handleClose}>
-        <Pressable
-          style={[
-            styles.modalContent,
-            {
-              backgroundColor: colors.surface,
-              borderRadius: radius["2xl"],
-            },
-          ]}
-          onPress={() => {}}
-        >
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              {title}
-            </Text>
-            <Pressable onPress={handleClose} hitSlop={8}>
-              <X size={20} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-
-          {searchable && (
-            <View
-              style={[
-                styles.searchWrapper,
-                {
-                  backgroundColor: colors.backgroundSecondary,
-                  borderRadius: radius.lg,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Search size={18} color={colors.textTertiary} />
-              <TextInput
-                placeholder="Search..."
-                placeholderTextColor={colors.textTertiary}
-                style={[styles.searchInput, { color: colors.textPrimary }]}
-                value={search}
-                onChangeText={setSearch}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-          )}
-
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => item}
-            style={styles.modalList}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.modalOption,
-                  {
-                    backgroundColor: pressed
-                      ? colors.pressedOverlay
-                      : "transparent",
-                    borderBottomColor: colors.divider,
-                  },
-                ]}
-                onPress={() => handleSelect(item)}
-              >
-                <Text
-                  style={[styles.modalOptionText, { color: colors.textPrimary }]}
-                >
-                  {item}
-                </Text>
-              </Pressable>
-            )}
-            ListEmptyComponent={
-              <View style={styles.emptyList}>
-                <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
-                  No results found
-                </Text>
-              </View>
-            }
-          />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
 
 // ─── Main screen ───────────────────────────────────────────
 
@@ -868,18 +684,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 4,
   },
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
-  },
-  modalContent: {
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "70%",
     padding: 20,
   },
   infoModalContent: {
@@ -897,50 +706,5 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: "Poppins-Regular",
     marginBottom: 18,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontFamily: "Poppins-SemiBold",
-  },
-  searchWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    height: 48,
-    borderWidth: 1,
-    gap: 10,
-    marginBottom: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: "Poppins-Regular",
-    height: "100%",
-  },
-  modalList: {
-    flexGrow: 0,
-  },
-  modalOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-  },
-  modalOptionText: {
-    fontSize: 15,
-    fontFamily: "Poppins-Regular",
-  },
-  emptyList: {
-    paddingVertical: 24,
-    alignItems: "center",
-  },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Regular",
   },
 });
