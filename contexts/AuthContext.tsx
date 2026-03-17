@@ -7,7 +7,7 @@
  */
 
 import { identifyUser, resetUser, type UserPlan } from "@/utils/analytics";
-import { checkOnboardingStatus } from "@/utils/onboarding";
+import { checkOnboardingStatus, ProfileNotFoundError } from "@/utils/onboarding";
 import { clearUserContext, setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import type { Session, User } from "@supabase/supabase-js";
@@ -96,8 +96,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const isComplete = await checkOnboardingStatus(userId);
       setOnboardingComplete(isComplete);
-    } catch {
-      // Default to false if check fails - user will be sent to onboarding
+    } catch (err) {
+      if (err instanceof ProfileNotFoundError) {
+        setSession(null);
+        setOnboardingComplete(null);
+        resetUser();
+        clearUserContext();
+        await supabase.auth.signOut();
+        return;
+      }
       setOnboardingComplete(false);
     }
   };
@@ -124,7 +131,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const isComplete = await checkOnboardingStatus(refreshedSession.user.id);
         setOnboardingComplete(isComplete);
-      } catch {
+      } catch (err) {
+        if (err instanceof ProfileNotFoundError) {
+          setSession(null);
+          setOnboardingComplete(null);
+          resetUser();
+          clearUserContext();
+          await supabase.auth.signOut();
+          return;
+        }
         setOnboardingComplete(false);
       }
     } catch {
@@ -155,8 +170,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
           try {
             const isComplete = await checkOnboardingStatus(newSession.user.id);
             if (mounted) setOnboardingComplete(isComplete);
-          } catch {
-            if (mounted) setOnboardingComplete(false);
+          } catch (err) {
+            if (err instanceof ProfileNotFoundError) {
+              if (mounted) {
+                setSession(null);
+                setOnboardingComplete(null);
+                resetUser();
+                clearUserContext();
+                await supabase.auth.signOut();
+              }
+            } else {
+              if (mounted) setOnboardingComplete(false);
+            }
           }
         }
 
@@ -187,8 +212,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
           const isComplete = await checkOnboardingStatus(newSession.user.id);
           if (mounted) setOnboardingComplete(isComplete);
-        } catch {
-          if (mounted) setOnboardingComplete(false);
+        } catch (err) {
+          if (err instanceof ProfileNotFoundError) {
+            if (mounted) {
+              setSession(null);
+              setOnboardingComplete(null);
+              resetUser();
+              clearUserContext();
+              await supabase.auth.signOut();
+            }
+          } else {
+            if (mounted) setOnboardingComplete(false);
+          }
         }
       }
 

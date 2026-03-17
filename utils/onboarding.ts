@@ -20,6 +20,18 @@ const REQUIRED_PROFILE_FIELDS = [
   "referral_source",
 ] as const;
 
+/**
+ * Thrown when a profile row does not exist for the given user ID.
+ * Indicates the account was likely deleted externally (e.g. from the website)
+ * while the app still holds a cached session.
+ */
+export class ProfileNotFoundError extends Error {
+  constructor() {
+    super("User profile not found — account may have been deleted");
+    this.name = "ProfileNotFoundError";
+  }
+}
+
 // ============================================================================
 // Onboarding Status Check
 // ============================================================================
@@ -30,24 +42,25 @@ const REQUIRED_PROFILE_FIELDS = [
  *
  * @param userId - The Supabase user ID
  * @returns true if onboarding is complete, false otherwise
+ * @throws {ProfileNotFoundError} if the profile row does not exist
  */
 export async function checkOnboardingStatus(userId: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("onboarding_completed")
-      .eq("id", userId)
-      .single();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("onboarding_completed")
+    .eq("id", userId)
+    .single();
 
-    if (error || !data) {
-      return false;
-    }
-
-    return data.onboarding_completed === true;
-  } catch {
-    // Default to incomplete if we can't check
-    return false;
+  // PGRST116 = ".single() returned zero rows" — profile doesn't exist
+  if (error?.code === "PGRST116" || (!error && !data)) {
+    throw new ProfileNotFoundError();
   }
+
+  if (error) {
+    throw error;
+  }
+
+  return data.onboarding_completed === true;
 }
 
 // ============================================================================

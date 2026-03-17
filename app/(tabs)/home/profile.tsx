@@ -10,11 +10,14 @@ import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { genderOptions } from "@/utils/validation/auth";
 import { router } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import {
+  AlertTriangle,
   ArrowLeft,
   Calendar,
   ChevronDown,
   ChevronRight,
+  Copy,
   Crown,
   FileText,
   Globe,
@@ -22,12 +25,14 @@ import {
   Shield,
   User,
   Users,
+  X,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -92,6 +97,12 @@ export default function Profile() {
 
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeleteFailedModal, setShowDeleteFailedModal] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const DELETE_CONFIRMATION_PHRASE = "confirm deletion";
 
   const provider = getProviderLabel(
     user?.app_metadata?.provider ?? "email"
@@ -104,6 +115,8 @@ export default function Profile() {
     dobText !== originalData.dobText ||
     country !== originalData.country ||
     gender !== originalData.gender;
+  const canConfirmDeletion =
+    deleteConfirmationText.trim() === DELETE_CONFIRMATION_PHRASE;
 
   useEffect(() => {
     async function fetchProfile() {
@@ -277,6 +290,52 @@ export default function Profile() {
     backgroundColor: colors.backgroundSecondary,
     borderColor: colors.border,
   });
+
+  const handleCopyDeletePhrase = async () => {
+    await Clipboard.setStringAsync(DELETE_CONFIRMATION_PHRASE);
+  };
+
+  const closeDeleteModal = () => {
+    if (deletingAccount) return;
+    setShowDeleteModal(false);
+    setDeleteConfirmationText("");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user || deletingAccount || !canConfirmDeletion) return;
+
+    setDeletingAccount(true);
+
+    try {
+      const { error } = await supabase.functions.invoke("delete-account");
+      if (error) {
+        throw error;
+      }
+
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) {
+        captureError(signOutError, {
+          feature: "home",
+          action: "delete_account_sign_out",
+          severity: "warning",
+        });
+      }
+
+      setShowDeleteModal(false);
+      setDeleteConfirmationText("");
+      router.replace("/account-deleted");
+    } catch (err) {
+      captureError(err, {
+        feature: "home",
+        action: "delete_account",
+        severity: "critical",
+      });
+      setShowDeleteModal(false);
+      setShowDeleteFailedModal(true);
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -597,6 +656,37 @@ export default function Profile() {
                 Save Changes
               </Button>
             </View>
+
+            {/* Danger Zone */}
+            <View style={styles.dangerZoneSection}>
+              <View style={styles.dangerZoneHeader}>
+                <AlertTriangle size={18} color={colors.warning} />
+                <Text style={[styles.dangerZoneTitle, { color: colors.warning }]}>
+                  Danger Zone
+                </Text>
+              </View>
+
+              <Card
+                style={[
+                  styles.dangerZoneCard,
+                  { borderColor: colors.error, backgroundColor: colors.errorMuted },
+                ]}
+                variant="outlined"
+                pressable={false}
+              >
+                <Text style={[styles.dangerZoneText, { color: colors.textPrimary }]}>
+                  Permanently delete your account and all associated data.
+                </Text>
+                <Button
+                  onPress={() => setShowDeleteModal(true)}
+                  variant="danger"
+                  fullWidth
+                  disabled={saving || deletingAccount}
+                >
+                  Delete Account
+                </Button>
+              </Card>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -621,6 +711,162 @@ export default function Profile() {
           setGender(value);
         }}
       />
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDeleteModal}
+      >
+        <Pressable style={styles.modalOverlay} onPress={closeDeleteModal}>
+          <Pressable
+            style={[
+              styles.deleteModalContent,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radius["2xl"],
+                ...shadows.lg,
+              },
+            ]}
+            onPress={() => {}}
+          >
+            <View style={styles.deleteModalHeader}>
+              <View style={styles.deleteModalTitleRow}>
+                <AlertTriangle size={18} color={colors.error} />
+                <Text style={[styles.deleteModalTitle, { color: colors.error }]}>
+                  Delete your account?
+                </Text>
+              </View>
+              <Pressable onPress={closeDeleteModal} hitSlop={8}>
+                <X size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.deleteModalDescription, { color: colors.textSecondary }]}>
+              This will permanently delete your Scamly account including:
+            </Text>
+
+            <View style={styles.bulletList}>
+              <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
+                • Your profile and personal data
+              </Text>
+              <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
+                • All scan history and chat conversations
+              </Text>
+              <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
+                • Your referral data and rewards
+              </Text>
+              <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
+                • Any active subscription (cancelled immediately with no further billing)
+              </Text>
+            </View>
+
+            <Text style={[styles.deleteModalWarning, { color: colors.error }]}>
+              This action is irreversible and cannot be undone.
+            </Text>
+
+            <Text style={[styles.deleteInstruction, { color: colors.textSecondary }]}>
+              Type "confirm deletion" to confirm:
+            </Text>
+
+            <View style={styles.deletePhraseRow}>
+              <TextInput
+                placeholder={DELETE_CONFIRMATION_PHRASE}
+                placeholderTextColor={colors.textTertiary}
+                style={[
+                  styles.deleteInput,
+                  {
+                    color: colors.textPrimary,
+                    borderColor: canConfirmDeletion ? colors.success : colors.border,
+                    backgroundColor: colors.backgroundSecondary,
+                  },
+                ]}
+                value={deleteConfirmationText}
+                onChangeText={setDeleteConfirmationText}
+                editable={!deletingAccount}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Pressable
+                onPress={handleCopyDeletePhrase}
+                style={[
+                  styles.copyButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.backgroundSecondary,
+                  },
+                ]}
+              >
+                <Copy size={16} color={colors.accent} />
+                <Text style={[styles.copyButtonText, { color: colors.accent }]}>Copy</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.deleteActionRow}>
+              <Button
+                onPress={closeDeleteModal}
+                variant="secondary"
+                disabled={deletingAccount}
+                style={styles.deleteActionButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                onPress={handleDeleteAccount}
+                variant="danger"
+                loading={deletingAccount}
+                disabled={!canConfirmDeletion || deletingAccount}
+                style={styles.deleteActionButton}
+              >
+                Permanently Delete Account
+              </Button>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showDeleteFailedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteFailedModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowDeleteFailedModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.errorModalContent,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radius["2xl"],
+                ...shadows.lg,
+              },
+            ]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.errorModalTitle, { color: colors.textPrimary }]}>
+              Account deletion failed
+            </Text>
+            <Text style={[styles.errorModalBody, { color: colors.textSecondary }]}>
+              We could not delete your account right now. Please try again in a few
+              minutes.{"\n\n"}If you are signed in to Scamly elsewhere, you cannot
+              delete your account. Please sign out of all other sessions and retry.{"\n\n"}If
+              issues persist, contact support@scamly.io
+            </Text>
+            <Button
+              onPress={() => setShowDeleteFailedModal(false)}
+              fullWidth
+              size="lg"
+            >
+              Close
+            </Button>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedBackground>
   );
 }
@@ -759,6 +1005,133 @@ const styles = StyleSheet.create({
   },
   saveSection: {
     marginTop: 4,
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  dangerZoneSection: {
+    marginTop: 6,
+    marginBottom: 24,
+  },
+  dangerZoneHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  dangerZoneTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 16,
+  },
+  dangerZoneCard: {
+    padding: 14,
+    gap: 12,
+    borderWidth: 1,
+  },
+  dangerZoneText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  deleteModalContent: {
+    borderWidth: 1,
+    padding: 20,
+  },
+  deleteModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 10,
+  },
+  deleteModalTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  deleteModalTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 20,
+  },
+  deleteModalDescription: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  bulletList: {
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  bulletItem: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  deleteModalWarning: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  deleteInstruction: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  deletePhraseRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  deleteInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: "Poppins-Regular",
+    fontSize: 15,
+  },
+  copyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 6,
+  },
+  copyButtonText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 13,
+  },
+  deleteActionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  deleteActionButton: {
+    flex: 1,
+  },
+  errorModalContent: {
+    borderWidth: 1,
+    padding: 20,
+    gap: 14,
+  },
+  errorModalTitle: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 20,
+  },
+  errorModalBody: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 20,
   },
 });
