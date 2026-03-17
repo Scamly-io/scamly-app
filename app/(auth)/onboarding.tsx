@@ -18,8 +18,8 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 
-const ONBOARDING_BASE_URL = "https://test.scamly.io/portal/onboarding";
-const ONBOARDING_COMPLETE_URL = "https://test.scamly.io/portal/onboarding-complete";
+const ONBOARDING_BASE_URL = "https://scamly.io/portal/onboarding";
+const ONBOARDING_COMPLETE_URL = "https://scamly.io/portal/onboarding-complete";
 
 export default function Onboarding() {
   const { colors } = useTheme();

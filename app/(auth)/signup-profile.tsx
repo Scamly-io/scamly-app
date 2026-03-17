@@ -192,7 +192,7 @@ export default function SignUpProfile() {
         email: signUpData.email,
         password: signUpData.password,
         options: {
-          emailRedirectTo: "https://test.scamly.io/portal", // Test environment
+          emailRedirectTo: "https://scamly.io/portal",
           data: profileData,
         },
       });
