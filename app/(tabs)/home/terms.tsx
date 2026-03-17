@@ -143,7 +143,7 @@ Notwithstanding the foregoing, the limitations in this clause do not apply to li
 (e) any liability that cannot be excluded or limited under the Australian Consumer Law or other applicable law.`,
   },
   {
-    title: "11. Competitors"
+    title: "11. Competitors",
     body: `If you are in the business of providing similar Services for the purpose of providing them to users for a commercial gain, whether business users or domestic users, then you are a competitor of SCAMLY PTY LTD. Competitors are not permitted to use or access any information or content on our Application. If you breach this provision, SCAMLY PTY LTD will hold you fully responsible for any loss that we may sustain and hold you accountable for all profits that you might make from such a breach.`,
   },
   {
