@@ -11,7 +11,7 @@ import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { ChevronRight, LogOut, MessageCircle, Scan, Search, Sparkles, TrendingUp, User } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -53,109 +53,108 @@ export default function Home() {
     return Math.max(1, Math.round(length / 1500));
   }
 
-  // Track feature discovery when home tab is focused
-  useFocusEffect(
-    React.useCallback(() => {
-      trackFeatureOpened("home");
-    }, [])
-  );
-
-  useEffect(() => {
-    async function fetchPageData() {
-      async function getUserProfile(): Promise<boolean> {
-        if (!user) {
-          trackUserVisibleError("home", "session_invalid", false);
-          return false;
-        }
-
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("first_name, subscription_plan")
-          .eq("id", user.id)
-          .single();
-
-        if (profileError || !profileData) {
-          trackUserVisibleError("home", "profile_fetch_failed", false);
-          captureDataFetchError(profileError || new Error("No profile data"), "home", "fetch_profile", "critical");
-          setUserName("");
-          return false;
-        }
-
-        const premium = profileData.subscription_plan !== "free";
-        setIsPremium(premium);
-        setUserName(profileData.first_name);
-        return premium;
+  const fetchPageData = useCallback(async () => {
+    async function getUserProfile(): Promise<boolean> {
+      if (!user) {
+        trackUserVisibleError("home", "session_invalid", false);
+        return false;
       }
 
-      async function getTrendingArticles(premium: boolean) {
-        let query = supabase
-          .from("articles")
-          .select("id, title, primary_image, description, slug, content")
-          .order("views", { ascending: false })
-          .eq("quick_tip", false)
-          .limit(2);
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("first_name, subscription_plan")
+        .eq("id", user.id)
+        .single();
 
-        if (!premium) {
-          query = query.eq("free_access", true);
-        }
-
-        const { data: trendingArticles, error: trendingArticlesError } = await query;
-
-        if (!trendingArticles || trendingArticlesError) {
-          captureWarning(trendingArticlesError || new Error("No trending articles"), "home", "fetch_trending_articles");
-        } else {
-          setTrendingArticles(
-            trendingArticles.map((article: any) => ({
-              id: article.id,
-              slug: article.slug,
-              title: article.title,
-              description: article.description,
-              image: article.primary_image,
-              length: article.content.length,
-            }))
-          );
-        }
+      if (profileError || !profileData) {
+        trackUserVisibleError("home", "profile_fetch_failed", false);
+        captureDataFetchError(profileError || new Error("No profile data"), "home", "fetch_profile", "critical");
+        setUserName("");
+        return false;
       }
 
-      async function getQuickTips(premium: boolean) {
-        let query = supabase
-          .from("articles")
-          .select(
-            "id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour"
-          )
-          .eq("quick_tip", true)
-          .order("views", { ascending: false })
-          .limit(3);
-
-        if (!premium) {
-          query = query.eq("free_access", true);
-        }
-
-        const { data: quickTips, error: quickTipsError } = await query;
-
-        if (!quickTips || quickTipsError) {
-          captureWarning(quickTipsError || new Error("No quick tips"), "home", "fetch_quick_tips");
-        } else {
-          setQuickTips(
-            quickTips.map((quickTip: any) => ({
-              id: quickTip.id,
-              slug: quickTip.slug,
-              title: quickTip.title,
-              description: quickTip.description,
-              icon: quickTip.quick_tip_icon,
-              iconColour: quickTip.quick_tip_icon_colour,
-              iconBackground: quickTip.quick_tip_icon_background_colour,
-            }))
-          );
-        }
-      }
-
-      const premium = await getUserProfile();
-      await Promise.all([getTrendingArticles(premium), getQuickTips(premium)]);
-      setLoading(false);
+      const premium = profileData.subscription_plan !== "free";
+      setIsPremium(premium);
+      setUserName(profileData.first_name);
+      return premium;
     }
-    fetchPageData();
+
+    async function getTrendingArticles(premium: boolean) {
+      let query = supabase
+        .from("articles")
+        .select("id, title, primary_image, description, slug, content")
+        .order("views", { ascending: false })
+        .eq("quick_tip", false)
+        .limit(2);
+
+      if (!premium) {
+        query = query.eq("free_access", true);
+      }
+
+      const { data: trendingArticles, error: trendingArticlesError } = await query;
+
+      if (!trendingArticles || trendingArticlesError) {
+        captureWarning(trendingArticlesError || new Error("No trending articles"), "home", "fetch_trending_articles");
+      } else {
+        setTrendingArticles(
+          trendingArticles.map((article: any) => ({
+            id: article.id,
+            slug: article.slug,
+            title: article.title,
+            description: article.description,
+            image: article.primary_image,
+            length: article.content.length,
+          }))
+        );
+      }
+    }
+
+    async function getQuickTips(premium: boolean) {
+      let query = supabase
+        .from("articles")
+        .select(
+          "id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour"
+        )
+        .eq("quick_tip", true)
+        .order("views", { ascending: false })
+        .limit(3);
+
+      if (!premium) {
+        query = query.eq("free_access", true);
+      }
+
+      const { data: quickTips, error: quickTipsError } = await query;
+
+      if (!quickTips || quickTipsError) {
+        captureWarning(quickTipsError || new Error("No quick tips"), "home", "fetch_quick_tips");
+      } else {
+        setQuickTips(
+          quickTips.map((quickTip: any) => ({
+            id: quickTip.id,
+            slug: quickTip.slug,
+            title: quickTip.title,
+            description: quickTip.description,
+            icon: quickTip.quick_tip_icon,
+            iconColour: quickTip.quick_tip_icon_colour,
+            iconBackground: quickTip.quick_tip_icon_background_colour,
+          }))
+        );
+      }
+    }
+
+    setLoading(true);
+    const premium = await getUserProfile();
+    await Promise.all([getTrendingArticles(premium), getQuickTips(premium)]);
+    setLoading(false);
   }, [user]);
+
+  // Refresh data whenever home tab is focused so subscription state stays current.
+  useFocusEffect(
+    useCallback(() => {
+      trackFeatureOpened("home");
+      fetchPageData();
+    }, [fetchPageData])
+  );
 
   async function handleSignOut() {
     try {

@@ -4,12 +4,13 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { search, SearchError } from "@/utils/ai/search";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
 import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { SearchResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
-import { Check, ContactRound, Copy, ExternalLink, Globe, Info, Lock, Phone, Search as SearchIcon } from "lucide-react-native";
+import { Check, ContactRound, Copy, ExternalLink, Globe, Info, Phone, Search as SearchIcon } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -38,6 +39,7 @@ export default function PhoneSearch() {
   const [isFreePlan, setIsFreePlan] = useState<boolean>(false);
   const [userId, setUserId] = useState<string>("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [openingPaywall, setOpeningPaywall] = useState(false);
 
   // Track feature discovery when contact search tab is focused
   useFocusEffect(
@@ -47,42 +49,44 @@ export default function PhoneSearch() {
   );
 
   useEffect(() => {
-    const fetchSubscriptionPlan = async () => {
-      setPlanLoading(true);
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) {
-        trackUserVisibleError("contact_search", "session_invalid", false);
-        captureDataFetchError(userError || new Error("No user found"), "contact_search", "get_user", "critical");
-        Alert.alert("Error", "No user found");
-        setPlanLoading(false);
-        return;
-      }
-
-      setUserId(user.id);
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("subscription_plan")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) {
-        trackUserVisibleError("contact_search", "profile_fetch_failed", false);
-        captureDataFetchError(profileError, "contact_search", "fetch_profile", "critical");
-        Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
-        setPlanLoading(false);
-        return;
-      }
-
-      setIsFreePlan(profile.subscription_plan === "free");
-      setPlanLoading(false);
-    };
-
-    fetchSubscriptionPlan();
+    refreshSubscriptionPlan();
   }, []);
+
+  async function refreshSubscriptionPlan() {
+    setPlanLoading(true);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      trackUserVisibleError("contact_search", "session_invalid", false);
+      captureDataFetchError(userError || new Error("No user found"), "contact_search", "get_user", "critical");
+      Alert.alert("Error", "No user found");
+      setPlanLoading(false);
+      return false;
+    }
+
+    setUserId(user.id);
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("subscription_plan")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError) {
+      trackUserVisibleError("contact_search", "profile_fetch_failed", false);
+      captureDataFetchError(profileError, "contact_search", "fetch_profile", "critical");
+      Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+      setPlanLoading(false);
+      return false;
+    }
+
+    const isFree = profile.subscription_plan === "free";
+    setIsFreePlan(isFree);
+    setPlanLoading(false);
+    return !isFree;
+  }
 
   function getErrorMessage(err: unknown): string {
     if (err instanceof SearchError) {
@@ -128,6 +132,24 @@ export default function PhoneSearch() {
 
   const company = resultData;
 
+  const handleOpenPaywall = async () => {
+    if (openingPaywall) return;
+
+    setOpeningPaywall(true);
+    try {
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded();
+      if (didUnlockEntitlement) {
+        setIsFreePlan(false);
+        setPlanLoading(false);
+      }
+    } catch (error) {
+      const message = trackRevenueCatError("present_paywall_contact_search", error);
+      Alert.alert("Subscription unavailable", message);
+    } finally {
+      setOpeningPaywall(false);
+    }
+  };
+
   // Clean domain by removing www., https://, or http:// prefixes
   const cleanDomain = (domain: string) => {
     if (!domain || domain === "0") return domain;
@@ -160,77 +182,126 @@ export default function PhoneSearch() {
         </Animated.View>
 
         <View style={styles.content}>
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardDismissMode="on-drag"
-          >
-            {/* Search Card */}
-            <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-              <Card style={styles.searchCard} pressable={false}>
-                <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
-                  <Info size={16} color={colors.accent} />
-                  <Text style={[styles.howToUseText, { color: colors.accent }]}>
-                    How to use this feature
+          {planLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.accent} />
+            </View>
+          ) : isFreePlan ? (
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <Animated.View entering={FadeInDown.duration(350)}>
+                <Card style={styles.lockedCard} pressable={false}>
+                  <Text style={[styles.lockedTitle, { color: colors.textPrimary }]}>
+                    The Contact Search tool cannot be accessed on free accounts.
                   </Text>
-                </TouchableOpacity>
-
-                <View
-                  style={[
-                    styles.searchInputContainer,
-                    {
-                      backgroundColor: colors.backgroundSecondary,
-                      borderColor: colors.border,
-                      borderRadius: radius.lg,
-                    },
-                  ]}
-                >
-                  <SearchIcon size={20} color={colors.textTertiary} />
-                  <TextInput
-                    style={[styles.searchInput, { color: colors.textPrimary }]}
-                    placeholder="Enter a company name"
-                    placeholderTextColor={colors.textTertiary}
-                    returnKeyType="search"
-                    value={searchInput}
-                    onChangeText={setSearchInput}
-                    onSubmitEditing={handleSearch}
-                    editable={!isFreePlan}
-                    selectTextOnFocus={!isFreePlan}
-                  />
-                </View>
-
-                <Button
-                  onPress={handleSearch}
-                  disabled={!searchInput.trim() || !!isFreePlan}
-                  loading={isLoading}
-                  fullWidth
-                >
-                  Search
-                </Button>
-              </Card>
-            </Animated.View>
-
-            {/* Results Card */}
-            <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-              <Card style={styles.resultsCard} pressable={false}>
-                {isLoading || planLoading ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={colors.accent} />
+                  <Text style={[styles.lockedSubtitle, { color: colors.textSecondary }]}>
+                    Upgrade to Scamly Premium to unlock fast, AI-assisted contact verification:
+                  </Text>
+                  <View style={styles.benefitsList}>
+                    <View style={styles.benefitItem}>
+                      <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
+                      <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
+                        Find official websites and contact pages for organizations.
+                      </Text>
+                    </View>
+                    <View style={styles.benefitItem}>
+                      <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
+                      <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
+                        Confirm public phone numbers before calling unknown senders.
+                      </Text>
+                    </View>
+                    <View style={styles.benefitItem}>
+                      <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
+                      <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
+                        Cross-check scam outreach against trusted company details.
+                      </Text>
+                    </View>
+                    <View style={styles.benefitItem}>
+                      <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
+                      <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
+                        Speed up investigation when time-sensitive fraud appears.
+                      </Text>
+                    </View>
                   </View>
-                ) : error ? (
-                  <View style={styles.errorContainer}>
-                    <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-                  </View>
-                ) : showResults && company ? (
-                  <Animated.View entering={FadeIn.duration(300)}>
-                    <Text style={[styles.companyName, { color: colors.textPrimary }]}>
-                      {company.company_name}
+                  <Button onPress={handleOpenPaywall} loading={openingPaywall} fullWidth>
+                    Upgrade to Premium
+                  </Button>
+                </Card>
+              </Animated.View>
+            </ScrollView>
+          ) : (
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="on-drag"
+            >
+              {/* Search Card */}
+              <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+                <Card style={styles.searchCard} pressable={false}>
+                  <TouchableOpacity style={styles.howToUseButton} onPress={() => setShowModal(true)}>
+                    <Info size={16} color={colors.accent} />
+                    <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                      How to use this feature
                     </Text>
+                  </TouchableOpacity>
 
-                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  <View
+                    style={[
+                      styles.searchInputContainer,
+                      {
+                        backgroundColor: colors.backgroundSecondary,
+                        borderColor: colors.border,
+                        borderRadius: radius.lg,
+                      },
+                    ]}
+                  >
+                    <SearchIcon size={20} color={colors.textTertiary} />
+                    <TextInput
+                      style={[styles.searchInput, { color: colors.textPrimary }]}
+                      placeholder="Enter a company name"
+                      placeholderTextColor={colors.textTertiary}
+                      returnKeyType="search"
+                      value={searchInput}
+                      onChangeText={setSearchInput}
+                      onSubmitEditing={handleSearch}
+                    />
+                  </View>
 
-                    <View style={styles.infoList}>
+                  <Button
+                    onPress={handleSearch}
+                    disabled={!searchInput.trim()}
+                    loading={isLoading}
+                    fullWidth
+                  >
+                    Search
+                  </Button>
+                </Card>
+              </Animated.View>
+
+              {/* Results Card */}
+              <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+                <Card style={styles.resultsCard} pressable={false}>
+                  {isLoading ? (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="large" color={colors.accent} />
+                    </View>
+                  ) : error ? (
+                    <View style={styles.errorContainer}>
+                      <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+                    </View>
+                  ) : showResults && company ? (
+                    <Animated.View entering={FadeIn.duration(300)}>
+                      <Text style={[styles.companyName, { color: colors.textPrimary }]}>
+                        {company.company_name}
+                      </Text>
+
+                      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                      <View style={styles.infoList}>
                     {/* Website */}
                     <View
                       style={[
@@ -400,30 +471,21 @@ export default function PhoneSearch() {
                       Your results will appear here
                     </Text>
                   </View>
-                )}
-              </Card>
-            </Animated.View>
+                  )}
+                </Card>
+              </Animated.View>
 
-            {/* Disclaimer */}
-            <View style={styles.disclaimer}>
-              <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>
-                Disclaimer
-              </Text>
-              <Text style={[styles.disclaimerText, { color: colors.textTertiary }]}>
-                This tool uses AI to locate public company contact information. Results may not
-                always be complete or accurate. Please verify through official sources before use.
-              </Text>
-            </View>
-          </ScrollView>
-
-          {isFreePlan && !planLoading && (
-            <View style={[styles.lockOverlay, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
-              <Lock size={40} color="white" />
-              <Text style={styles.lockTitle}>Feature Locked</Text>
-              <Text style={styles.lockSubtitle}>
-                Scamly's advanced contact information search tool is not available on free accounts.
-              </Text>
-            </View>
+              {/* Disclaimer */}
+              <View style={styles.disclaimer}>
+                <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>
+                  Disclaimer
+                </Text>
+                <Text style={[styles.disclaimerText, { color: colors.textTertiary }]}>
+                  This tool uses AI to locate public company contact information. Results may not
+                  always be complete or accurate. Please verify through official sources before use.
+                </Text>
+              </View>
+            </ScrollView>
           )}
         </View>
 
@@ -534,26 +596,41 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     fontSize: 15,
   },
-  lockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-    paddingHorizontal: 32,
-    borderRadius: 20,
+  lockedCard: {
+    marginTop: 8,
+    padding: 24,
+    gap: 14,
   },
-  lockTitle: {
-    color: "white",
+  lockedTitle: {
     fontFamily: "Poppins-Bold",
-    fontSize: 20,
-    textAlign: "center",
+    fontSize: 22,
+    lineHeight: 30,
   },
-  lockSubtitle: {
-    color: "rgba(255,255,255,0.8)",
+  lockedSubtitle: {
     fontFamily: "Poppins-Regular",
     fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 21,
+  },
+  benefitsList: {
+    gap: 10,
+    marginBottom: 4,
+  },
+  benefitItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  benefitDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    marginTop: 7,
+  },
+  benefitText: {
+    flex: 1,
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 21,
   },
   resultsCard: {
     marginBottom: 24,

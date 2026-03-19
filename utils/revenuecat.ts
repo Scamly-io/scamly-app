@@ -1,4 +1,5 @@
 import { captureError } from "@/utils/sentry";
+import { Platform } from "react-native";
 import Purchases, { CustomerInfo, LOG_LEVEL, PurchasesPackage } from "react-native-purchases";
 import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 
@@ -7,7 +8,11 @@ export const SCAMLY_MONTHLY_PACKAGE_ID = "scamly_premium_monthly";
 export const SCAMLY_YEARLY_PACKAGE_ID = "scamly_premium_yearly";
 
 const REVENUECAT_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || "appl_EElVohkhYSlZEQtkRyVobgwLfIt";
+  Platform.OS === "ios"
+    ? "test_ibbaJXEktARooMcrhxSfmlApJGw"
+    : Platform.OS === "android"
+    ? "test_ibbaJXEktARooMcrhxSfmlApJGw"
+    : "";
 
 let isConfigured = false;
 let configuredUserId: string | null = null;

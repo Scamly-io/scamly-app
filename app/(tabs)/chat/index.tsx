@@ -5,11 +5,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { ChatError, createConversationID, deleteConversationId } from "@/utils/ai/chat";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
 import { captureChatError, captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
-import { Clock3, Lock, MessageCircle, Plus, Trash2 } from "lucide-react-native";
+import { Clock3, MessageCircle, Plus, Trash2 } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -39,6 +40,7 @@ export default function ChatIndex() {
   const [planLoading, setPlanLoading] = useState(true);
   const [isFreePlan, setIsFreePlan] = useState(false);
   const [showLoadingModal, setShowLoadingModal] = useState(false);
+  const [openingPaywall, setOpeningPaywall] = useState(false);
 
   const formatDate = (iso?: string) => {
     if (!iso) return "";
@@ -79,6 +81,16 @@ export default function ChatIndex() {
     return profile.subscription_plan;
   };
 
+  const refreshAccessAndData = async () => {
+    const subscriptionPlan = await fetchSubscriptionPlan();
+    if (subscriptionPlan !== "free") {
+      await fetchChats();
+      return;
+    }
+    setChats([]);
+    setLoading(false);
+  };
+
   const fetchChats = async () => {
     setLoading(true);
 
@@ -105,8 +117,8 @@ export default function ChatIndex() {
 
   useEffect(() => {
     if (!user) return;
-    
-    fetchSubscriptionPlan().then(() => fetchChats());
+
+    refreshAccessAndData();
 
     const channel = supabase
       .channel("chats-changes")
@@ -127,10 +139,28 @@ export default function ChatIndex() {
       // Track feature discovery when chat tab is focused
       trackFeatureOpened("chat");
       if (user) {
-        fetchSubscriptionPlan().then(() => fetchChats());
+        refreshAccessAndData();
       }
     }, [user])
   );
+
+  const handleOpenPaywall = async () => {
+    if (openingPaywall) return;
+    setOpeningPaywall(true);
+    try {
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded();
+      if (didUnlockEntitlement) {
+        setIsFreePlan(false);
+        setPlanLoading(false);
+        await fetchChats();
+      }
+    } catch (error) {
+      const message = trackRevenueCatError("present_paywall_chat", error);
+      Alert.alert("Subscription unavailable", message);
+    } finally {
+      setOpeningPaywall(false);
+    }
+  };
 
   const sortedChats = useMemo(() => {
     return [...chats].sort(
@@ -233,20 +263,22 @@ export default function ChatIndex() {
               Discuss scams, fraud, and cyber crime
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={createNewChat}
-            style={[
-              styles.newChatButton,
-              {
-                backgroundColor: colors.accent,
-                borderRadius: radius.full,
-                opacity: isFreePlan ? 0.5 : 1,
-              },
-            ]}
-            disabled={isFreePlan}
-          >
-            <Plus size={20} color={colors.textInverse} />
-          </TouchableOpacity>
+          {isFreePlan && !planLoading ? (
+            <View style={styles.newChatButtonSpacer} />
+          ) : (
+            <TouchableOpacity
+              onPress={createNewChat}
+              style={[
+                styles.newChatButton,
+                {
+                  backgroundColor: colors.accent,
+                  borderRadius: radius.full,
+                },
+              ]}
+            >
+              <Plus size={20} color={colors.textInverse} />
+            </TouchableOpacity>
+          )}
         </Animated.View>
 
         {/* Content */}
@@ -255,6 +287,46 @@ export default function ChatIndex() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.accent} />
             </View>
+          ) : isFreePlan ? (
+            <Animated.View entering={FadeIn.duration(350)}>
+              <Card style={styles.lockedCard} pressable={false}>
+                <Text style={[styles.lockedTitle, { color: colors.textPrimary }]}>
+                  The AI Chat tool cannot be accessed on free accounts.
+                </Text>
+                <Text style={[styles.lockedSubtitle, { color: colors.textSecondary }]}>
+                  Upgrade to Scamly Premium to unlock AI-assisted scam analysis and incident support:
+                </Text>
+                <View style={styles.benefitsList}>
+                  <View style={styles.benefitItem}>
+                    <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
+                    <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
+                      Ask follow-up questions about suspicious messages and calls.
+                    </Text>
+                  </View>
+                  <View style={styles.benefitItem}>
+                    <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
+                    <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
+                      Get personalized next steps based on your exact scam scenario.
+                    </Text>
+                  </View>
+                  <View style={styles.benefitItem}>
+                    <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
+                    <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
+                      Keep a searchable history of your scam-related conversations.
+                    </Text>
+                  </View>
+                  <View style={styles.benefitItem}>
+                    <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
+                    <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
+                      Receive faster guidance when new threats appear.
+                    </Text>
+                  </View>
+                </View>
+                <Button onPress={handleOpenPaywall} loading={openingPaywall} fullWidth>
+                  Upgrade to Premium
+                </Button>
+              </Card>
+            </Animated.View>
           ) : sortedChats.length === 0 ? (
             <Animated.View entering={FadeIn.duration(400)}>
               <Card style={styles.emptyState} pressable={false}>
@@ -366,16 +438,6 @@ export default function ChatIndex() {
             />
           )}
 
-          {/* Lock Overlay */}
-          {isFreePlan && !planLoading && (
-            <View style={[styles.lockOverlay, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
-              <Lock size={40} color="white" />
-              <Text style={styles.lockTitle}>Feature Locked</Text>
-              <Text style={styles.lockSubtitle}>
-                Scamly's advanced AI chat model is not available on free accounts.
-              </Text>
-            </View>
-          )}
         </View>
 
         {/* Loading wheel modal */}
@@ -431,6 +493,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  newChatButtonSpacer: {
+    width: 48,
+    height: 48,
+  },
   content: {
     flex: 1,
     paddingHorizontal: 20,
@@ -445,6 +511,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 32,
     gap: 12,
+  },
+  lockedCard: {
+    marginTop: 12,
+    padding: 24,
+    gap: 14,
+  },
+  lockedTitle: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 22,
+    lineHeight: 30,
+  },
+  lockedSubtitle: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  benefitsList: {
+    gap: 10,
+    marginBottom: 4,
+  },
+  benefitItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  benefitDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    marginTop: 7,
+  },
+  benefitText: {
+    flex: 1,
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 21,
   },
   emptyIconContainer: {
     width: 72,
@@ -515,27 +617,6 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: "center",
     justifyContent: "center",
-  },
-  lockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-    paddingHorizontal: 32,
-    borderRadius: 20,
-  },
-  lockTitle: {
-    color: "white",
-    fontFamily: "Poppins-Bold",
-    fontSize: 20,
-    textAlign: "center",
-  },
-  lockSubtitle: {
-    color: "rgba(255,255,255,0.8)",
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
   },
   modalOverlay: {
     flex: 1,
