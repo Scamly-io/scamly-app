@@ -109,7 +109,10 @@ export default function Profile() {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showDeleteFailedModal, setShowDeleteFailedModal] = useState(false);
+  const [deleteError, setDeleteError] = useState<{
+    code: string | null;
+    status: number | null;
+  } | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [openingPaywall, setOpeningPaywall] = useState(false);
@@ -342,15 +345,52 @@ export default function Profile() {
     setDeleteConfirmationText("");
   };
 
+  const closeDeleteErrorModal = () => {
+    setDeleteError(null);
+  };
+
+  const handleCopyErrorCode = async () => {
+    if (deleteError?.code) {
+      await Clipboard.setStringAsync(deleteError.code);
+    }
+  };
+
+  const handleManageSubFromDeleteError = async () => {
+    setDeleteError(null);
+    await handleOpenCustomerCenter();
+  };
+
   const handleDeleteAccount = async () => {
     if (!user || deletingAccount || !canConfirmDeletion) return;
 
     setDeletingAccount(true);
 
     try {
-      const { error } = await supabase.functions.invoke("delete-account");
+      const { error, response } = await supabase.functions.invoke("delete-account");
+
       if (error) {
-        throw error;
+        let errorCode: string | null = null;
+        let status: number | null = null;
+
+        if (response) {
+          status = response.status;
+          try {
+            const body = await response.json();
+            errorCode = body.code ?? null;
+          } catch {}
+        }
+
+        captureError(error, {
+          feature: "home",
+          action: "delete_account",
+          severity: "critical",
+          extra: { errorCode, status },
+        });
+
+        setShowDeleteModal(false);
+        setDeleteConfirmationText("");
+        setDeleteError({ code: errorCode, status });
+        return;
       }
 
       const { error: signOutError } = await supabase.auth.signOut();
@@ -372,7 +412,8 @@ export default function Profile() {
         severity: "critical",
       });
       setShowDeleteModal(false);
-      setShowDeleteFailedModal(true);
+      setDeleteConfirmationText("");
+      setDeleteError({ code: null, status: null });
     } finally {
       setDeletingAccount(false);
     }
@@ -889,7 +930,7 @@ export default function Profile() {
                 • Your referral data and rewards
               </Text>
               <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
-                • Any active subscription (cancelled immediately with no further billing)
+                • You must cancel any active subscription before deletion
               </Text>
             </View>
 
@@ -958,15 +999,12 @@ export default function Profile() {
       </Modal>
 
       <Modal
-        visible={showDeleteFailedModal}
+        visible={deleteError !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowDeleteFailedModal(false)}
+        onRequestClose={closeDeleteErrorModal}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowDeleteFailedModal(false)}
-        >
+        <Pressable style={styles.modalOverlay} onPress={closeDeleteErrorModal}>
           <Pressable
             style={[
               styles.errorModalContent,
@@ -979,22 +1017,134 @@ export default function Profile() {
             ]}
             onPress={() => {}}
           >
-            <Text style={[styles.errorModalTitle, { color: colors.textPrimary }]}>
-              Account deletion failed
-            </Text>
-            <Text style={[styles.errorModalBody, { color: colors.textSecondary }]}>
-              We could not delete your account right now. Please try again in a few
-              minutes.{"\n\n"}If you are signed in to Scamly elsewhere, you cannot
-              delete your account. Please sign out of all other sessions and retry.{"\n\n"}If
-              issues persist, contact support@scamly.io
-            </Text>
-            <Button
-              onPress={() => setShowDeleteFailedModal(false)}
-              fullWidth
-              size="lg"
-            >
-              Close
-            </Button>
+            <View style={styles.deleteModalTitleRow}>
+              <AlertTriangle
+                size={18}
+                color={
+                  deleteError?.code === "DA-SUB01"
+                    ? colors.warning
+                    : colors.error
+                }
+              />
+              <Text
+                style={[
+                  styles.errorModalTitle,
+                  {
+                    color:
+                      deleteError?.code === "DA-SUB01"
+                        ? colors.warning
+                        : colors.textPrimary,
+                  },
+                ]}
+              >
+                {deleteError?.code === "DA-SUB01"
+                  ? "Active Subscription"
+                  : deleteError?.code === "DA-RC01"
+                    ? "Temporarily Unavailable"
+                    : "Account Deletion Failed"}
+              </Text>
+            </View>
+
+            {deleteError?.code === "DA-SUB01" && (
+              <Text style={[styles.errorModalBody, { color: colors.textSecondary }]}>
+                Your account cannot be deleted while you have an active
+                subscription. Please cancel your subscription first, then try
+                deleting your account again.
+              </Text>
+            )}
+
+            {(deleteError?.code === "DA-MIS01" ||
+              deleteError?.code === "DA-MIS02") && (
+              <>
+                <Text style={[styles.errorModalBody, { color: colors.textSecondary }]}>
+                  Something went wrong while processing your request. Please
+                  contact{" "}
+                  <Text
+                    style={{
+                      fontFamily: "Poppins-SemiBold",
+                      color: colors.accent,
+                    }}
+                  >
+                    support@scamly.io
+                  </Text>{" "}
+                  and include the following error code:
+                </Text>
+                <View
+                  style={[
+                    styles.errorCodeBadge,
+                    {
+                      backgroundColor: colors.backgroundSecondary,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.errorCodeText,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    {deleteError.code}
+                  </Text>
+                  <Pressable
+                    onPress={handleCopyErrorCode}
+                    hitSlop={8}
+                    style={styles.errorCodeCopyButton}
+                  >
+                    <Copy size={14} color={colors.accent} />
+                    <Text
+                      style={[
+                        styles.errorCodeCopyText,
+                        { color: colors.accent },
+                      ]}
+                    >
+                      Copy
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+
+            {deleteError?.code === "DA-RC01" && (
+              <Text style={[styles.errorModalBody, { color: colors.textSecondary }]}>
+                We're unable to process your request right now. Please try again
+                later.
+              </Text>
+            )}
+
+            {deleteError !== null &&
+              !["DA-SUB01", "DA-MIS01", "DA-MIS02", "DA-RC01"].includes(
+                deleteError.code ?? ""
+              ) && (
+                <Text style={[styles.errorModalBody, { color: colors.textSecondary }]}>
+                  We could not delete your account right now. Please try again
+                  in a few minutes.{"\n\n"}If issues persist, contact
+                  support@scamly.io
+                </Text>
+              )}
+
+            {deleteError?.code === "DA-SUB01" ? (
+              <View style={styles.deleteActionRow}>
+                <Button
+                  onPress={closeDeleteErrorModal}
+                  variant="secondary"
+                  style={styles.deleteActionButton}
+                >
+                  Close
+                </Button>
+                <Button
+                  onPress={handleManageSubFromDeleteError}
+                  loading={openingCustomerCenter}
+                  style={styles.deleteActionButton}
+                >
+                  Manage Subscription
+                </Button>
+              </View>
+            ) : (
+              <Button onPress={closeDeleteErrorModal} fullWidth size="lg">
+                Close
+              </Button>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1289,5 +1439,28 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     fontSize: 14,
     lineHeight: 20,
+  },
+  errorCodeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  errorCodeText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+  errorCodeCopyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  errorCodeCopyText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 13,
   },
 });
