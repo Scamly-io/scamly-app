@@ -41,5 +41,14 @@ export const genderOptions = [
   "Prefer not to say",
 ] as const;
 
+/** Schema for onboarding profile fields (no email/password/firstName) */
+export const onboardingProfileSchema = z.object({
+  country: z.string().min(1, "Country is required"),
+  referralSource: z.string().min(1, "Please select how you heard about us"),
+  dob: z.string().optional(),
+  gender: z.string().optional(),
+});
+
 export type SignInFormData = z.infer<typeof signInSchema>;
 export type SignUpFormData = z.infer<typeof signUpSchema>;
+export type OnboardingProfileFormData = z.infer<typeof onboardingProfileSchema>;

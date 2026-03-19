@@ -2,7 +2,6 @@ import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { identifyUser, trackUserVisibleError, type UserPlan } from "@/utils/analytics";
-import { checkProfileComplete } from "@/utils/onboarding";
 import { captureError, setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import {
@@ -125,8 +124,12 @@ export default function Login() {
       await GoogleSignin.hasPlayServices();
       const response = await GoogleSignin.signIn();
 
-
       if (isSuccessResponse(response)) {
+        const firstName = response.data.user?.givenName ?? null;
+
+        if (!response.data.idToken) {
+          throw new Error("No ID token returned by Google.");
+        }
 
         const { data, error } = await supabase.auth.signInWithIdToken({
           provider: "google",
@@ -137,46 +140,46 @@ export default function Login() {
           throw error;
         }
 
-        const profileComplete = await checkProfileComplete(data.user.id);
+        const userId = data.user.id;
 
-        if (!profileComplete) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("first_name, country")
+          .eq("id", userId)
+          .single();
+
+        const isNewUser = !profile?.first_name || !profile?.country;
+
+        if (isNewUser) {
+          if (firstName) {
+            await supabase
+              .from("profiles")
+              .update({ first_name: firstName })
+              .eq("id", userId);
+          }
           router.replace("/onboarding");
-        } else {
-          router.replace("/");
+          return;
         }
+
+        router.replace("/");
       }
-    } catch (error) {
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        Alert.alert(
-          "Sign In Error",
-          "Something went wrong signing in with Google. Please try again."
-        );
-        // Add error tracking
-      } else {
-        console.log(error.code);
-        Alert.alert(
-          "Sign In Error",
-          "Something went wrong signing in with Google. Please try again."
-        );
-        captureError(error, {
-          feature: "login",
-          action: "google_sign_in",
-          severity: "critical",
-        });
-        setGoogleLoading(false);
+    } catch (error: any) {
+      if (error?.code === statusCodes.SIGN_IN_CANCELLED) {
+        return;
       }
+
+      Alert.alert(
+        "Sign In Error",
+        "Something went wrong signing in with Google. Please try again."
+      );
+      captureError(error, {
+        feature: "login",
+        action: "google_sign_in",
+        severity: "critical",
+      });
     } finally {
       setGoogleLoading(false);
     }
-  };
-
-  const redirectAfterSocialAuth = async (userId: string) => {
-    const profileComplete = await checkProfileComplete(userId);
-    if (!profileComplete) {
-      router.replace("/onboarding");
-      return;
-    }
-    router.replace("/");
   };
 
   const handleAppleSignIn = async () => {
@@ -200,6 +203,8 @@ export default function Login() {
           throw new Error("No identity token returned by Apple.");
         }
 
+        const firstName = credential.fullName?.givenName ?? null;
+
         const { data, error } = await supabase.auth.signInWithIdToken({
           provider: "apple",
           token: credential.identityToken,
@@ -209,7 +214,28 @@ export default function Login() {
           throw error ?? new Error("Failed to authenticate with Apple.");
         }
 
-        await redirectAfterSocialAuth(data.user.id);
+        const userId = data.user.id;
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("first_name, country")
+          .eq("id", userId)
+          .single();
+
+        const isNewUser = !profile?.first_name || !profile?.country;
+
+        if (isNewUser) {
+          if (firstName) {
+            await supabase
+              .from("profiles")
+              .update({ first_name: firstName })
+              .eq("id", userId);
+          }
+          router.replace("/onboarding");
+          return;
+        }
+
+        router.replace("/");
         return;
       }
 
