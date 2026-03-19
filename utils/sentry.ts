@@ -24,6 +24,8 @@ export type FeatureName =
   | 'scan'
   | 'chat'
   | 'home'
+  | 'profile'
+  | 'purchase'
   | 'contact_search'
   | 'learn'
   | 'login'

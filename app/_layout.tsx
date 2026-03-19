@@ -1,6 +1,7 @@
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider, useTheme } from "@/theme";
 import { initializePostHog, initializeSessionTracking } from "@/utils/analytics";
+import { initializeRevenueCat, trackRevenueCatError } from "@/utils/revenuecat";
 import { initializeSentry } from "@/utils/sentry";
 import * as Sentry from "@sentry/react-native";
 import { useFonts } from "expo-font";
@@ -42,6 +43,13 @@ function AnalyticsInitializer() {
 
 function AppContent() {
   const { isDark, colors } = useTheme();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    initializeRevenueCat(user?.id ?? null).catch((error) => {
+      trackRevenueCatError("configure_sdk", error);
+    });
+  }, [user?.id]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -82,7 +90,7 @@ export default function Layout() {
             Something went wrong
           </Text>
           <Text style={{ textAlign: "center", color: "#666" }}>
-            We've been notified and are working to fix the issue. Please restart the app.
+            We&apos;ve been notified and are working to fix the issue. Please restart the app.
           </Text>
         </View>
       )}

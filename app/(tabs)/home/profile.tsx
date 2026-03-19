@@ -6,11 +6,18 @@ import { countries } from "@/constants/countries";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
+import {
+  getRevenueCatCustomerInfo,
+  hasScamlyPremiumEntitlement,
+  presentScamlyCustomerCenter,
+  presentScamlyPaywallIfNeeded,
+  trackRevenueCatError,
+} from "@/utils/revenuecat";
 import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { genderOptions } from "@/utils/validation/auth";
-import { router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
+import { router } from "expo-router";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -20,6 +27,7 @@ import {
   ChevronRight,
   Copy,
   Crown,
+  ExternalLink,
   FileText,
   Globe,
   Mail,
@@ -28,7 +36,7 @@ import {
   Users,
   X,
 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -104,6 +112,9 @@ export default function Profile() {
   const [showDeleteFailedModal, setShowDeleteFailedModal] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [openingPaywall, setOpeningPaywall] = useState(false);
+  const [openingCustomerCenter, setOpeningCustomerCenter] = useState(false);
+  const [hasPremiumEntitlement, setHasPremiumEntitlement] = useState(false);
 
   const DELETE_CONFIRMATION_PHRASE = "confirm deletion";
 
@@ -121,51 +132,67 @@ export default function Profile() {
     dataSharingConsent !== originalData.dataSharingConsent;
   const canConfirmDeletion =
     deleteConfirmationText.trim() === DELETE_CONFIRMATION_PHRASE;
+  const hasPremiumAccess = subscriptionPlan !== "free" || hasPremiumEntitlement;
+  const displayedPlan = hasPremiumAccess && subscriptionPlan === "free" ? "premium" : subscriptionPlan;
 
-  useEffect(() => {
-    async function fetchProfile() {
-      if (!user) return;
+  const loadProfile = useCallback(async () => {
+    if (!user) return;
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("first_name, dob, country, gender, subscription_plan, data_sharing_consent")
-        .eq("id", user.id)
-        .single();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("first_name, dob, country, gender, subscription_plan, data_sharing_consent")
+      .eq("id", user.id)
+      .single();
 
-      if (error || !data) {
-        captureError(error || new Error("No profile data"), {
-          feature: "profile",
-          action: "fetch_profile",
-          severity: "critical",
-        });
-        setLoading(false);
-        return;
-      }
-
-      const name = data.first_name ?? "";
-      const dob = data.dob ? isoToDobDisplay(data.dob) : "";
-      const c = data.country ?? "";
-      const g = data.gender ?? "";
-      const consent = Boolean(data.data_sharing_consent);
-
-      setFirstName(name);
-      setDobText(dob);
-      setCountry(c);
-      setGender(g);
-      setDataSharingConsent(consent);
-      setSubscriptionPlan(data.subscription_plan ?? "free");
-      setOriginalData({
-        firstName: name,
-        dobText: dob,
-        country: c,
-        gender: g,
-        dataSharingConsent: consent,
+    if (error || !data) {
+      captureError(error || new Error("No profile data"), {
+        feature: "profile",
+        action: "fetch_profile",
+        severity: "critical",
       });
       setLoading(false);
+      return;
     }
 
-    fetchProfile();
+    const name = data.first_name ?? "";
+    const dob = data.dob ? isoToDobDisplay(data.dob) : "";
+    const c = data.country ?? "";
+    const g = data.gender ?? "";
+    const consent = Boolean(data.data_sharing_consent);
+
+    setFirstName(name);
+    setDobText(dob);
+    setCountry(c);
+    setGender(g);
+    setDataSharingConsent(consent);
+    setSubscriptionPlan(data.subscription_plan ?? "free");
+    setOriginalData({
+      firstName: name,
+      dobText: dob,
+      country: c,
+      gender: g,
+      dataSharingConsent: consent,
+    });
+    setLoading(false);
   }, [user]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const refreshRevenueCatStatus = useCallback(async () => {
+    try {
+      const customerInfo = await getRevenueCatCustomerInfo();
+      setHasPremiumEntitlement(hasScamlyPremiumEntitlement(customerInfo));
+    } catch (error) {
+      trackRevenueCatError("get_customer_info", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshRevenueCatStatus();
+  }, [refreshRevenueCatStatus, user]);
 
   const clearError = (field: string) => {
     if (errors[field]) {
@@ -351,6 +378,44 @@ export default function Profile() {
     }
   };
 
+  const handleOpenPaywall = async () => {
+    if (!user || openingPaywall) return;
+
+    setOpeningPaywall(true);
+    try {
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded();
+      await refreshRevenueCatStatus();
+
+      if (didUnlockEntitlement) {
+        await refreshAuth();
+        await loadProfile();
+        Alert.alert("Success", "Your premium subscription is now active.");
+      }
+    } catch (error) {
+      const message = trackRevenueCatError("present_paywall", error);
+      Alert.alert("Subscription unavailable", message);
+    } finally {
+      setOpeningPaywall(false);
+    }
+  };
+
+  const handleOpenCustomerCenter = async () => {
+    if (openingCustomerCenter) return;
+
+    setOpeningCustomerCenter(true);
+    try {
+      await presentScamlyCustomerCenter();
+      await refreshRevenueCatStatus();
+      await refreshAuth();
+      await loadProfile();
+    } catch (error) {
+      const message = trackRevenueCatError("open_customer_center", error);
+      Alert.alert("Unable to open subscriptions", message);
+    } finally {
+      setOpeningCustomerCenter(false);
+    }
+  };
+
   if (loading) {
     return (
       <ThemedBackground>
@@ -429,6 +494,49 @@ export default function Profile() {
                 <Text style={[styles.helperText, { color: colors.textTertiary }]}>
                   You cannot change your email address in the app
                 </Text>
+              ) : null}
+            </View>
+
+            {/* Subscription */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                Subscription
+              </Text>
+
+              <Card style={styles.card} pressable={false}>
+                <View style={styles.fieldRow}>
+                  <View style={[styles.fieldIcon, { backgroundColor: colors.accentMuted }]}>
+                    <Crown size={18} color={colors.accent} />
+                  </View>
+                  <View style={styles.fieldContent}>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                      Current plan
+                    </Text>
+                    <Text style={[styles.fieldValue, { color: colors.textPrimary }]}>
+                      {getSubscriptionLabel(displayedPlan)}
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+              {!hasPremiumAccess ? (
+                <View style={styles.upgradeButtonWrapper}>
+                  <Button onPress={handleOpenPaywall} loading={openingPaywall} fullWidth>
+                    Upgrade to Premium
+                  </Button>
+                </View>
+              ) : null}
+              {hasPremiumAccess ? (
+                <View style={styles.upgradeButtonWrapper}>
+                  <Button
+                    onPress={handleOpenCustomerCenter}
+                    variant="secondary"
+                    loading={openingCustomerCenter}
+                    fullWidth
+                    icon={<ExternalLink size={16} color={colors.accent} />}
+                  >
+                    Manage Subscription
+                  </Button>
+                </View>
               ) : null}
             </View>
 
@@ -630,32 +738,6 @@ export default function Profile() {
               </Card>
             </View>
 
-            {/* Subscription */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Subscription
-              </Text>
-
-              <Card style={styles.card} pressable={false}>
-                <View style={styles.fieldRow}>
-                  <View style={[styles.fieldIcon, { backgroundColor: colors.accentMuted }]}>
-                    <Crown size={18} color={colors.accent} />
-                  </View>
-                  <View style={styles.fieldContent}>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                      Current plan
-                    </Text>
-                    <Text style={[styles.fieldValue, { color: colors.textPrimary }]}>
-                      {getSubscriptionLabel(subscriptionPlan)}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-              <Text style={[styles.helperText, { color: colors.textTertiary }]}>
-                You cannot manage your subscription in the app
-              </Text>
-            </View>
-
             {/* Legal */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
@@ -816,7 +898,7 @@ export default function Profile() {
             </Text>
 
             <Text style={[styles.deleteInstruction, { color: colors.textSecondary }]}>
-              Type "confirm deletion" to confirm:
+              Type {"\"confirm deletion\""} to confirm:
             </Text>
 
             <View style={styles.deletePhraseRow}>
@@ -916,6 +998,7 @@ export default function Profile() {
           </Pressable>
         </Pressable>
       </Modal>
+
     </ThemedBackground>
   );
 }
@@ -1076,6 +1159,9 @@ const styles = StyleSheet.create({
   saveSection: {
     marginTop: 4,
     marginBottom: 16,
+  },
+  upgradeButtonWrapper: {
+    marginTop: 12,
   },
   dangerZoneSection: {
     marginTop: 6,
