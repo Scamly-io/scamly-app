@@ -386,6 +386,10 @@ export default function Home() {
             >
               Sign out
             </Button>
+            <Text style={[styles.feedbackText, { color: colors.textPrimary }]}>
+              We value your feedback. {"\n"} To provide feedback, email{" "}
+              <Text style={{ fontWeight: "bold" }}>feedback@scamly.io</Text>
+            </Text>
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
@@ -556,5 +560,12 @@ const styles = StyleSheet.create({
   signOutSection: {
     alignItems: "center",
     marginTop: 8,
+  },
+  feedbackText: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 16,
+    lineHeight: 24,
+    marginTop: 20,
+    textAlign: "center",
   },
 });
