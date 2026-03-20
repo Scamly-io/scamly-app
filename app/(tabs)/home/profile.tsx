@@ -6,6 +6,7 @@ import { countries } from "@/constants/countries";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
+import { getSupportedPromoOffer } from "@/utils/promo";
 import {
   EARLY_INTEREST_STORAGE_KEY,
   getRevenueCatCustomerInfo,
@@ -19,7 +20,6 @@ import {
 } from "@/utils/revenuecat";
 import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
-import { getSupportedPromoOffer } from "@/utils/promo";
 import { genderOptions } from "@/utils/validation/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
@@ -695,7 +695,7 @@ export default function Profile() {
                   </Text>
                 ) : null}
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Promotional code
+                  Discount code
                 </Text>
                 <View style={styles.promoCodeRow}>
                   <View
@@ -708,7 +708,7 @@ export default function Profile() {
                     ]}
                   >
                     <TextInput
-                      placeholder="Enter promo code"
+                      placeholder="Enter discount code"
                       placeholderTextColor={colors.textTertiary}
                       style={[styles.input, { color: colors.textPrimary }]}
                       value={promoCode}
@@ -746,7 +746,7 @@ export default function Profile() {
                 </View>
                 {isIosPromoFlow && !hasPremiumAccess ? (
                   <Text style={[styles.helperText, { color: colors.textTertiary }]}>
-                    Promotional codes can be applied after you subscribe to Premium.
+                    Discount codes can be applied after you subscribe to Premium.
                   </Text>
                 ) : null}
               </View>

@@ -62,7 +62,7 @@ You may not use the Services and may not accept the Terms if:
   },
   {
     title: "5. Payment",
-    body: `All payments made in the course of your use of the Services are made using Stripe. In using the Application, the Services or when making any payment in relation to your use of the Services, you warrant that you have read, understood and agree to be bound by the Stripe terms and conditions which are available on their website.
+    body: `All payments made in the course of your use of the Services are managed through RevenueCat and processed via Apple App Store or Google Play Store In-App Purchase (IAP) systems, depending on your device platform. In using the Application, the Services or when making any payment in relation to your use of the Services, you warrant that you have read, understood and agree to be bound by the RevenueCat terms and conditions, as well as the applicable Apple Media Services Terms and Conditions or Google Play Terms of Service, each of which are available on their respective websites.
 
 You acknowledge and agree that where a request for the payment of the Services Fee is returned or denied, for whatever reason, by your financial institution or is unpaid by you for any other reason, then you are liable for any costs, including banking fees and charges, associated with the Services Fee.
 
