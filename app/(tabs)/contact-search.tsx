@@ -510,9 +510,9 @@ export default function PhoneSearch() {
             >
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Tips</Text>
               <Text style={[styles.modalText, { color: colors.textSecondary }]}>
-                For the best results:{"\n\n"}• Use the company's full or most recognized name
-                {"\n"}• Include a country for international brands{"\n"}• Example: "ANZ Bank
-                Australia" instead of "ANZ"{"\n\n"}Allow up to 30 seconds for results.
+                For the best results:{"\n\n"}• Use the company&apos;s full or most recognized name
+                {"\n"}• Include a country for international brands{"\n"}• Example: &quot;ANZ Bank
+                Australia&quot; instead of &quot;ANZ&quot;{"\n\n"}Allow up to 30 seconds for results.
               </Text>
               <Button onPress={() => setShowModal(false)}>Got it</Button>
             </Animated.View>

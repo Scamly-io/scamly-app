@@ -41,7 +41,7 @@ type Article = {
 };
 
 export default function Home() {
-  const { colors, radius, shadows, isDark } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user, signOut } = useAuth();
   const [userName, setUserName] = useState<string | null>("");
   const [trendingArticles, setTrendingArticles] = useState<Article[]>([]);

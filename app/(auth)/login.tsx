@@ -91,7 +91,7 @@ export default function Login() {
             // Set Sentry user context for error tracking
             setUserContext(data.user.id, planCategory);
           }
-        } catch (profileError) {
+        } catch {
           // Continue login even if identification fails - non-blocking
         }
       }

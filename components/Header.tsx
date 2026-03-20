@@ -10,7 +10,7 @@ type HeaderProps = {
 };
 
 export default function Header({ title, imageUrl, subtitle, basicHeader = false }: HeaderProps) {
-  const { colors, isDark, spacing } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const headerBackground = isDark 
     ? colors.surfaceElevated 

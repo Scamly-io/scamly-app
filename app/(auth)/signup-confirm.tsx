@@ -39,7 +39,7 @@ export default function SignUpConfirm() {
               Check Your Email
             </Text>
             <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-              We've sent a confirmation link to your email address. Please check
+              We&apos;ve sent a confirmation link to your email address. Please check
               your inbox and click the link to verify your account.
             </Text>
 

@@ -21,7 +21,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { CheckCircle, ChevronDown, ChevronUp, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -106,7 +106,6 @@ export default function Scan() {
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [pageLoading, setPageLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<ScanResult | null>(null);
   const [aspectRatio, setAspectRatio] = useState<number>(1);
   const [scanQuotaReached, setScanQuotaReached] = useState<boolean>(false);
@@ -141,7 +140,7 @@ export default function Scan() {
     };
   }, [scanPhase]);
 
-  async function handlePageMount() {
+  const handlePageMount = useCallback(async () => {
     setPageLoading(true);
 
     if (!user) {
@@ -186,22 +185,22 @@ export default function Scan() {
       }
     }
     setPageLoading(false);
-  }
+  }, [user]);
 
   useEffect(() => {
     if (user) {
       handlePageMount();
     }
-  }, [user]);
+  }, [user, handlePageMount]);
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       // Track feature discovery when scan tab is focused
       trackFeatureOpened("scan");
       if (user) {
         handlePageMount();
       }
-    }, [user])
+    }, [user, handlePageMount])
   );
 
   async function checkQuotaAfterScan() {
@@ -231,16 +230,6 @@ export default function Scan() {
       setScanQuotaResetDate(nextPeriodStart.toLocaleDateString());
       Alert.alert("Scan Limit Reached", "You've reached the monthly scan limit for your account. Your quota will reset on " + nextPeriodStart.toLocaleDateString());
     }
-  }
-
-  function makeId(length: number): string {
-    let result = "";
-    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    const charactersLength = characters.length;
-    for (let i = 0; i < length; i++) {
-      result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    }
-    return result;
   }
 
   async function convertImageToB64(imageUri: string): Promise<string> {
@@ -400,7 +389,7 @@ export default function Scan() {
     return new Promise((resolve) => {
       Alert.alert(
         "Data Sharing Permission",
-        "By using the scanning tool, you agree to allow Scamly to share images you upload, as well as your country data with OpenAI for scan processing.",
+        "By using the scanning tool, you agree to allow Scamly to share images you upload, as well as your country data with OpenAI's GPT models for scan processing.",
         [
           {
             text: "Reject",
@@ -703,7 +692,7 @@ export default function Scan() {
                     <View style={styles.scanFailureHeader}>
                       <TriangleAlert size={20} color={colors.warning} />
                       <Text style={[styles.scanFailureTitle, { color: colors.warning }]}>
-                        We couldn't complete this scan
+                        We couldn&apos;t complete this scan
                       </Text>
                     </View>
                     <Text style={[styles.scanFailureReason, { color: colors.textPrimary }]}>

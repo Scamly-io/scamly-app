@@ -6,7 +6,7 @@ import { Platform, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const pathName = usePathname();
   const isChatDetail = pathName.includes("/chat/") && pathName !== "/chat";
   const isHomeSubPage = pathName.startsWith("/home/") && pathName !== "/home";

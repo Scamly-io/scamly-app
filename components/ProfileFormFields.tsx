@@ -384,7 +384,7 @@ export default function ProfileFormFields({
               Why is this collected?
             </Text>
             <Text style={[styles.infoModalBody, { color: colors.textSecondary }]}>
-              Country data is collected to provide Scamly's AI with contextual
+              Country data is collected to provide Scamly&apos;s AI with contextual
               information that may be relevant to detecting scams. For example, if
               you receive a text message claiming to be from a US bank, and you live
               in Australia, this adds suspicion. {"\n\n"}All data collected is done

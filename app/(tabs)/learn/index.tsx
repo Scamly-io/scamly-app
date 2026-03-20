@@ -41,7 +41,7 @@ type Article = {
 };
 
 export default function Learn() {
-  const { colors, radius, shadows, isDark } = useTheme();
+  const { colors, isDark } = useTheme();
   const [searchInput, setSearchInput] = useState<string>("");
   const [searchResults, setSearchResults] = useState<Article[]>([]);
   const [searchLoading, setSearchLoading] = useState<boolean>(false);

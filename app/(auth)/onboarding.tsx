@@ -8,6 +8,7 @@ import { presentScamlyPaywall } from "@/utils/revenuecat";
 import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { onboardingProfileSchema } from "@/utils/validation/auth";
+import type { User } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -17,10 +18,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+function signedInWithOAuth(user: User): boolean {
+  return (
+    user.identities?.some(
+      ({ provider }) => provider === "google" || provider === "apple"
+    ) ?? false
+  );
+}
 
 export default function Onboarding() {
   const { colors, radius, shadows } = useTheme();
@@ -125,6 +133,20 @@ export default function Onboarding() {
 
       await checkOnboarding();
 
+      if (user && signedInWithOAuth(user)) {
+        const { error: welcomeEmailError } = await supabase.functions.invoke(
+          "send-customer-email",
+          { body: { userId: user.id, type: "welcome" } }
+        );
+        if (welcomeEmailError) {
+          captureError(welcomeEmailError, {
+            feature: "onboarding",
+            action: "send_customer_email",
+            severity: "warning",
+          });
+        }
+      }
+
       try {
         await presentScamlyPaywall();
       } catch {
@@ -171,7 +193,7 @@ export default function Onboarding() {
               ]}
             >
               <Text style={[styles.headerText, { color: colors.textPrimary }]}>
-                You're almost there
+                You&apos;re almost there
               </Text>
               <Text style={[styles.subHeaderText, { color: colors.textSecondary }]}>
                 Tell us a bit about yourself

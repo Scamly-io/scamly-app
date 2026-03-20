@@ -23,7 +23,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -194,7 +193,7 @@ export default function SignUpProfile() {
               </Pressable>
 
               <Text style={[styles.headerText, { color: colors.textPrimary }]}>
-                You're almost there
+                You&apos;re almost there
               </Text>
               <Text style={[styles.subHeaderText, { color: colors.textSecondary }]}>
                 Tell us a bit about yourself

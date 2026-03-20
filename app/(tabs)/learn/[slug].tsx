@@ -13,7 +13,7 @@ import Markdown from "@ronradtke/react-native-markdown-display";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ArrowLeft } from "lucide-react-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -59,7 +59,7 @@ export default function ArticleDetail() {
    * Check if engagement criteria are met and fire event if so.
    * Only fires once per article view.
    */
-  const checkAndTrackEngagement = () => {
+  const checkAndTrackEngagement = useCallback(() => {
     if (hasTrackedEngagement.current || !article) return;
 
     const timeOnPageSeconds = Math.round((Date.now() - articleViewStartTime.current) / 1000);
@@ -72,7 +72,7 @@ export default function ArticleDetail() {
       trackArticleEngaged(article.id, timeOnPageSeconds);
       hasTrackedEngagement.current = true;
     }
-  };
+  }, [article]);
 
   /**
    * Handle scroll events to track max scroll position.
@@ -150,7 +150,7 @@ export default function ArticleDetail() {
     return () => {
       checkAndTrackEngagement();
     };
-  }, [article]);
+  }, [article, checkAndTrackEngagement]);
 
   const markdownStyles = {
     body: {

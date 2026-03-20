@@ -33,7 +33,7 @@ export default function ShimmerRow({ text, isActive, isVisible }: ShimmerRowProp
         false
       );
     }
-  }, [isActive]);
+  }, [isActive, translateX]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],

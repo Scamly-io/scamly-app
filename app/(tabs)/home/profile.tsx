@@ -7,15 +7,21 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
 import {
+  EARLY_INTEREST_STORAGE_KEY,
   getRevenueCatCustomerInfo,
+  handleEarlyInterestPromoOffer,
   hasScamlyPremiumEntitlement,
+  isEarlyInterestUser,
   presentScamlyCustomerCenter,
   presentScamlyPaywallIfNeeded,
+  tagEarlyInterestUser,
   trackRevenueCatError,
 } from "@/utils/revenuecat";
 import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
+import { getSupportedPromoOffer } from "@/utils/promo";
 import { genderOptions } from "@/utils/validation/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import {
@@ -93,6 +99,7 @@ export default function Profile() {
   const [gender, setGender] = useState("");
   const [dataSharingConsent, setDataSharingConsent] = useState(false);
   const [subscriptionPlan, setSubscriptionPlan] = useState("free");
+  const [subscriptionStatus, setSubscriptionStatus] = useState("");
 
   const [originalData, setOriginalData] = useState({
     firstName: "",
@@ -118,6 +125,10 @@ export default function Profile() {
   const [openingPaywall, setOpeningPaywall] = useState(false);
   const [openingCustomerCenter, setOpeningCustomerCenter] = useState(false);
   const [hasPremiumEntitlement, setHasPremiumEntitlement] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [checkingPromoCode, setCheckingPromoCode] = useState(false);
+  const [promoCodeValid, setPromoCodeValid] = useState(false);
+  const [promoCodeFocused, setPromoCodeFocused] = useState(false);
 
   const DELETE_CONFIRMATION_PHRASE = "confirm deletion";
 
@@ -137,13 +148,15 @@ export default function Profile() {
     deleteConfirmationText.trim() === DELETE_CONFIRMATION_PHRASE;
   const hasPremiumAccess = subscriptionPlan !== "free" || hasPremiumEntitlement;
   const displayedPlan = hasPremiumAccess && subscriptionPlan === "free" ? "premium" : subscriptionPlan;
+  const isIosPromoFlow = Platform.OS === "ios";
+  const canInteractWithPromoCode = !isIosPromoFlow || hasPremiumAccess;
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("first_name, dob, country, gender, subscription_plan, data_sharing_consent")
+      .select("first_name, dob, country, gender, subscription_plan, subscription_status, data_sharing_consent")
       .eq("id", user.id)
       .single();
 
@@ -169,6 +182,7 @@ export default function Profile() {
     setGender(g);
     setDataSharingConsent(consent);
     setSubscriptionPlan(data.subscription_plan ?? "free");
+    setSubscriptionStatus(data.subscription_status ?? "");
     setOriginalData({
       firstName: name,
       dobText: dob,
@@ -335,6 +349,91 @@ export default function Profile() {
     borderColor: colors.border,
   });
 
+  const handlePromoCodeChange = (text: string) => {
+    setPromoCode(text);
+    if (promoCodeValid) {
+      setPromoCodeValid(false);
+    }
+  };
+
+  const handleApplyPromoCode = async () => {
+    const trimmedPromoCode = promoCode.trim().toLowerCase();
+    if (!trimmedPromoCode || checkingPromoCode) return;
+    if (isIosPromoFlow && !hasPremiumAccess) return;
+    if (subscriptionStatus.toLowerCase() === "cancelled") {
+      Alert.alert(
+        "Promotion unavailable",
+        "You cannot apply a promotional code while your subscription is set to cancel."
+      );
+      return;
+    }
+
+    setCheckingPromoCode(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-promo-code", {
+        body: { code: trimmedPromoCode },
+      });
+
+      if (error) {
+        captureError(error, {
+          feature: "profile",
+          action: "validate_promo_code",
+          severity: "warning",
+        });
+        setPromoCodeValid(false);
+        Alert.alert("Error", "Could not validate your promo code. Please try again.");
+        return;
+      }
+
+      const isValidPromoCode = Boolean(data?.valid);
+      const offer = data?.offer;
+
+      if (!isValidPromoCode) {
+        setPromoCodeValid(false);
+        Alert.alert("Invalid code", "That promo code is not valid.");
+        return;
+      }
+
+      const supportedOffer = getSupportedPromoOffer(offer);
+      if (!supportedOffer) {
+        setPromoCodeValid(false);
+        Alert.alert(
+          "Unsupported code",
+          "That promo code is not supported in this app version."
+        );
+        return;
+      }
+
+      if (supportedOffer === "early_interest") {
+        if (isIosPromoFlow) {
+          await handleEarlyInterestPromoOffer();
+        } else {
+          await AsyncStorage.setItem("early_interest_user", "true");
+          await AsyncStorage.setItem("promoCode", trimmedPromoCode); // e.g. "early40"
+          await tagEarlyInterestUser();
+        }
+      }
+      // TODO: Re-enable for social media discount launch
+      // else if (offer === "social_discount") {
+      //   await AsyncStorage.setItem("social_media_discount", "true");
+      //   await AsyncStorage.setItem("promoCode", trimmedPromoCode); // e.g. "scamly10"
+      // }
+
+      setPromoCodeValid(true);
+    } catch (error) {
+      setPromoCodeValid(false);
+      captureError(error, {
+        feature: "profile",
+        action: "validate_promo_code",
+        severity: "warning",
+      });
+      Alert.alert("Error", "Could not validate your promo code. Please try again.");
+    } finally {
+      setCheckingPromoCode(false);
+    }
+  };
+
   const handleCopyDeletePhrase = async () => {
     await Clipboard.setStringAsync(DELETE_CONFIRMATION_PHRASE);
   };
@@ -421,15 +520,25 @@ export default function Profile() {
 
   const handleOpenPaywall = async () => {
     if (!user || openingPaywall) return;
-
     setOpeningPaywall(true);
+
     try {
-      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded();
+      const earlyInterest = await isEarlyInterestUser();
+      const offeringId = Platform.OS === "android" && earlyInterest
+        ? "early_interest"
+        : undefined;
+
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(offeringId);
       await refreshRevenueCatStatus();
 
       if (didUnlockEntitlement) {
         await refreshAuth();
         await loadProfile();
+
+        if (earlyInterest) {
+          await AsyncStorage.removeItem(EARLY_INTEREST_STORAGE_KEY);
+          await AsyncStorage.removeItem("promoCode");
+        }
         Alert.alert("Success", "Your premium subscription is now active.");
       }
     } catch (error) {
@@ -579,6 +688,68 @@ export default function Profile() {
                   </Button>
                 </View>
               ) : null}
+              <View style={styles.promoCodeSection}>
+                {promoCodeValid ? (
+                  <Text style={[styles.promoCodeValidText, { color: colors.success }]}>
+                    Valid code
+                  </Text>
+                ) : null}
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Promotional code
+                </Text>
+                <View style={styles.promoCodeRow}>
+                  <View
+                    style={[
+                      styles.inputWrapper,
+                      styles.promoCodeInputWrapper,
+                      { borderRadius: radius.lg },
+                      getInputStyle(promoCodeFocused),
+                      promoCodeValid ? { borderColor: colors.success } : {},
+                    ]}
+                  >
+                    <TextInput
+                      placeholder="Enter promo code"
+                      placeholderTextColor={colors.textTertiary}
+                      style={[styles.input, { color: colors.textPrimary }]}
+                      value={promoCode}
+                      onChangeText={handlePromoCodeChange}
+                      editable={!checkingPromoCode && canInteractWithPromoCode}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onFocus={() => setPromoCodeFocused(true)}
+                      onBlur={() => setPromoCodeFocused(false)}
+                    />
+                  </View>
+                  <Pressable
+                    onPress={handleApplyPromoCode}
+                    disabled={!promoCode.trim() || checkingPromoCode || !canInteractWithPromoCode}
+                    style={[
+                      styles.checkButton,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.backgroundSecondary,
+                        opacity:
+                          !promoCode.trim() || checkingPromoCode || !canInteractWithPromoCode
+                            ? 0.6
+                            : 1,
+                      },
+                    ]}
+                  >
+                    {checkingPromoCode ? (
+                      <ActivityIndicator size="small" color={colors.accent} />
+                    ) : (
+                      <Text style={[styles.checkButtonText, { color: colors.accent }]}>
+                        Apply
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+                {isIosPromoFlow && !hasPremiumAccess ? (
+                  <Text style={[styles.helperText, { color: colors.textTertiary }]}>
+                    Promotional codes can be applied after you subscribe to Premium.
+                  </Text>
+                ) : null}
+              </View>
             </View>
 
             {/* Personal Info */}
@@ -891,110 +1062,116 @@ export default function Profile() {
         onRequestClose={closeDeleteModal}
       >
         <Pressable style={styles.modalOverlay} onPress={closeDeleteModal}>
-          <Pressable
-            style={[
-              styles.deleteModalContent,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radius["2xl"],
-                ...shadows.lg,
-              },
-            ]}
-            onPress={() => {}}
+          <KeyboardAvoidingView
+            style={styles.deleteModalKeyboardContainer}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
           >
-            <View style={styles.deleteModalHeader}>
-              <View style={styles.deleteModalTitleRow}>
-                <AlertTriangle size={18} color={colors.error} />
-                <Text style={[styles.deleteModalTitle, { color: colors.error }]}>
-                  Delete your account?
+            <Pressable
+              style={[
+                styles.deleteModalContent,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderRadius: radius["2xl"],
+                  ...shadows.lg,
+                },
+              ]}
+              onPress={() => {}}
+            >
+              <View style={styles.deleteModalHeader}>
+                <View style={styles.deleteModalTitleRow}>
+                  <AlertTriangle size={18} color={colors.error} />
+                  <Text style={[styles.deleteModalTitle, { color: colors.error }]}>
+                    Delete your account?
+                  </Text>
+                </View>
+                <Pressable onPress={closeDeleteModal} hitSlop={8}>
+                  <X size={18} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+
+              <Text style={[styles.deleteModalDescription, { color: colors.textSecondary }]}>
+                This will permanently delete your Scamly account including:
+              </Text>
+
+              <View style={styles.bulletList}>
+                <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
+                  • Your profile and personal data
+                </Text>
+                <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
+                  • All scan history and chat conversations
+                </Text>
+                <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
+                  • Your referral data and rewards
+                </Text>
+                <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
+                  • You must cancel any active subscription before deletion
                 </Text>
               </View>
-              <Pressable onPress={closeDeleteModal} hitSlop={8}>
-                <X size={18} color={colors.textSecondary} />
-              </Pressable>
-            </View>
 
-            <Text style={[styles.deleteModalDescription, { color: colors.textSecondary }]}>
-              This will permanently delete your Scamly account including:
-            </Text>
-
-            <View style={styles.bulletList}>
-              <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
-                • Your profile and personal data
+              <Text style={[styles.deleteModalWarning, { color: colors.error }]}>
+                This action is irreversible and cannot be undone.
               </Text>
-              <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
-                • All scan history and chat conversations
+
+              <Text style={[styles.deleteInstruction, { color: colors.textSecondary }]}>
+                Type {"\"confirm deletion\""} to confirm:
               </Text>
-              <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
-                • Your referral data and rewards
-              </Text>
-              <Text style={[styles.bulletItem, { color: colors.textPrimary }]}>
-                • You must cancel any active subscription before deletion
-              </Text>
-            </View>
 
-            <Text style={[styles.deleteModalWarning, { color: colors.error }]}>
-              This action is irreversible and cannot be undone.
-            </Text>
+              <View style={styles.deletePhraseRow}>
+                <TextInput
+                  placeholder={DELETE_CONFIRMATION_PHRASE}
+                  placeholderTextColor={colors.textTertiary}
+                  style={[
+                    styles.deleteInput,
+                    {
+                      color: colors.textPrimary,
+                      borderColor: canConfirmDeletion ? colors.success : colors.border,
+                      backgroundColor: colors.backgroundSecondary,
+                    },
+                  ]}
+                  value={deleteConfirmationText}
+                  onChangeText={setDeleteConfirmationText}
+                  editable={!deletingAccount}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Pressable
+                  onPress={handleCopyDeletePhrase}
+                  style={[
+                    styles.copyButton,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.backgroundSecondary,
+                    },
+                  ]}
+                >
+                  <Copy size={16} color={colors.accent} />
+                  <Text style={[styles.copyButtonText, { color: colors.accent }]}>Copy</Text>
+                </Pressable>
+              </View>
 
-            <Text style={[styles.deleteInstruction, { color: colors.textSecondary }]}>
-              Type {"\"confirm deletion\""} to confirm:
-            </Text>
-
-            <View style={styles.deletePhraseRow}>
-              <TextInput
-                placeholder={DELETE_CONFIRMATION_PHRASE}
-                placeholderTextColor={colors.textTertiary}
-                style={[
-                  styles.deleteInput,
-                  {
-                    color: colors.textPrimary,
-                    borderColor: canConfirmDeletion ? colors.success : colors.border,
-                    backgroundColor: colors.backgroundSecondary,
-                  },
-                ]}
-                value={deleteConfirmationText}
-                onChangeText={setDeleteConfirmationText}
-                editable={!deletingAccount}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Pressable
-                onPress={handleCopyDeletePhrase}
-                style={[
-                  styles.copyButton,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.backgroundSecondary,
-                  },
-                ]}
-              >
-                <Copy size={16} color={colors.accent} />
-                <Text style={[styles.copyButtonText, { color: colors.accent }]}>Copy</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.deleteActionRow}>
-              <Button
-                onPress={closeDeleteModal}
-                variant="secondary"
-                disabled={deletingAccount}
-                style={styles.deleteActionButton}
-              >
-                Cancel
-              </Button>
-              <Button
-                onPress={handleDeleteAccount}
-                variant="danger"
-                loading={deletingAccount}
-                disabled={!canConfirmDeletion || deletingAccount}
-                style={styles.deleteActionButton}
-              >
-                Permanently Delete Account
-              </Button>
-            </View>
-          </Pressable>
+              <View style={styles.deleteActionRow}>
+                <Button
+                  onPress={closeDeleteModal}
+                  variant="secondary"
+                  disabled={deletingAccount}
+                  style={styles.deleteActionButton}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onPress={handleDeleteAccount}
+                  variant="danger"
+                  loading={deletingAccount}
+                  disabled={!canConfirmDeletion || deletingAccount}
+                  style={styles.deleteActionButton}
+                >
+                  Permanently Delete Account
+                </Button>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
 
@@ -1107,7 +1284,7 @@ export default function Profile() {
 
             {deleteError?.code === "DA-RC01" && (
               <Text style={[styles.errorModalBody, { color: colors.textSecondary }]}>
-                We're unable to process your request right now. Please try again
+                We&apos;re unable to process your request right now. Please try again
                 later.
               </Text>
             )}
@@ -1313,6 +1490,36 @@ const styles = StyleSheet.create({
   upgradeButtonWrapper: {
     marginTop: 12,
   },
+  promoCodeSection: {
+    marginTop: 12,
+  },
+  promoCodeValidText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 12,
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+  promoCodeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  promoCodeInputWrapper: {
+    flex: 1,
+  },
+  checkButton: {
+    height: 56,
+    minWidth: 84,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  checkButtonText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 14,
+  },
   dangerZoneSection: {
     marginTop: 6,
     marginBottom: 24,
@@ -1346,6 +1553,10 @@ const styles = StyleSheet.create({
   deleteModalContent: {
     borderWidth: 1,
     padding: 20,
+  },
+  deleteModalKeyboardContainer: {
+    flex: 1,
+    justifyContent: "center",
   },
   deleteModalHeader: {
     flexDirection: "row",

@@ -11,7 +11,7 @@ import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { Link, router } from "expo-router";
 import { Clock3, MessageCircle, Plus, Trash2 } from "lucide-react-native";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -33,7 +33,7 @@ type Chat = {
 };
 
 export default function ChatIndex() {
-  const { colors, radius, shadows, isDark } = useTheme();
+  const { colors, radius, shadows } = useTheme();
   const { user } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +54,31 @@ export default function ChatIndex() {
     return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   };
 
-  const fetchSubscriptionPlan = async () => {
+  const fetchChats = useCallback(async () => {
+    setLoading(true);
+
+    if (!user) {
+      trackUserVisibleError("chat", "session_invalid", false);
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("chats")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      captureDataFetchError(error, "chat", "fetch_chats", "critical");
+    } else {
+      setChats(data || []);
+    }
+
+    setLoading(false);
+  }, [user]);
+
+  const fetchSubscriptionPlan = useCallback(async () => {
     setPlanLoading(true);
     if (!user) {
       trackUserVisibleError("chat", "session_invalid", false);
@@ -79,9 +103,9 @@ export default function ChatIndex() {
     setIsFreePlan(profile.subscription_plan === "free");
     setPlanLoading(false);
     return profile.subscription_plan;
-  };
+  }, [user]);
 
-  const refreshAccessAndData = async () => {
+  const refreshAccessAndData = useCallback(async () => {
     const subscriptionPlan = await fetchSubscriptionPlan();
     if (subscriptionPlan !== "free") {
       await fetchChats();
@@ -89,31 +113,7 @@ export default function ChatIndex() {
     }
     setChats([]);
     setLoading(false);
-  };
-
-  const fetchChats = async () => {
-    setLoading(true);
-
-    if (!user) {
-      trackUserVisibleError("chat", "session_invalid", false);
-      setLoading(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("chats")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      captureDataFetchError(error, "chat", "fetch_chats", "critical");
-    } else {
-      setChats(data || []);
-    }
-
-    setLoading(false);
-  };
+  }, [fetchChats, fetchSubscriptionPlan]);
 
   useEffect(() => {
     if (!user) return;
@@ -132,16 +132,16 @@ export default function ChatIndex() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, refreshAccessAndData]);
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       // Track feature discovery when chat tab is focused
       trackFeatureOpened("chat");
       if (user) {
         refreshAccessAndData();
       }
-    }, [user])
+    }, [user, refreshAccessAndData])
   );
 
   const handleOpenPaywall = async () => {

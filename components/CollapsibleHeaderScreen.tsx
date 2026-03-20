@@ -25,7 +25,7 @@ export default function CollapsibleHeaderScreen({
   contentContainerStyle,
   showsVerticalScrollIndicator = false,
 }: CollapsibleHeaderScreenProps) {
-  const { colors, shadows } = useTheme();
+  const { colors } = useTheme();
   const headerHeight = useSharedValue(0);
   const headerTranslateY = useSharedValue(0);
   const scrollY = useSharedValue(0);

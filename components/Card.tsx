@@ -1,6 +1,6 @@
 import { useTheme } from "@/theme";
 import { ReactNode } from "react";
-import { Pressable, StyleSheet, ViewStyle } from "react-native";
+import { Pressable, ViewStyle } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -92,5 +92,4 @@ export default function Card({
   );
 }
 
-const styles = StyleSheet.create({});
 

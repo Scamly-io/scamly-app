@@ -123,7 +123,7 @@ export default function ChatDetail() {
       }
       return <MessageBlock message={item} />;
     },
-    [colors]
+    [colors, radius.sm]
   );
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useTheme } from "@/theme";
 import { ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle, TextStyle } from "react-native";
+import { ActivityIndicator, Pressable, Text, ViewStyle, TextStyle } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -148,5 +148,4 @@ export default function Button({
   );
 }
 
-const styles = StyleSheet.create({});
 

@@ -30,7 +30,7 @@ export default function ThinkingIndicator() {
       300,
       withRepeat(withTiming(1, { duration }), -1, true)
     );
-  }, []);
+  }, [dot1, dot2, dot3]);
 
   const dot1Style = useAnimatedStyle(() => ({
     opacity: dot1.value,
