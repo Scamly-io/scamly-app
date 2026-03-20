@@ -145,14 +145,14 @@ export async function handleEarlyInterestPromoOffer(): Promise<void> {
     const pkg = packageIdentifier === SCAMLY_YEARLY_PACKAGE_ID ? yearly : monthly;
 
     if (!pkg) {
-      Alert.alert("Success", "Your premium subscription is now active.");
+      Alert.alert("Error", "We weren't able to apply that promotion. Your premium subscription is still active.");
       return;
     }
 
     const promoOffer = await getEarlyInterestPromoOffer(pkg);
     if (!promoOffer) {
       // Offer not available — just show the normal success alert
-      Alert.alert("Success", "Your premium subscription is now active.");
+      Alert.alert("Error", "We weren't able to apply that promotion. Your premium subscription is still active.");
       return;
     }
 
@@ -189,7 +189,7 @@ export async function handleEarlyInterestPromoOffer(): Promise<void> {
   } catch (error) {
     // If anything goes wrong fetching the promo, fall back gracefully
     trackRevenueCatError("handleEarlyInterestPromoOffer", error);
-    Alert.alert("Success", "Your premium subscription is now active.");
+    Alert.alert("Error", "We weren't able to apply that promotion. Your premium subscription is still active.");
   }
 };
 
