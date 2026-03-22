@@ -22,7 +22,7 @@ const SECTIONS = [
     title: "3. Registration to use the Services",
     body: `(a) In order to access the Services, you must first register for an account through the Application (Account).
 
-(a) As part of the registration process, or as part of your continued use of the Services, you may be required to provide personal information about yourself (such as identification or contact details), including:
+(b) As part of the registration process, or as part of your continued use of the Services, you may be required to provide personal information about yourself (such as identification or contact details), including:
 
 - (i) Email address
 - (ii) Preferred username
