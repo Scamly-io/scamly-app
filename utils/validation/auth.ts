@@ -32,12 +32,12 @@ export const referralSourceOptions = [
   "Other Social Media",
   "Google",
   "Word of Mouth",
+  "Other",
 ] as const;
 
 export const genderOptions = [
   "Male",
   "Female",
-  "Non-binary",
   "Prefer not to say",
 ] as const;
 

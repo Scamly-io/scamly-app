@@ -4,6 +4,7 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { parseDob, toISODate } from "@/utils/date";
+import { getPublicIp } from "@/utils/network";
 import { presentScamlyPaywall } from "@/utils/revenuecat";
 import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
@@ -101,12 +102,15 @@ export default function Onboarding() {
     setLoading(true);
 
     try {
+      const ip = await getPublicIp();
+
       const profileData: {
         country: string;
         referral_source: string;
         onboarding_completed: boolean;
         dob?: string;
         gender?: string;
+        ip_address?: string;
       } = {
         country,
         referral_source: referralSource,
@@ -118,6 +122,9 @@ export default function Onboarding() {
       }
       if (gender) {
         profileData.gender = gender;
+      }
+      if (ip) {
+        profileData.ip_address = ip;
       }
 
       const { error } = await supabase

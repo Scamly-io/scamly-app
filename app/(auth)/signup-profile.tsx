@@ -9,6 +9,7 @@ import {
   trackSignupFailed,
 } from "@/utils/analytics";
 import { parseDob, toISODate } from "@/utils/date";
+import { getPublicIp } from "@/utils/network";
 import { addActionBreadcrumb, captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { signUpSchema } from "@/utils/validation/auth";
@@ -104,6 +105,9 @@ export default function SignUpProfile() {
     addActionBreadcrumb("signup_attempted", "signup");
 
     try {
+      const ip = await getPublicIp();
+      console.log("ip", ip);
+
       const profileData: {
         first_name: string;
         country: string;
@@ -111,6 +115,7 @@ export default function SignUpProfile() {
         onboarding_completed: boolean;
         dob?: string;
         gender?: string;
+        ip_address?: string;
       } = {
         first_name: firstName,
         country,
@@ -123,6 +128,9 @@ export default function SignUpProfile() {
       }
       if (gender) {
         profileData.gender = gender;
+      }
+      if (ip) {
+        profileData.ip_address = ip;
       }
 
       const { error } = await supabase.auth.signUp({
