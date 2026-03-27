@@ -10,7 +10,7 @@ import { captureDataFetchError, captureError, captureWarning } from "@/utils/sen
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import { ChevronRight, LogOut, MessageCircle, Scan, Search, Sparkles, TrendingUp, User } from "lucide-react-native";
+import { ChevronRight, Lightbulb, LogOut, MessageCircle, Scan, Search, Sparkles, TrendingUp, User } from "lucide-react-native";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -377,8 +377,31 @@ export default function Home() {
             </Card>
           </Animated.View>
 
+          {/* Feature Requests */}
+          <Animated.View entering={FadeInDown.duration(400).delay(550)}>
+            <Card
+              onPress={() => router.push("/home/feature-wall")}
+              style={styles.profileBanner}
+            >
+              <View style={styles.profileBannerContent}>
+                <View style={[styles.profileIconContainer, { backgroundColor: colors.accentMuted }]}>
+                  <Lightbulb size={22} color={colors.accent} />
+                </View>
+                <View style={styles.profileTextContainer}>
+                  <Text style={[styles.profileBannerTitle, { color: colors.textPrimary }]}>
+                    Feature Requests
+                  </Text>
+                  <Text style={[styles.profileBannerDescription, { color: colors.textSecondary }]}>
+                    Suggest & vote on new features
+                  </Text>
+                </View>
+                <ChevronRight size={20} color={colors.textTertiary} />
+              </View>
+            </Card>
+          </Animated.View>
+
           {/* Sign Out */}
-          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={styles.signOutSection}>
+          <Animated.View entering={FadeInDown.duration(400).delay(650)} style={styles.signOutSection}>
             <Button
               onPress={handleSignOut}
               variant="danger"
