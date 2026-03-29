@@ -15,6 +15,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -218,10 +219,15 @@ export default function Learn() {
     setSearchResults([]);
   }
 
+  // iOS native tabs: include bottom safe area explicitly. Relying only on UIScrollView
+  // contentInsetAdjustmentBehavior can leave the library list under the tab bar after
+  // popping the article stack (e.g. after router.replace reset the stack).
+  const safeAreaEdges = Platform.OS === "ios" ? (["top", "bottom"] as const) : (["top"] as const);
+
   if (pageLoading) {
     return (
       <ThemedBackground>
-        <SafeAreaView edges={["top"]} style={styles.loadingContainer}>
+        <SafeAreaView edges={safeAreaEdges} style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
         </SafeAreaView>
       </ThemedBackground>
@@ -230,10 +236,11 @@ export default function Learn() {
 
   return (
     <ThemedBackground>
-      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+      <SafeAreaView edges={safeAreaEdges} style={styles.safeArea}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
+          contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "never" : undefined}
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="on-drag"
         >

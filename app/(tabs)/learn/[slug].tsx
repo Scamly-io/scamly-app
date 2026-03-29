@@ -20,6 +20,7 @@ import {
   LogBox,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -266,12 +267,17 @@ export default function ArticleDetail() {
     },
   };
 
+  const articleSafeAreaEdges =
+    Platform.OS === "ios"
+      ? (["top", "left", "right", "bottom"] as const)
+      : (["top", "left", "right"] as const);
+
   if (loading) {
     return (
       <>
         <StatusBar style={isDark ? "light" : "dark"} />
         <ThemedBackground>
-          <SafeAreaView edges={["top", "left", "right"]} style={styles.loadingContainer}>
+          <SafeAreaView edges={articleSafeAreaEdges} style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.accent} />
           </SafeAreaView>
         </ThemedBackground>
@@ -283,7 +289,7 @@ export default function ArticleDetail() {
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <ThemedBackground>
-        <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
+        <SafeAreaView edges={articleSafeAreaEdges} style={styles.safeArea}>
           {/* Header */}
           <Animated.View entering={FadeIn.duration(300)} style={styles.header}>
             <TouchableOpacity
@@ -291,7 +297,13 @@ export default function ArticleDetail() {
                 styles.backButton,
                 { backgroundColor: colors.surface, borderRadius: radius.md, ...shadows.sm },
               ]}
-              onPress={() => router.replace("/learn")}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/learn");
+                }
+              }}
             >
               <ArrowLeft size={20} color={colors.textPrimary} />
               <Text style={[styles.backLabel, { color: colors.textPrimary }]}>Back</Text>
@@ -302,6 +314,7 @@ export default function ArticleDetail() {
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
+            contentInsetAdjustmentBehavior={Platform.OS === "ios" ? "never" : undefined}
             showsVerticalScrollIndicator={false}
             onScroll={handleScroll}
             scrollEventThrottle={100}
