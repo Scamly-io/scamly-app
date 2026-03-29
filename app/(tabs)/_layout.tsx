@@ -1,91 +1,76 @@
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useTheme } from "@/theme";
-import { Tabs, usePathname } from "expo-router";
-import { BookOpen, House, MessageCircle, SearchCode, Sparkles } from "lucide-react-native";
-import { Platform, StyleSheet } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePathname } from "expo-router";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { createContext } from "react";
+
+// --- Context for hiding the tab bar from child screens ---
+export const TabBarContext = createContext<{
+  setIsTabBarHidden: (hidden: boolean) => void;
+}>({
+  setIsTabBarHidden: () => {},
+});
 
 export default function TabsLayout() {
   const { colors } = useTheme();
   const pathName = usePathname();
+
+  // NOTE: With NativeTabs you can also drive this from child screens
+  // via useFocusEffect + TabBarContext (see below), but if you want to
+  // keep the path-based logic you used before, this still works.
   const isChatDetail = pathName.includes("/chat/") && pathName !== "/chat";
   const isHomeSubPage = pathName.startsWith("/home/") && pathName !== "/home";
   const hideTabBar = isChatDetail || isHomeSubPage;
-  const insets = useSafeAreaInsets();
-
-  const bottomPadding = Platform.OS === "ios" ? 24 : Math.max(12, insets.bottom + 6);
-  const tabBarHeight = Platform.OS === "ios" ? 88 : 56 + bottomPadding;
 
   return (
     <ProtectedRoute>
-      <Tabs
-        screenOptions={{
-          tabBarStyle: hideTabBar
-            ? { display: "none" }
-            : {
-                backgroundColor: colors.tabBar,
-                borderTopColor: colors.tabBarBorder,
-                borderTopWidth: StyleSheet.hairlineWidth,
-                paddingTop: 8,
-                paddingBottom: bottomPadding,
-                height: tabBarHeight,
-              },
-          headerShown: false,
-          tabBarActiveTintColor: colors.tabActive,
-          tabBarInactiveTintColor: colors.tabInactive,
-          tabBarLabelStyle: {
-            fontFamily: "Poppins-Medium",
-            fontSize: 11,
-            marginTop: 4,
-          },
-        }}
-      >
-        <Tabs.Screen
-          name="home"
-          options={{
-            title: "Home",
-            tabBarIcon: ({ focused, color }) => (
-              <House size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="scan"
-          options={{
-            title: "Scan",
-            tabBarIcon: ({ focused, color }) => (
-              <Sparkles size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="chat"
-          options={{
-            title: "Chat",
-            tabBarIcon: ({ focused, color }) => (
-              <MessageCircle size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="contact-search"
-          options={{
-            title: "Search",
-            tabBarIcon: ({ focused, color }) => (
-              <SearchCode size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="learn"
-          options={{
-            title: "Library",
-            tabBarIcon: ({ focused, color }) => (
-              <BookOpen size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
-            ),
-          }}
-        />
-      </Tabs>
+      <TabBarContext value={{ setIsTabBarHidden: () => {} }}>
+        <NativeTabs
+          hidden={hideTabBar}
+          // Active icon/text tint color
+          tintColor={colors.tabActive}
+        >
+          <NativeTabs.Trigger name="home">
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "house", selected: "house.fill" }}
+              md="home"
+            />
+            <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="scan">
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "sparkles", selected: "sparkles" }}
+              md="auto_awesome"
+            />
+            <NativeTabs.Trigger.Label>Scan</NativeTabs.Trigger.Label>
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="chat">
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "message", selected: "message.fill" }}
+              md="chat_bubble"
+            />
+            <NativeTabs.Trigger.Label>Chat</NativeTabs.Trigger.Label>
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="contact-search">
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "magnifyingglass", selected: "magnifyingglass" }}
+              md="search"
+            />
+            <NativeTabs.Trigger.Label>Search</NativeTabs.Trigger.Label>
+          </NativeTabs.Trigger>
+
+          <NativeTabs.Trigger name="learn">
+            <NativeTabs.Trigger.Icon
+              sf={{ default: "books.vertical", selected: "books.vertical.fill" }}
+              md="menu_book"
+            />
+            <NativeTabs.Trigger.Label>Library</NativeTabs.Trigger.Label>
+          </NativeTabs.Trigger>
+        </NativeTabs>
+      </TabBarContext>
     </ProtectedRoute>
   );
 }
