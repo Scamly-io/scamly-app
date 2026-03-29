@@ -66,6 +66,7 @@ function getUserBillingPeriod(createdAt: string | Date) {
 }
 
 const FREE_USER_SCAN_QUOTA = 6;
+const PAGE_MOUNT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Map scan results to analytics result category.
@@ -79,6 +80,12 @@ function getResultCategory(isScam: boolean, riskLevel: string): ResultCategory {
 }
 
 type ScanPhase = "idle" | "scanning" | "complete";
+type PageMountCache = {
+  userRef: ReturnType<typeof useAuth>["user"];
+  cachedAt: number;
+  scanQuotaReached: boolean;
+  scanQuotaResetDate: string | null;
+};
 
 const STAGE_OPTIONS = {
   upload: ["Uploading your image"],
@@ -123,6 +130,14 @@ export default function Scan() {
   // Track whether we've already fired result_viewed for the current results
   const hasTrackedResultView = useRef<boolean>(false);
   const stageTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pageMountCacheRef = useRef<PageMountCache | null>(null);
+  const pageMountInFlightRef = useRef<Promise<void> | null>(null);
+
+  useEffect(() => {
+    if (pageMountCacheRef.current?.userRef !== user) {
+      pageMountCacheRef.current = null;
+    }
+  }, [user]);
 
   useEffect(() => {
     if (scanPhase === "scanning") {
@@ -140,51 +155,90 @@ export default function Scan() {
     };
   }, [scanPhase]);
 
-  const handlePageMount = useCallback(async () => {
-    setPageLoading(true);
+  const handlePageMount = useCallback(async ({ forceRefresh = false }: { forceRefresh?: boolean } = {}) => {
+    const cached = pageMountCacheRef.current;
+    const isCacheValid =
+      !forceRefresh &&
+      cached?.userRef === user &&
+      Date.now() - cached.cachedAt < PAGE_MOUNT_CACHE_TTL_MS;
 
-    if (!user) {
-      trackUserVisibleError("scan", "session_invalid", false);
-      Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+    if (isCacheValid && cached) {
+      setScanQuotaReached(cached.scanQuotaReached);
+      setScanQuotaResetDate(cached.scanQuotaResetDate);
+      setPageLoading(false);
       return;
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("subscription_plan, created_at")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) {
-      trackUserVisibleError("scan", "profile_fetch_failed", false);
-      captureDataFetchError(profileError, "scan", "fetch_profile", "critical");
-      Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+    if (pageMountInFlightRef.current) {
+      await pageMountInFlightRef.current;
       return;
     }
 
-    if (profile.subscription_plan === "free") {
-      const { periodStart, nextPeriodStart } = getUserBillingPeriod(profile.created_at);
+    const loadPromise = (async () => {
+      setPageLoading(true);
 
-      const { count, error: countError } = await supabase
-        .from("scans")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user!.id)
-        .gte("created_at", periodStart.toISOString())
-        .lt("created_at", nextPeriodStart.toISOString());
-
-      if (countError) {
-        trackUserVisibleError("scan", "quota_check_failed", false);
-        captureDataFetchError(countError, "scan", "fetch_quota", "critical");
+      if (!user) {
+        trackUserVisibleError("scan", "session_invalid", false);
         Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
         return;
       }
 
-      if (count !== null && count >= FREE_USER_SCAN_QUOTA) {
-        setScanQuotaReached(true);
-        setScanQuotaResetDate(nextPeriodStart.toLocaleDateString());
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("subscription_plan, created_at")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError) {
+        trackUserVisibleError("scan", "profile_fetch_failed", false);
+        captureDataFetchError(profileError, "scan", "fetch_profile", "critical");
+        Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+        return;
       }
+
+      let nextScanQuotaReached = false;
+      let nextScanQuotaResetDate: string | null = null;
+
+      if (profile.subscription_plan === "free") {
+        const { periodStart, nextPeriodStart } = getUserBillingPeriod(profile.created_at);
+
+        const { count, error: countError } = await supabase
+          .from("scans")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .gte("created_at", periodStart.toISOString())
+          .lt("created_at", nextPeriodStart.toISOString());
+
+        if (countError) {
+          trackUserVisibleError("scan", "quota_check_failed", false);
+          captureDataFetchError(countError, "scan", "fetch_quota", "critical");
+          Alert.alert("Error", "There is an issue with your account. Please log out and try again.");
+          return;
+        }
+
+        if (count !== null && count >= FREE_USER_SCAN_QUOTA) {
+          nextScanQuotaReached = true;
+          nextScanQuotaResetDate = nextPeriodStart.toLocaleDateString();
+        }
+      }
+
+      setScanQuotaReached(nextScanQuotaReached);
+      setScanQuotaResetDate(nextScanQuotaResetDate);
+      pageMountCacheRef.current = {
+        userRef: user,
+        cachedAt: Date.now(),
+        scanQuotaReached: nextScanQuotaReached,
+        scanQuotaResetDate: nextScanQuotaResetDate,
+      };
+    })();
+
+    pageMountInFlightRef.current = loadPromise;
+    try {
+      await loadPromise;
+    } finally {
+      pageMountInFlightRef.current = null;
+      setPageLoading(false);
     }
-    setPageLoading(false);
   }, [user]);
 
   useEffect(() => {
@@ -301,7 +355,7 @@ export default function Scan() {
 
       if (err instanceof ScanError) {
         if (err.stage === "quota_exceeded") {
-          handlePageMount();
+          handlePageMount({ forceRefresh: true });
           Alert.alert("Scan Limit Reached", "You've reached your monthly scan limit. Please upgrade or wait for your quota to reset.");
         } else if (err.stage === "upload") {
           Alert.alert("Upload Failed", "We couldn't upload your image. Please check your connection and try again.");

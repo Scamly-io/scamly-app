@@ -8,6 +8,7 @@ import { useTheme } from "@/theme";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
 import { captureDataFetchError, captureError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { ChevronRight, LogOut, MessageCircle, MessageCirclePlus, Scan, Search, Sparkles, TrendingUp, User } from "lucide-react-native";
@@ -40,6 +41,15 @@ type Article = {
   iconBackground?: string;
 };
 
+const HOME_ARTICLES_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const HOME_ARTICLES_CACHE_KEY_PREFIX = "home_articles_cache_v1";
+
+type HomeArticlesCache = {
+  fetchedAt: number;
+  trendingArticles: Article[];
+  quickTips: Article[];
+};
+
 export default function Home() {
   const { colors, isDark } = useTheme();
   const { user, signOut } = useAuth();
@@ -51,6 +61,56 @@ export default function Home() {
 
   function calculateReadTime(length: number): number {
     return Math.max(1, Math.round(length / 1500));
+  }
+
+  function getHomeArticlesCacheKey(premium: boolean): string {
+    return `${HOME_ARTICLES_CACHE_KEY_PREFIX}_${premium ? "premium" : "free"}`;
+  }
+
+  async function getCachedHomeArticles(premium: boolean): Promise<HomeArticlesCache | null> {
+    try {
+      const cacheKey = getHomeArticlesCacheKey(premium);
+      const rawCache = await AsyncStorage.getItem(cacheKey);
+
+      if (!rawCache) {
+        return null;
+      }
+
+      const parsedCache = JSON.parse(rawCache) as HomeArticlesCache;
+      const cacheAgeMs = Date.now() - parsedCache.fetchedAt;
+      if (cacheAgeMs > HOME_ARTICLES_CACHE_TTL_MS) {
+        await AsyncStorage.removeItem(cacheKey);
+        return null;
+      }
+
+      if (!Array.isArray(parsedCache.trendingArticles) || !Array.isArray(parsedCache.quickTips)) {
+        await AsyncStorage.removeItem(cacheKey);
+        return null;
+      }
+
+      return parsedCache;
+    } catch (cacheError) {
+      captureWarning(cacheError, "home", "read_articles_cache");
+      return null;
+    }
+  }
+
+  async function setCachedHomeArticles(
+    premium: boolean,
+    trendingArticles: Article[],
+    quickTips: Article[]
+  ): Promise<void> {
+    try {
+      const cacheKey = getHomeArticlesCacheKey(premium);
+      const payload: HomeArticlesCache = {
+        fetchedAt: Date.now(),
+        trendingArticles,
+        quickTips,
+      };
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(payload));
+    } catch (cacheError) {
+      captureWarning(cacheError, "home", "write_articles_cache");
+    }
   }
 
   const fetchPageData = useCallback(async () => {
@@ -79,7 +139,7 @@ export default function Home() {
       return premium;
     }
 
-    async function getTrendingArticles(premium: boolean) {
+    async function getTrendingArticles(premium: boolean): Promise<Article[] | null> {
       let query = supabase
         .from("articles")
         .select("id, title, primary_image, description, slug, content")
@@ -95,21 +155,20 @@ export default function Home() {
 
       if (!trendingArticles || trendingArticlesError) {
         captureWarning(trendingArticlesError || new Error("No trending articles"), "home", "fetch_trending_articles");
-      } else {
-        setTrendingArticles(
-          trendingArticles.map((article: any) => ({
-            id: article.id,
-            slug: article.slug,
-            title: article.title,
-            description: article.description,
-            image: article.primary_image,
-            length: article.content.length,
-          }))
-        );
+        return null;
       }
+
+      return trendingArticles.map((article: any) => ({
+        id: article.id,
+        slug: article.slug,
+        title: article.title,
+        description: article.description,
+        image: article.primary_image,
+        length: article.content.length,
+      }));
     }
 
-    async function getQuickTips(premium: boolean) {
+    async function getQuickTips(premium: boolean): Promise<Article[] | null> {
       let query = supabase
         .from("articles")
         .select(
@@ -127,24 +186,48 @@ export default function Home() {
 
       if (!quickTips || quickTipsError) {
         captureWarning(quickTipsError || new Error("No quick tips"), "home", "fetch_quick_tips");
-      } else {
-        setQuickTips(
-          quickTips.map((quickTip: any) => ({
-            id: quickTip.id,
-            slug: quickTip.slug,
-            title: quickTip.title,
-            description: quickTip.description,
-            icon: quickTip.quick_tip_icon,
-            iconColour: quickTip.quick_tip_icon_colour,
-            iconBackground: quickTip.quick_tip_icon_background_colour,
-          }))
-        );
+        return null;
       }
+
+      return quickTips.map((quickTip: any) => ({
+        id: quickTip.id,
+        slug: quickTip.slug,
+        title: quickTip.title,
+        description: quickTip.description,
+        icon: quickTip.quick_tip_icon,
+        iconColour: quickTip.quick_tip_icon_colour,
+        iconBackground: quickTip.quick_tip_icon_background_colour,
+      }));
+    }
+
+    const premium = await getUserProfile();
+
+    const cachedArticles = await getCachedHomeArticles(premium);
+    if (cachedArticles) {
+      setTrendingArticles(cachedArticles.trendingArticles);
+      setQuickTips(cachedArticles.quickTips);
+      setLoading(false);
+      return;
     }
 
     setLoading(true);
-    const premium = await getUserProfile();
-    await Promise.all([getTrendingArticles(premium), getQuickTips(premium)]);
+    const [fetchedTrendingArticles, fetchedQuickTips] = await Promise.all([
+      getTrendingArticles(premium),
+      getQuickTips(premium),
+    ]);
+
+    if (fetchedTrendingArticles) {
+      setTrendingArticles(fetchedTrendingArticles);
+    }
+
+    if (fetchedQuickTips) {
+      setQuickTips(fetchedQuickTips);
+    }
+
+    if (fetchedTrendingArticles && fetchedQuickTips) {
+      await setCachedHomeArticles(premium, fetchedTrendingArticles, fetchedQuickTips);
+    }
+
     setLoading(false);
   }, [user]);
 
