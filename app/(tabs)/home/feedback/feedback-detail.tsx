@@ -127,7 +127,6 @@ export default function FeedbackDetail() {
   const [loadingComments, setLoadingComments] = useState(true);
   const [commentText, setCommentText] = useState("");
   const [posting, setPosting] = useState(false);
-  const inputBarBottomPadding = Platform.OS === "ios" ? insets.bottom + 8 : 8;
 
   const commentInputRef = useRef<TextInput>(null);
 
@@ -406,7 +405,7 @@ export default function FeedbackDetail() {
             {
               borderTopColor: colors.divider,
               backgroundColor: colors.background,
-              paddingBottom: inputBarBottomPadding,
+              paddingBottom: insets.bottom + 8,
             },
           ]}
         >
