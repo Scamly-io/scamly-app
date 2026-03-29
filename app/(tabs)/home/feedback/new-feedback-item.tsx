@@ -2,6 +2,7 @@ import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
+import { triggerFeedbackWallRefresh } from "@/utils/feedbackWallRefresh";
 import { supabase } from "@/utils/supabase";
 import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
@@ -12,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,7 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function NewFeatureRequest() {
+export default function NewFeedbackItem() {
   const { colors, radius } = useTheme();
   const { user } = useAuth();
   const [title, setTitle] = useState("");
@@ -42,36 +44,46 @@ export default function NewFeatureRequest() {
       );
 
       const { data: existing } = await supabase
-        .from("feature_wall")
+        .from("feedback_wall")
         .select("id")
         .eq("user_id", user.id)
         .eq("content_hash", contentHash);
 
       if (existing && existing.length > 0) {
         Alert.alert(
-          "Duplicate Request",
-          "You've already posted this feature request.",
+          "Duplicate",
+          "You've already submitted this feedback.",
         );
         setPosting(false);
         return;
       }
 
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name")
+        .eq("id", user.id)
+        .single();
+
+      const firstName = profile?.first_name ?? "Anonymous";
+
       const { error } = await supabase
-        .from("feature_wall")
+        .from("feedback_wall")
         .insert({
           title: title.trim(),
           description: description.trim(),
           content_hash: contentHash,
           user_id: user.id,
+          posted_by: firstName,
         });
 
       if (error) {
         console.error(error);
-        Alert.alert("Error", "Failed to post your feature request. Please try again.");
+        Alert.alert("Error", "Failed to submit your feedback. Please try again.");
         setPosting(false);
         return;
       }
 
+      triggerFeedbackWallRefresh();
       router.back();
     } catch {
       Alert.alert("Error", "Something went wrong. Please try again.");
@@ -96,13 +108,18 @@ export default function NewFeatureRequest() {
               <ArrowLeft size={22} color={colors.textPrimary} />
             </Pressable>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-              Request a new feature
+              Submit Feedback
             </Text>
             <View style={styles.headerSpacer} />
           </View>
 
           {/* Body */}
-          <View style={styles.body}>
+          <ScrollView
+            style={styles.body}
+            contentContainerStyle={styles.bodyContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <Text style={[styles.label, { color: colors.textSecondary }]}>
               Title
             </Text>
@@ -116,7 +133,7 @@ export default function NewFeatureRequest() {
                   borderRadius: radius.md,
                 },
               ]}
-              placeholder="e.g. Dark mode support"
+              placeholder="e.g. Improve scan accuracy"
               placeholderTextColor={colors.textTertiary}
               value={title}
               onChangeText={setTitle}
@@ -141,7 +158,7 @@ export default function NewFeatureRequest() {
                   borderRadius: radius.md,
                 },
               ]}
-              placeholder="Describe your feature request in more detail..."
+              placeholder="Describe your feedback in more detail..."
               placeholderTextColor={colors.textTertiary}
               value={description}
               onChangeText={setDescription}
@@ -152,26 +169,17 @@ export default function NewFeatureRequest() {
             <Text style={[styles.charCount, { color: colors.textTertiary }]}>
               {description.length}/200
             </Text>
-          </View>
 
-          {/* Bottom */}
-          <View
-            style={[
-              styles.bottomBar,
-              { borderTopColor: colors.divider, backgroundColor: colors.background },
-            ]}
-          >
-            <SafeAreaView edges={["bottom"]}>
-              <Button
-                onPress={handlePost}
-                fullWidth
-                disabled={!canPost}
-                loading={posting}
-              >
-                Post
-              </Button>
-            </SafeAreaView>
-          </View>
+            <Button
+              onPress={handlePost}
+              fullWidth
+              disabled={!canPost}
+              loading={posting}
+              style={styles.postButton}
+            >
+              Post
+            </Button>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedBackground>
@@ -207,7 +215,10 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  bodyContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   label: {
     fontFamily: "Poppins-Medium",
@@ -234,9 +245,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginTop: 8,
   },
-  bottomBar: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  postButton: {
+    marginTop: 16,
   },
 });

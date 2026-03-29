@@ -7,7 +7,6 @@
     "icon": "./assets/images/icons/default-icon.png",
     "scheme": "scamlyapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "io.scamly.app",
@@ -25,7 +24,6 @@
         "backgroundImage": "./assets/images/icons/android/android-icon-background.png",
         "monochromeImage": "./assets/images/icons/android/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "io.scamly.app",
       "playStoreUrl": "https://play.google.com/store/apps/details?id=io.scamly.app"
@@ -65,7 +63,10 @@
       "@sentry/react-native",
       [
         "expo-apple-authentication"
-      ]
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
