@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
   Shield,
+  ShieldCheck,
   TriangleAlert,
   X,
   XCircle,
@@ -291,7 +292,7 @@ export default function ClipboardScan() {
   function getSeverityIcon(severity: string) {
     switch (severity) {
       case "low":
-        return <TriangleAlert size={20} color={colors.success} />;
+        return <ShieldCheck size={20} color={colors.success} />;
       case "medium":
         return <TriangleAlert size={20} color={colors.warning} />;
       case "high":
