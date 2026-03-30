@@ -10,7 +10,8 @@ export default function TabsLayout() {
   const pathName = usePathname();
   const isChatDetail = pathName.includes("/chat/") && pathName !== "/chat";
   const isHomeSubPage = pathName.startsWith("/home/") && pathName !== "/home";
-  const hideTabBar = isChatDetail || isHomeSubPage;
+  const isScanSubPage = pathName.startsWith("/scan/") && pathName !== "/scan";
+  const hideTabBar = isChatDetail || isHomeSubPage || isScanSubPage;
   const insets = useSafeAreaInsets();
 
   const bottomPadding = Platform.OS === "ios" ? 24 : Math.max(12, insets.bottom + 6);

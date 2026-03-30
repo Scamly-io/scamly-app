@@ -2,7 +2,7 @@
  * Scan image Utility Module for Scamly
  *
  * Centralizes functions related to scanning images for scams.
- * Used within (tabs)/scan.tsx
+ * Used within (tabs)/scan/
  *  
  * Key principles:
  * - Handles uploading images to S3

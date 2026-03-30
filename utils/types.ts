@@ -4,7 +4,7 @@
 
 /**
  * Scan result schema
- * Uses: utils/ai/scan.ts, (tabs)/scan.tsx
+ * Uses: utils/ai/scan.ts, (tabs)/scan/
  */
 export interface ScanResult {
     is_scam: boolean;

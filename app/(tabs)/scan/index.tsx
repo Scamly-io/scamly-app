@@ -20,6 +20,7 @@ import { ScanResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
+import * as WebBrowser from "expo-web-browser";
 import { CheckCircle, ChevronDown, ChevronUp, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -27,6 +28,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -287,7 +289,6 @@ export default function Scan() {
   }
 
   async function convertImageToB64(imageUri: string): Promise<string> {
-
     const result = await ImageManipulator.manipulateAsync(
       imageUri,
       [{ resize: { height: 1024 } }], 
@@ -320,6 +321,7 @@ export default function Scan() {
 
     const imageB64 = await convertImageToB64(image.uri!);
     const scanStartTime = Date.now();
+    console.log(imageB64.slice(0, 100));
 
     try {
       const scanResults = await scanImage(imageB64);
@@ -576,15 +578,36 @@ export default function Scan() {
                   exiting={FadeOut.duration(250)}
                 >
                   <Card style={styles.uploadCard} pressable={false}>
-                    <TouchableOpacity
-                      style={styles.howToUseButton}
-                      onPress={() => setShowModal(true)}
-                    >
-                      <Info size={16} color={colors.accent} />
-                      <Text style={[styles.howToUseText, { color: colors.accent }]}>
-                        How to use this feature
-                      </Text>
-                    </TouchableOpacity>
+                    <View style={styles.topActionsRow}>
+                      <TouchableOpacity
+                        style={styles.howToUseButton}
+                        onPress={() => setShowModal(true)}
+                      >
+                        <Info size={16} color={colors.accent} />
+                        <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                          How to use this feature
+                        </Text>
+                      </TouchableOpacity>
+
+                      {Platform.OS === "ios" && (
+                        <TouchableOpacity
+                          style={styles.addShortcutButton}
+                          onPress={async () => {
+                            await WebBrowser.openBrowserAsync(
+                              "https://www.icloud.com/shortcuts/2411e0ed5d124973891cb2eff7b240a5",
+                              {
+                                presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+                                readerMode: false,
+                              }
+                            );
+                          }}
+                        >
+                          <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                            Add Shortcut
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
 
                     {image ? (
                       <View style={styles.uploadedImageContainer}>
@@ -1009,12 +1032,20 @@ const styles = StyleSheet.create({
   uploadCard: {
     marginBottom: 16,
   },
+  topActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
   howToUseButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     gap: 8,
-    marginBottom: 16,
+  },
+  addShortcutButton: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   howToUseText: {
     fontFamily: "Poppins-Medium",
