@@ -1,6 +1,6 @@
 import Button from "@/components/Button";
 import Card from "@/components/Card";
-import ShimmerRow from "@/components/ShimmerRow";
+import ShimmerText from "@/components/ShimmerText";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
@@ -354,9 +354,111 @@ export default function ClipboardScan() {
                 <View style={styles.scanningTextContainer}>
                   {scanPhase === "scanning" && (
                     <View>
-                      <ShimmerRow text={stageTexts[0]} isActive={scanStage === 0} isVisible={true} />
-                      <ShimmerRow text={stageTexts[1]} isActive={scanStage === 1} isVisible={scanStage >= 1} />
-                      <ShimmerRow text={stageTexts[2]} isActive={scanStage === 2} isVisible={scanStage >= 2} />
+                      <View style={{ marginBottom: 6 }}>
+                        {scanStage === 0 ? (
+                          <ShimmerText
+                            size="sm"
+                            bold={false}
+                            duration={1.4}
+                            containerStyle={{ alignItems: "flex-start" }}
+                            style={{ fontFamily: "Poppins-Medium", textAlign: "left" }}
+                            colors={{
+                              light: {
+                                text: colors.textSecondary,
+                                shimmer: {
+                                  start: colors.textSecondary,
+                                  middle: colors.accentMuted,
+                                  end: colors.textSecondary,
+                                },
+                              },
+                              dark: {
+                                text: colors.textSecondary,
+                                shimmer: {
+                                  start: colors.textSecondary,
+                                  middle: colors.accentMuted,
+                                  end: colors.textSecondary,
+                                },
+                              },
+                            }}
+                          >
+                            {stageTexts[0]}
+                          </ShimmerText>
+                        ) : (
+                          <Text style={[styles.scanningStageText, { color: colors.textPrimary }]}>
+                            {stageTexts[0]}
+                          </Text>
+                        )}
+                      </View>
+
+                      {scanStage >= 1 && (
+                        <View style={{ marginBottom: 6 }}>
+                          {scanStage === 1 ? (
+                            <ShimmerText
+                              size="sm"
+                              bold={false}
+                              duration={1.4}
+                              containerStyle={{ alignItems: "flex-start" }}
+                              style={{ fontFamily: "Poppins-Medium", textAlign: "left" }}
+                              colors={{
+                                light: {
+                                  text: colors.textSecondary,
+                                  shimmer: {
+                                    start: colors.textSecondary,
+                                    middle: colors.accentMuted,
+                                    end: colors.textSecondary,
+                                  },
+                                },
+                                dark: {
+                                  text: colors.textSecondary,
+                                  shimmer: {
+                                    start: colors.textSecondary,
+                                    middle: colors.accentMuted,
+                                    end: colors.textSecondary,
+                                  },
+                                },
+                              }}
+                            >
+                              {stageTexts[1]}
+                            </ShimmerText>
+                          ) : (
+                            <Text style={[styles.scanningStageText, { color: colors.textPrimary }]}>
+                              {stageTexts[1]}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
+                      {scanStage >= 2 && (
+                        <View style={{ marginBottom: 6 }}>
+                          <ShimmerText
+                            size="sm"
+                            bold={false}
+                            duration={1.4}
+                            containerStyle={{ alignItems: "flex-start" }}
+                            style={{ fontFamily: "Poppins-Medium", textAlign: "left" }}
+                            colors={{
+                              light: {
+                                text: colors.textSecondary,
+                                shimmer: {
+                                  start: colors.textSecondary,
+                                  middle: colors.accentMuted,
+                                  end: colors.textSecondary,
+                                },
+                              },
+                              dark: {
+                                text: colors.textSecondary,
+                                shimmer: {
+                                  start: colors.textSecondary,
+                                  middle: colors.accentMuted,
+                                  end: colors.textSecondary,
+                                },
+                              },
+                            }}
+                          >
+                            {stageTexts[2]}
+                          </ShimmerText>
+                        </View>
+                      )}
                     </View>
                   )}
 
@@ -577,6 +679,11 @@ const styles = StyleSheet.create({
   scanningTextContainer: {
     flex: 1,
     paddingTop: 2,
+  },
+  scanningStageText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+    lineHeight: 20,
   },
   scanCompleteText: {
     fontFamily: "Poppins-SemiBold",
