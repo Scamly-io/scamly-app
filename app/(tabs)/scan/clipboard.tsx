@@ -13,6 +13,7 @@ import {
   trackUserVisibleError,
   type ResultCategory,
 } from "@/utils/analytics";
+import { getIsPremium } from "@/utils/access";
 import { promptReview } from "@/utils/review";
 import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
@@ -79,6 +80,29 @@ export default function ClipboardScan() {
   const hasTrackedResultView = useRef<boolean>(false);
   const stageTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const scanInFlightRef = useRef<boolean>(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const checkAccess = async () => {
+        const premium = await getIsPremium();
+        if (active && !premium) {
+          router.back();
+          setTimeout(() => {
+            Alert.alert(
+              "Premium Required",
+              "Quick Scan is only available to Scamly Premium subscribers. Upgrade to unlock instant scanning.",
+              [{ text: "OK" }]
+            );
+          }, 0);
+        }
+      };
+      checkAccess();
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
 
   useEffect(() => {
     if (scanPhase === "scanning") {

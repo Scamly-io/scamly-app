@@ -153,6 +153,7 @@ export default function ChatIndex() {
         setIsFreePlan(false);
         setPlanLoading(false);
         await fetchChats();
+        router.push("/subscription-success");
       }
     } catch (error) {
       const message = trackRevenueCatError("present_paywall_chat", error);

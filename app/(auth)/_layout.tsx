@@ -11,6 +11,7 @@ export default function AuthLayout() {
         <Stack.Screen name="signup-confirm" options={{ title: "Confirm" }} />
         <Stack.Screen name="account-deleted" options={{ title: "Account Deleted" }} />
         <Stack.Screen name="onboarding" options={{ title: "Onboarding", gestureEnabled: false }} />
+        <Stack.Screen name="subscription-success" options={{ title: "Subscription", gestureEnabled: false }} />
       </Stack>
     </SignUpProvider>
   );

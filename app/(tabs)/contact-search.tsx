@@ -10,6 +10,7 @@ import { supabase } from "@/utils/supabase";
 import { SearchResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
+import { router } from "expo-router";
 import { Check, ContactRound, Copy, ExternalLink, Globe, Info, Phone, Search as SearchIcon } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
@@ -141,6 +142,7 @@ export default function PhoneSearch() {
       if (didUnlockEntitlement) {
         setIsFreePlan(false);
         setPlanLoading(false);
+        router.push("/subscription-success");
       }
     } catch (error) {
       const message = trackRevenueCatError("present_paywall_contact_search", error);

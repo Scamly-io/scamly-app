@@ -539,7 +539,7 @@ export default function Profile() {
           await AsyncStorage.removeItem(EARLY_INTEREST_STORAGE_KEY);
           await AsyncStorage.removeItem("promoCode");
         }
-        Alert.alert("Success", "Your premium subscription is now active.");
+        router.push("/subscription-success");
       }
     } catch (error) {
       const message = trackRevenueCatError("present_paywall", error);

@@ -6,19 +6,22 @@ import { useTheme } from "@/theme";
 import { parseDob, toISODate } from "@/utils/date";
 import { getPublicIp } from "@/utils/network";
 import { presentScamlyPaywall } from "@/utils/revenuecat";
+import { PAYWALL_RESULT } from "react-native-purchases-ui";
 import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { onboardingProfileSchema } from "@/utils/validation/auth";
 import type { User } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -36,6 +39,8 @@ export default function Onboarding() {
   const router = useRouter();
   const { user, checkOnboarding } = useAuth();
 
+  const [firstName, setFirstName] = useState("");
+  const [showFirstNameField, setShowFirstNameField] = useState<boolean | null>(null);
   const [dobText, setDobText] = useState("");
   const [country, setCountry] = useState("");
   const [gender, setGender] = useState("");
@@ -43,6 +48,26 @@ export default function Onboarding() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const checkProfile = async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("first_name")
+          .eq("id", user.id)
+          .single();
+
+        setShowFirstNameField(!data?.first_name);
+      } catch {
+        setShowFirstNameField(true);
+      }
+    };
+
+    checkProfile();
+  }, [user]);
 
   const clearError = (field: string) => {
     if (errors[field]) {
@@ -61,6 +86,15 @@ export default function Onboarding() {
   const handleComplete = async () => {
     let dobIso: string | undefined;
     const fieldErrors: Record<string, string> = {};
+
+    if (showFirstNameField) {
+      const trimmed = firstName.trim();
+      if (!trimmed) {
+        fieldErrors.firstName = "First name is required";
+      } else if (trimmed.length > 50) {
+        fieldErrors.firstName = "First name is too long";
+      }
+    }
 
     if (dobText && dobText.length < 10) {
       fieldErrors.dob = "Please enter a complete date (DD/MM/YYYY)";
@@ -108,6 +142,7 @@ export default function Onboarding() {
         country: string;
         referral_source: string;
         onboarding_completed: boolean;
+        first_name?: string;
         dob?: string;
         gender?: string;
         ip_address?: string;
@@ -117,6 +152,9 @@ export default function Onboarding() {
         onboarding_completed: true,
       };
 
+      if (showFirstNameField && firstName.trim()) {
+        profileData.first_name = firstName.trim();
+      }
       if (dobIso) {
         profileData.dob = dobIso;
       }
@@ -154,13 +192,21 @@ export default function Onboarding() {
         }
       }
 
+      let didSubscribe = false;
       try {
-        await presentScamlyPaywall();
+        const paywallResult = await presentScamlyPaywall();
+        didSubscribe =
+          paywallResult === PAYWALL_RESULT.PURCHASED ||
+          paywallResult === PAYWALL_RESULT.RESTORED;
       } catch {
-        // Non-blocking — proceed to home even if paywall fails to present
+        // Non-blocking — proceed even if paywall fails to present
       }
 
-      router.replace("/home");
+      if (didSubscribe) {
+        router.replace("/subscription-success");
+      } else {
+        router.replace("/home");
+      }
     } catch (error) {
       Alert.alert(
         "Error",
@@ -174,6 +220,16 @@ export default function Onboarding() {
       setLoading(false);
     }
   };
+
+  if (showFirstNameField === null) {
+    return (
+      <ThemedBackground>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      </ThemedBackground>
+    );
+  }
 
   return (
     <ThemedBackground>
@@ -207,6 +263,9 @@ export default function Onboarding() {
               </Text>
 
               <ProfileFormFields
+                showFirstName={showFirstNameField}
+                firstName={firstName}
+                onFirstNameChange={setFirstName}
                 dobText={dobText}
                 onDobTextChange={setDobText}
                 country={country}
@@ -239,6 +298,11 @@ export default function Onboarding() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   safeArea: {
     flex: 1,
   },

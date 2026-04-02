@@ -1,6 +1,7 @@
 import Button from "@/components/Button";
 import Card from "@/components/Card";
 import ShimmerText from "@/components/ShimmerText";
+import ShortcutSetupModal from "@/components/ShortcutSetupModal";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
@@ -20,7 +21,7 @@ import { ScanResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import * as WebBrowser from "expo-web-browser";
+import { router } from "expo-router";
 import { CheckCircle, ChevronDown, ChevronUp, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -122,6 +123,7 @@ export default function Scan() {
   const [scanQuotaResetDate, setScanQuotaResetDate] = useState<string | null>(null);
   const [scanFailureWarning, setScanFailureWarning] = useState<string | null>(null);
   const [expandedDetections, setExpandedDetections] = useState<Set<number>>(new Set());
+  const [showShortcutSetup, setShowShortcutSetup] = useState(false);
 
   const [scanPhase, setScanPhase] = useState<ScanPhase>("idle");
   const [scanStage, setScanStage] = useState<number>(0);
@@ -527,6 +529,11 @@ export default function Scan() {
   const scanButtonDisabled = !image || loading || !user || scanQuotaReached || scanQuotaJustReached;
 
   return (
+    <>
+    <ShortcutSetupModal
+      visible={showShortcutSetup}
+      onClose={() => setShowShortcutSetup(false)}
+    />
     <ThemedBackground>
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <ScrollView
@@ -589,15 +596,7 @@ export default function Scan() {
                       {Platform.OS === "ios" && (
                         <TouchableOpacity
                           style={styles.addShortcutButton}
-                          onPress={async () => {
-                            await WebBrowser.openBrowserAsync(
-                              "https://www.icloud.com/shortcuts/2411e0ed5d124973891cb2eff7b240a5",
-                              {
-                                presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-                                readerMode: false,
-                              }
-                            );
-                          }}
+                          onPress={() => setShowShortcutSetup(true)}
                         >
                           <Text style={[styles.howToUseText, { color: colors.accent }]}>
                             Add Shortcut
@@ -1065,6 +1064,7 @@ export default function Scan() {
         </Modal>
       </SafeAreaView>
     </ThemedBackground>
+    </>
   );
 }
 
