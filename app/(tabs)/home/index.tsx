@@ -1,6 +1,7 @@
 import ArticleTile from "@/components/ArticleTile";
 import Button from "@/components/Button";
 import Card from "@/components/Card";
+import FeedbackWallModal from "@/components/FeedbackWallModal";
 import QuickTipTile from "@/components/QuickTipTile";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
@@ -58,6 +59,7 @@ export default function Home() {
   const [quickTips, setQuickTips] = useState<Article[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [feedbackWallVisible, setFeedbackWallVisible] = useState(false);
 
   function calculateReadTime(length: number): number {
     return Math.max(1, Math.round(length / 1500));
@@ -463,7 +465,7 @@ export default function Home() {
           {/* Give Feedback */}
           <Animated.View entering={FadeInDown.duration(400).delay(550)}>
             <Button
-              onPress={() => router.push("/home/feedback/feedback-wall")}
+              onPress={() => setFeedbackWallVisible(true)}
               variant="secondary"
               icon={<MessageCirclePlus size={18} color={colors.accent} />}
             >
@@ -483,6 +485,10 @@ export default function Home() {
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
+      <FeedbackWallModal
+        visible={feedbackWallVisible}
+        onClose={() => setFeedbackWallVisible(false)}
+      />
     </ThemedBackground>
   );
 }

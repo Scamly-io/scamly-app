@@ -1,12 +1,11 @@
 import Button from "@/components/Button";
-import ThemedBackground from "@/components/ThemedBackground";
+import FeedbackDetailModal, { type FeedbackDetailItem } from "@/components/FeedbackDetailModal";
+import NewFeedbackItemModal from "@/components/NewFeedbackItemModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { getFeedbackWallRefreshSignal } from "@/utils/feedbackWallRefresh";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
-import { Image } from "expo-image";
-import { router } from "expo-router";
 import {
   ArrowDownUp,
   ChevronDown,
@@ -79,8 +78,6 @@ const REPORT_REASONS = [
 ] as const;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-const logo = require("@/assets/images/page-images/icon.png");
 
 function getInitials(name: string | null | undefined): string {
   if (!name) return "??";
@@ -241,7 +238,12 @@ function HeartButton({
   );
 }
 
-export default function FeedbackWall() {
+export type FeedbackWallModalProps = {
+  visible: boolean;
+  onClose: () => void;
+};
+
+export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModalProps) {
   const { colors, radius, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -263,6 +265,9 @@ export default function FeedbackWall() {
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
   const [reportReason, setReportReason] = useState<string | null>(null);
   const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [newFeedbackVisible, setNewFeedbackVisible] = useState(false);
+  const [detailFeedback, setDetailFeedback] = useState<FeedbackDetailItem | null>(null);
+  const [focusCommentOnDetailOpen, setFocusCommentOnDetailOpen] = useState(false);
 
   const closeReportModal = () => {
     setReportTargetId(null);
@@ -384,6 +389,7 @@ export default function FeedbackWall() {
   }, [filter, fetchAllFeedbacks, fetchMyFeedbacks]);
 
   useEffect(() => {
+    if (!visible) return;
     let active = true;
     (async () => {
       if (!hasLoadedOnceRef.current) {
@@ -398,15 +404,16 @@ export default function FeedbackWall() {
     return () => {
       active = false;
     };
-  }, [refetchForCurrentFilter]);
+  }, [refetchForCurrentFilter, visible]);
 
   useFocusEffect(
     useCallback(() => {
+      if (!visible) return;
       const signal = getFeedbackWallRefreshSignal();
       if (signal === lastRefreshSignalRef.current) return;
       lastRefreshSignalRef.current = signal;
       void refetchForCurrentFilter();
-    }, [refetchForCurrentFilter]),
+    }, [visible, refetchForCurrentFilter]),
   );
 
   const handleLoadMore = async () => {
@@ -498,24 +505,20 @@ export default function FeedbackWall() {
     FILTER_OPTIONS.find((f) => f.value === filter)?.label ?? "All Feedback";
 
   const navigateToDetail = (item: feedbackRequest, focusComment = false) => {
-    router.push({
-      pathname: "/home/feedback/feedback-detail",
-      params: {
-        id: item.id,
-        title: item.title ?? item.content ?? "",
-        description: item.description ?? "",
-        posted_by: item.posted_by ?? "",
-        created_at: item.created_at,
-        vote_count: String(item.vote_count),
-        comment_count: String(item.comment_count),
-        user_has_voted: String(item.user_has_voted),
-        ...(focusComment && { focusComment: "true" }),
-      },
+    setDetailFeedback({
+      id: item.id,
+      title: item.title ?? item.content ?? "",
+      description: item.description ?? "",
+      posted_by: item.posted_by ?? "",
+      created_at: item.created_at,
+      vote_count: item.vote_count,
+      user_has_voted: item.user_has_voted,
     });
+    setFocusCommentOnDetailOpen(focusComment);
   };
 
   const ListHeader = () => (
-    <View style={{ paddingTop: insets.top + 52 }}>
+    <View style={{ paddingTop: 8 }}>
       <View style={styles.controlsRow}>
         <NativeMenu
           trigger={
@@ -564,7 +567,7 @@ export default function FeedbackWall() {
       </View>
 
       <Pressable
-        onPress={() => router.push("/home/feedback/new-feedback-item")}
+        onPress={() => setNewFeedbackVisible(true)}
         style={[
           styles.feedbackBanner,
           {
@@ -725,89 +728,104 @@ export default function FeedbackWall() {
   };
 
   return (
-    <ThemedBackground>
-      {/* Fixed header: logo + close */}
-      <View
-        style={[
-          styles.fixedHeader,
-          { paddingTop: insets.top + 8, backgroundColor: colors.background },
-        ]}
-      >
-        <Image source={logo} style={styles.logo} contentFit="contain" />
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={8}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View
           style={[
-            styles.closeButton,
+            styles.header,
             {
-              backgroundColor: isDark ? colors.accentMuted : colors.surface,
-              boxShadow: isDark
-                ? "0px 2px 8px rgba(0, 0, 0, 0.35)"
-                : "0px 2px 8px rgba(0, 0, 0, 0.12)",
+              borderBottomColor: colors.divider,
+              backgroundColor: colors.background,
             },
           ]}
         >
-          <X size={22} color={colors.textPrimary} />
-        </Pressable>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+            Feedback
+          </Text>
+          <Pressable onPress={onClose} hitSlop={8} style={styles.headerAction}>
+            <X size={20} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={colors.accent} />
+          </View>
+        ) : (
+          <FlatList
+            data={sortedFeedbacks}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            ListHeaderComponent={ListHeader}
+            ListFooterComponent={renderFooter}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text
+                  style={[styles.emptyText, { color: colors.textSecondary }]}
+                >
+                  {filter === "mine"
+                    ? "You haven't submitted any feedback yet."
+                    : "No feedback yet. Be the first!"}
+                </Text>
+              </View>
+            }
+            contentContainerStyle={styles.listContent}
+            style={styles.list}
+            showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            nestedScrollEnabled
+          />
+        )}
+
+        {showPill && (
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(200)}
+            style={[
+              styles.floatingPill,
+              {
+                bottom: insets.bottom + 18,
+                backgroundColor: colors.accent,
+                borderRadius: radius.full,
+                boxShadow: `0px 4px 20px ${isDark ? "rgba(167, 139, 250, 0.5)" : "rgba(124, 92, 252, 0.4)"}`,
+              },
+            ]}
+          >
+            <Pressable
+              onPress={() => setNewFeedbackVisible(true)}
+              style={styles.floatingPillInner}
+            >
+              <CirclePlus size={20} color={colors.textInverse} />
+              <Text
+                style={[styles.floatingPillText, { color: colors.textInverse }]}
+              >
+                Give Feedback
+              </Text>
+            </Pressable>
+          </Animated.View>
+        )}
       </View>
 
-      {loading ? (
-        <View style={[styles.centered, { paddingTop: insets.top + 80 }]}>
-          <ActivityIndicator size="large" color={colors.accent} />
-        </View>
-      ) : (
-        <FlatList
-          data={sortedFeedbacks}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          ListHeaderComponent={ListHeader}
-          ListFooterComponent={renderFooter}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text
-                style={[styles.emptyText, { color: colors.textSecondary }]}
-              >
-                {filter === "mine"
-                  ? "You haven't submitted any feedback yet."
-                  : "No feedback yet. Be the first!"}
-              </Text>
-            </View>
-          }
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-        />
-      )}
+      <FeedbackDetailModal
+        visible={detailFeedback !== null}
+        item={detailFeedback}
+        focusComment={focusCommentOnDetailOpen}
+        onClose={() => {
+          setDetailFeedback(null);
+          setFocusCommentOnDetailOpen(false);
+        }}
+      />
 
-      {/* Floating pill */}
-      {showPill && (
-        <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(200)}
-          style={[
-            styles.floatingPill,
-            {
-              bottom: insets.bottom + 24,
-              backgroundColor: colors.accent,
-              borderRadius: radius.full,
-              boxShadow: `0px 4px 20px ${isDark ? "rgba(167, 139, 250, 0.5)" : "rgba(124, 92, 252, 0.4)"}`,
-            },
-          ]}
-        >
-          <Pressable
-            onPress={() => router.push("/home/feedback/new-feedback-item")}
-            style={styles.floatingPillInner}
-          >
-            <CirclePlus size={20} color={colors.textInverse} />
-            <Text
-              style={[styles.floatingPillText, { color: colors.textInverse }]}
-            >
-              Give Feedback
-            </Text>
-          </Pressable>
-        </Animated.View>
-      )}
+      <NewFeedbackItemModal
+        visible={newFeedbackVisible}
+        onClose={() => setNewFeedbackVisible(false)}
+      />
 
       {/* Report modal */}
       <Modal
@@ -892,34 +910,34 @@ export default function FeedbackWall() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ThemedBackground>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  fixedHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
+  root: {
+    flex: 1,
+  },
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  logo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: "Poppins-SemiBold",
   },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 999,
+  headerAction: {
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
+  },
+  list: {
+    flex: 1,
   },
   centered: {
     flex: 1,

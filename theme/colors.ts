@@ -18,8 +18,8 @@ export const colors = {
     textInverse: '#FFFFFF',
     
     // Accent
-    accent: '#7C5CFC',
-    accentSecondary: '#A78BFA',
+    accent: '#5022f6',
+    accentSecondary: '#7C5CFC',
     accentMuted: 'rgba(124, 92, 252, 0.12)',
     accentLight: 'rgba(124, 92, 252, 0.08)',
     

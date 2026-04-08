@@ -3,6 +3,7 @@ import { ThemeProvider, useTheme } from "@/theme";
 import { initializePostHog, initializeSessionTracking } from "@/utils/analytics";
 import { initializeRevenueCat, trackRevenueCatError } from "@/utils/revenuecat";
 import { initializeSentry } from "@/utils/sentry";
+import ThemedBackground from "@/components/ThemedBackground";
 import * as Sentry from "@sentry/react-native";
 import { useFonts } from "expo-font";
 import { Slot } from "expo-router";
@@ -42,7 +43,7 @@ function AnalyticsInitializer() {
 }
 
 function AppContent() {
-  const { isDark, colors } = useTheme();
+  const { isDark } = useTheme();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -52,11 +53,11 @@ function AppContent() {
   }, [user?.id]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <ThemedBackground>
       <StatusBar style={isDark ? "light" : "dark"} />
       <AnalyticsInitializer />
       <Slot />
-    </View>
+    </ThemedBackground>
   );
 }
 

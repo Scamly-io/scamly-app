@@ -1,16 +1,15 @@
 import Button from "@/components/Button";
-import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { triggerFeedbackWallRefresh } from "@/utils/feedbackWallRefresh";
 import { supabase } from "@/utils/supabase";
 import * as Crypto from "expo-crypto";
-import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
 import React, { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -21,7 +20,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function NewFeedbackItem() {
+type NewFeedbackItemModalProps = {
+  visible: boolean;
+  onClose: () => void;
+};
+
+export default function NewFeedbackItemModal({
+  visible,
+  onClose,
+}: NewFeedbackItemModalProps) {
   const { colors, radius } = useTheme();
   const { user } = useAuth();
   const [title, setTitle] = useState("");
@@ -29,6 +36,11 @@ export default function NewFeedbackItem() {
   const [posting, setPosting] = useState(false);
 
   const canPost = title.trim().length > 0 && description.trim().length > 0;
+
+  const handleClose = () => {
+    if (posting) return;
+    onClose();
+  };
 
   const handlePost = async () => {
     if (!user || !canPost) return;
@@ -84,7 +96,10 @@ export default function NewFeedbackItem() {
       }
 
       triggerFeedbackWallRefresh();
-      router.back();
+      setTitle("");
+      setDescription("");
+      setPosting(false);
+      onClose();
     } catch {
       Alert.alert("Error", "Something went wrong. Please try again.");
       setPosting(false);
@@ -92,16 +107,20 @@ export default function NewFeedbackItem() {
   };
 
   return (
-    <ThemedBackground>
-      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.flex}
         >
-          {/* Header */}
           <View style={[styles.header, { borderBottomColor: colors.divider }]}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={handleClose}
               hitSlop={8}
               style={styles.backButton}
             >
@@ -113,7 +132,6 @@ export default function NewFeedbackItem() {
             <View style={styles.headerSpacer} />
           </View>
 
-          {/* Body */}
           <ScrollView
             style={styles.body}
             contentContainerStyle={styles.bodyContent}
@@ -182,7 +200,7 @@ export default function NewFeedbackItem() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </ThemedBackground>
+    </Modal>
   );
 }
 

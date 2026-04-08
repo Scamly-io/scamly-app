@@ -7,7 +7,6 @@ export default function HomeLayout() {
       <Stack.Screen name="profile" />
       <Stack.Screen name="privacy-policy" />
       <Stack.Screen name="terms" />
-      <Stack.Screen name="feedback" />
     </Stack>
   );
 }
