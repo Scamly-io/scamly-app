@@ -359,6 +359,8 @@ export default function Scan() {
         if (err.stage === "quota_exceeded") {
           handlePageMount({ forceRefresh: true });
           Alert.alert("Scan Limit Reached", "You've reached your monthly scan limit. Please upgrade or wait for your quota to reset.");
+        } else if (err.stage === "auth") {
+          Alert.alert("Sign in required", "Please sign in to scan images.");
         } else if (err.stage === "upload") {
           Alert.alert("Upload Failed", "We couldn't upload your image. Please check your connection and try again.");
         } else {

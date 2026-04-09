@@ -9,8 +9,8 @@
  */
 
 import * as Application from 'expo-application';
-import { AppState, AppStateStatus, Platform } from 'react-native';
 import { PostHog } from 'posthog-react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 
 // ============================================================================
 // Types
@@ -21,7 +21,14 @@ export type UserPlan = 'free' | 'trial' | 'paid';
 export type ScanType = 'image' | 'screenshot';
 export type ScanSource = 'camera' | 'upload';
 export type ResultCategory = 'scam' | 'likely_scam' | 'unsure' | 'safe';
-export type ScanStage = 'upload' | 'processing' | 'response';
+/** Stages reported when a scan fails (edge function, client, or quota). */
+export type ScanStage =
+  | 'upload'
+  | 'processing'
+  | 'validation'
+  | 'quota_exceeded'
+  | 'auth'
+  | 'rate_limit';
 
 export type FeatureName =
   | 'home'
@@ -351,7 +358,7 @@ export function trackScanCompleted(
 
 /**
  * Track when a scan fails at any stage.
- * Fired on upload, processing, or response errors.
+ * Fired on auth, upload, processing, response, or quota errors.
  */
 export function trackScanFailed(errorType: string, stage: ScanStage): void {
   captureEvent('scan_failed', {

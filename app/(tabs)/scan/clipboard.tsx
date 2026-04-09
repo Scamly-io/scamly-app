@@ -261,6 +261,8 @@ export default function ClipboardScan() {
             "Scan Limit Reached",
             "You've reached your monthly scan limit. Please upgrade or wait for your quota to reset."
           );
+        } else if (err.stage === "auth") {
+          Alert.alert("Sign in required", "Please sign in to scan images.");
         } else if (err.stage === "upload") {
           Alert.alert(
             "Upload Failed",
