@@ -2,6 +2,8 @@ import Button from "@/components/Button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { triggerFeedbackWallRefresh } from "@/utils/feedbackWallRefresh";
+import { trackFeedbackPostSubmitted } from "@/utils/analytics";
+import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import * as Crypto from "expo-crypto";
 import { ArrowLeft } from "lucide-react-native";
@@ -90,17 +92,28 @@ export default function NewFeedbackItemModal({
 
       if (error) {
         console.error(error);
+        captureError(error, {
+          feature: "feedback_wall",
+          action: "submit_feedback",
+          severity: "critical",
+        });
         Alert.alert("Error", "Failed to submit your feedback. Please try again.");
         setPosting(false);
         return;
       }
 
+      trackFeedbackPostSubmitted();
       triggerFeedbackWallRefresh();
       setTitle("");
       setDescription("");
       setPosting(false);
       onClose();
-    } catch {
+    } catch (err) {
+      captureError(err, {
+        feature: "feedback_wall",
+        action: "submit_feedback",
+        severity: "critical",
+      });
       Alert.alert("Error", "Something went wrong. Please try again.");
       setPosting(false);
     }

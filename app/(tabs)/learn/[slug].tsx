@@ -4,8 +4,10 @@ import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/access";
 import {
   trackArticleEngaged,
+  trackArticleScrollDepthReached,
   trackArticleViewed,
   trackUserVisibleError,
+  type ArticleScrollDepthBand,
 } from "@/utils/analytics";
 import { captureDataFetchError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
@@ -54,6 +56,15 @@ export default function ArticleDetail() {
   const maxScrollPercent = useRef<number>(0);
   const hasTrackedEngagement = useRef<boolean>(false);
   const hasTrackedView = useRef<boolean>(false);
+  const depthBandsSent = useRef<Set<ArticleScrollDepthBand>>(new Set());
+
+  useEffect(() => {
+    hasTrackedView.current = false;
+    hasTrackedEngagement.current = false;
+    maxScrollPercent.current = 0;
+    depthBandsSent.current.clear();
+    articleViewStartTime.current = 0;
+  }, [slug]);
 
   /**
    * Check if engagement criteria are met and fire event if so.
@@ -89,6 +100,23 @@ export default function ArticleDetail() {
         // Check engagement when user scrolls past threshold
         if (scrollPercent >= ENGAGEMENT_MIN_SCROLL_PERCENT) {
           checkAndTrackEngagement();
+        }
+      }
+
+      if (article && articleViewStartTime.current > 0) {
+        const pct = Math.round(scrollPercent * 100);
+        const bands: ArticleScrollDepthBand[] = [25, 50, 75, 100];
+        const elapsedSec = Math.round(
+          (Date.now() - articleViewStartTime.current) / 1000,
+        );
+        for (const band of bands) {
+          if (
+            pct >= band &&
+            !depthBandsSent.current.has(band)
+          ) {
+            depthBandsSent.current.add(band);
+            trackArticleScrollDepthReached(article.id, band, elapsedSec);
+          }
         }
       }
     }

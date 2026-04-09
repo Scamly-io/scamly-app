@@ -40,6 +40,7 @@ All methods ultimately create a Supabase session (access + refresh tokens) store
 ### Other mechanisms
 
 - **Explicit sign-out:** `AuthContext.signOut()` (used from places like home) or `supabase.auth.signOut()` (e.g. after account deletion in `profile.tsx`). Both trigger Supabase’s `SIGNED_OUT` flow; the context clears analytics/Sentry user context.
+- **Account deletion (analytics):** When the user confirms deletion in `app/(tabs)/home/profile.tsx`, PostHog receives `account_deletion_confirmed` immediately, then `account_deletion_succeeded` after the `delete-account` edge function succeeds (before sign-out), or `account_deletion_failed` with `error_stage` `edge_function` / `unexpected` on failure. Sentry uses `feature: "profile"` and actions `delete_account` / `delete_account_sign_out` for errors.
 - **Session restore:** No separate “method”; persisted session is rehydrated by Supabase and surfaced through `onAuthStateChange` (see below).
 
 ---

@@ -307,6 +307,25 @@ trackArticleEngaged('how-to-spot-phishing', 125);
 
 ---
 
+#### 7b. Article scroll depth
+
+**Event:** `article_scroll_depth_reached`
+
+**Function:** `trackArticleScrollDepthReached(articleId, depthPercent, timeOnPageSeconds)`
+
+**When:** User scrolls to or past **25%, 50%, 75%, or 100%** of article height (each band once per article view).
+
+**Location:** `app/(tabs)/learn/[slug].tsx`
+
+**Properties:**
+- `article_id`
+- `depth_percent`: `25` | `50` | `75` | `100`
+- `time_on_page_seconds`
+
+**Purpose:** Distinguish opens from reading progress; compare articles by depth without waiting for full `article_engaged` criteria.
+
+---
+
 ### Feature Discovery Events
 
 #### 8. Feature Opened
@@ -325,7 +344,7 @@ trackArticleEngaged('how-to-spot-phishing', 125);
 - `app/(tabs)/learn/index.tsx`
 
 **Properties:**
-- `feature_name`: `'home'` | `'scan'` | `'chat'` | `'contact_search'` | `'learning_center'` | `'article'` | `'settings'` | `'history'`
+- `feature_name`: `'home'` | `'scan'` | `'chat'` | `'contact_search'` | `'learning_center'` | `'article'` | `'settings'` | `'history'` | `'feedback_wall'`
 
 **Usage:**
 ```typescript
@@ -333,6 +352,112 @@ trackFeatureOpened('scan');
 ```
 
 **Purpose:** Understand feature usage patterns and navigation flows
+
+**Settings / profile:** `trackFeatureOpened('settings')` runs when the profile screen is focused (`app/(tabs)/home/profile.tsx`).
+
+---
+
+### Paywall flow events (RevenueCat UI)
+
+These complement **RevenueCat → PostHog** subscription events (`rc_trial_started_event`, `rc_initial_purchase_event`, etc.). Use funnels that start at `paywall_flow_started` and end at an `rc_*` event (see dashboards below).
+
+#### Paywall flow started
+
+**Event:** `paywall_flow_started`
+
+**When:** Immediately before `RevenueCatUI.presentPaywall` / `presentPaywallIfNeeded`.
+
+**Properties:**
+- `trigger`: `onboarding` | `profile_upgrade` | `chat_locked` | `contact_search_locked`
+- `presentation`: `always` | `if_needed`
+- `offering_key`: `default` or offering id string (e.g. `early_interest`)
+
+#### Paywall flow finished
+
+**Event:** `paywall_flow_finished`
+
+**When:** After the paywall UI returns, or on thrown error before return.
+
+**Properties:**
+- `trigger`, `presentation`, `offering_key` (same as started)
+- `result`: string form of `PAYWALL_RESULT` (e.g. `PURCHASED`, `CANCELLED`, `NOT_PRESENTED`) or `error`
+- `did_unlock_entitlement`: boolean
+
+**Implementation:** `utils/revenuecat.ts` — pass `{ trigger }` as the second argument to `presentScamlyPaywall` / `presentScamlyPaywallIfNeeded`.
+
+---
+
+### Feedback wall events
+
+| Event | When | Key properties |
+|-------|------|----------------|
+| `feedback_wall_opened` | Modal becomes visible | `entry_point` (default `home`); also fires `feature_opened` with `feedback_wall` |
+| `feedback_wall_composer_opened` | User starts a new post | — |
+| `feedback_post_submitted` | Post saved successfully | — |
+| `feedback_item_opened` | User opens a thread | `feedback_id` |
+| `feedback_vote` | Like/unlike succeeds (list or detail) | `feedback_id`, `action`: `like` \| `unlike` |
+| `feedback_comment_posted` | Comment saved | `feedback_id` |
+| `feedback_report_submitted` | Report saved | `feedback_id`, `reason_key` (e.g. `spam`, `fraud`, …) |
+
+**Locations:** `components/FeedbackWallModal.tsx`, `components/NewFeedbackItemModal.tsx`, `components/FeedbackDetailModal.tsx`
+
+---
+
+### Quick Scan (iOS Shortcut) events
+
+| Event | When | Properties |
+|-------|------|------------|
+| `shortcut_setup_modal_opened` | Shortcut setup modal shown | `entry`: `subscription_success` \| `scan_tab` |
+| `shortcut_install_link_opened` | User taps “Get Shortcut” / install link | `entry` (same) |
+
+**Locations:** `components/ShortcutSetupModal.tsx` (required `entry` prop); callers: `app/(auth)/subscription-success.tsx`, `app/(tabs)/scan/index.tsx`.
+
+---
+
+### Account management events
+
+| Event | When | Properties |
+|-------|------|------------|
+| `account_deletion_confirmed` | User passes confirmation phrase and deletion runs | — |
+| `account_deletion_succeeded` | `delete-account` edge function succeeds | — |
+| `account_deletion_failed` | Edge function or unexpected error | `error_stage`: `edge_function` \| `unexpected` |
+
+**Location:** `app/(tabs)/home/profile.tsx` — events are sent **before** `resetUser()` on success so they are not dropped by logout.
+
+---
+
+### Returning users and retention
+
+PostHog **Retention** insights work on any recurring event. Recommended:
+
+- **Weekly / monthly returning users:** retention where **return criterion** is `session_started` or any `feature_opened` (break down by `feature_name` if needed).
+- **Cohort by signup:** first event `signup_completed` (pre-auth), return `session_started` or `identify`-derived activity.
+
+Person properties from `identifyUser` (`plan`, `platform`, `app_version`) can be used as cohort filters.
+
+---
+
+### PostHog dashboards (RevenueCat + paywall)
+
+A pinned dashboard **“Scamly — Product & monetization”** includes:
+
+- Funnel: `paywall_flow_started` → `rc_trial_started_event` (14-day conversion window)
+- Funnel: `paywall_flow_started` → `rc_initial_purchase_event` (14-day window)
+- Trend: `paywall_flow_finished` broken down by event property `trigger`
+
+**Dashboard:** [Scamly — Product & monetization](https://us.posthog.com/project/282849/dashboard/1446506) (project `282849`).
+
+Add your own trends for `feature_opened`, `article_viewed`, `feedback_*`, and `shortcut_*` on the same dashboard as data grows.
+
+---
+
+### Sentry error reporting (alignment)
+
+Errors are centralized in `utils/sentry.ts`. **Feature tags** used in this codebase include: `scan`, `chat`, `home`, `profile`, `purchase`, `contact_search`, `learn`, `login`, `signup`, `auth`, `onboarding`, `feedback_wall`.
+
+- **Contact search:** failures from `utils/ai/search.ts` now call `captureError` with `feature: "contact_search"` (previously referenced a non-existent helper).
+- **Account deletion:** Sentry uses `feature: "profile"` for delete flows.
+- **Feedback wall:** insert/vote/comment failures in modals report with `feature: "feedback_wall"` and a specific `action`.
 
 ---
 
@@ -559,7 +684,7 @@ capturePreAuthEvent('signup_completed', { referral_source: 'Google', country: 'A
 
 ## Event Summary
 
-### Total Events: 13 event types
+### Total Events: 20+ named in-app event types (plus session + signup)
 
 **By Category:**
 
@@ -570,25 +695,50 @@ capturePreAuthEvent('signup_completed', { referral_source: 'Google', country: 'A
 4. `result_viewed`
 5. `result_rated` (not yet implemented in UI)
 
-**Content Events (2):**
+**Content Events (3):**
 6. `article_viewed`
 7. `article_engaged`
+8. `article_scroll_depth_reached`
 
 **Discovery Events (1):**
-8. `feature_opened`
+9. `feature_opened` (includes `settings`, `feedback_wall`, main tabs)
+
+**Paywall (2):**
+10. `paywall_flow_started`
+11. `paywall_flow_finished`
+
+**Feedback wall (7):**
+12. `feedback_wall_opened`
+13. `feedback_wall_composer_opened`
+14. `feedback_post_submitted`
+15. `feedback_item_opened`
+16. `feedback_vote`
+17. `feedback_comment_posted`
+18. `feedback_report_submitted`
+
+**Quick Scan / Shortcut (2):**
+19. `shortcut_setup_modal_opened`
+20. `shortcut_install_link_opened`
+
+**Account (3):**
+21. `account_deletion_confirmed`
+22. `account_deletion_succeeded`
+23. `account_deletion_failed`
 
 **Error Events (1):**
-9. `user_visible_error`
+24. `user_visible_error`
 
 **Signup Events (4 - pre-auth):**
-10. `signup_started`
-11. `signup_attempted`
-12. `signup_completed`
-13. `signup_failed`
+25. `signup_started`
+26. `signup_attempted`
+27. `signup_completed`
+28. `signup_failed`
 
 **Session Events (2):**
 - `session_started` (automatic)
 - `session_ended` (automatic)
+
+**RevenueCat (server / integration):** `rc_initial_purchase_event`, `rc_trial_started_event`, `rc_trial_converted_event`, `rc_trial_cancelled_event`, `rc_renewal_event`, `rc_cancellation_event`, `rc_uncancellation_event`, `rc_non_subscription_purchase_event`, `rc_subscription_paused_event`, `rc_expiration_event`, `rc_billing_issue_event`, `rc_product_change_event` — configure and verify names in RevenueCat’s PostHog integration; use with `paywall_flow_*` for funnels.
 
 ### Event Frequency Estimates
 
@@ -648,7 +798,8 @@ type FeatureName =
   | 'learning_center'
   | 'article'
   | 'settings'
-  | 'history';
+  | 'history'
+  | 'feedback_wall';
 ```
 
 ---
@@ -830,18 +981,21 @@ console.log('PostHog client:', getPostHogClient());
 
 ## Summary Statistics
 
-**Total Event Types:** 13 (+ 2 automatic session events)
+**Total Event Types:** 20+ in-app named events (+ 2 session events + RevenueCat integration events)
 
-**Event Tracking Locations:** 34+ across codebase
+**Event Tracking Locations:** 40+ across codebase
 
 **Features with Analytics:**
-- Home (4 tracking points)
-- Scan (9 tracking points)
+- Home (4+ tracking points; feedback wall + shortcut entry from home)
+- Scan (9+ tracking points; shortcut setup from scan tab)
 - Chat (8 tracking points)
 - Contact Search (3 tracking points)
-- Learning Center (5 tracking points)
+- Learning Center (6+ tracking points; article depth)
+- Profile / settings (paywall triggers, account deletion, `feature_opened` settings)
 - Login (2 tracking points)
 - Signup (4 tracking points - pre-auth)
+- Feedback wall (dedicated event suite)
+- Paywall / RevenueCat (flow + RC events in PostHog)
 
 **Most Tracked Feature:** Scan (comprehensive funnel tracking)
 

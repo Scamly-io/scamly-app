@@ -194,7 +194,9 @@ export default function Onboarding() {
 
       let didSubscribe = false;
       try {
-        const paywallResult = await presentScamlyPaywall();
+        const paywallResult = await presentScamlyPaywall(undefined, {
+          trigger: "onboarding",
+        });
         didSubscribe =
           paywallResult === PAYWALL_RESULT.PURCHASED ||
           paywallResult === PAYWALL_RESULT.RESTORED;

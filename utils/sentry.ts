@@ -30,7 +30,9 @@ export type FeatureName =
   | 'learn'
   | 'login'
   | 'signup'
-  | 'auth';
+  | 'auth'
+  | 'onboarding'
+  | 'feedback_wall';
 
 export type ErrorContext = {
   feature: FeatureName;

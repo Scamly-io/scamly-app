@@ -533,6 +533,7 @@ export default function Scan() {
     <ShortcutSetupModal
       visible={showShortcutSetup}
       onClose={() => setShowShortcutSetup(false)}
+      entry="scan_tab"
     />
     <ThemedBackground>
       <SafeAreaView edges={["top"]} style={styles.safeArea}>

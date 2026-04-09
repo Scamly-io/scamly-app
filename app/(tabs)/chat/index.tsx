@@ -148,7 +148,9 @@ export default function ChatIndex() {
     if (openingPaywall) return;
     setOpeningPaywall(true);
     try {
-      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded();
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(undefined, {
+        trigger: "chat_locked",
+      });
       if (didUnlockEntitlement) {
         setIsFreePlan(false);
         setPlanLoading(false);

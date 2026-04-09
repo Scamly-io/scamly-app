@@ -12,6 +12,16 @@ RevenueCat is used to manage Scamly subscriptions (products/packages, purchases,
 - Premium access is determined by a RevenueCat **entitlement** (`SCAMLY_PREMIUM_ENTITLEMENT_ID`).
 - Paywalls are generally presented using `presentScamlyPaywallIfNeeded()` so paid users aren’t re-prompted.
 - Promo / offer flows are **platform-specific** (iOS uses StoreKit promo offers; Android uses a separate offering + attributes).
+- **PostHog:** Each paywall presentation records `paywall_flow_started` and `paywall_flow_finished` with `trigger`, `presentation` (`if_needed` | `always`), `result` (RevenueCat `PAYWALL_RESULT` string or `error`), `did_unlock_entitlement`, and `offering_key` (`default` or e.g. `early_interest`). These pair with RevenueCat’s server-side events in PostHog (`rc_trial_started_event`, `rc_initial_purchase_event`, etc.) for funnels. See `documentation/POSTHOG_ANALYTICS.md` and dashboard **Scamly — Product & monetization** in PostHog.
+
+### Paywall analytics `trigger` values
+
+| `trigger` | Where |
+|-----------|--------|
+| `onboarding` | `app/(auth)/onboarding.tsx` — after profile save |
+| `profile_upgrade` | `app/(tabs)/home/profile.tsx` — Upgrade to Premium |
+| `chat_locked` | `app/(tabs)/chat/index.tsx` — locked chat upsell |
+| `contact_search_locked` | `app/(tabs)/contact-search.tsx` — locked search upsell |
 
 ## Where the Paywall Appears
 
@@ -65,8 +75,8 @@ The paywall can be shown from multiple user journeys:
 | `getScamlyPackages(offeringId?)` | `Promise<{ monthly: PurchasesPackage \| null; yearly: PurchasesPackage \| null }>` | Load monthly/yearly packages from current (or specified) offering. | Uses `Purchases.getOfferings()` and matches by package identifiers. |
 | `purchaseScamlyPackage(packageIdentifier, offeringId?)` | `Promise<CustomerInfo>` | Purchase monthly/yearly package from offering. | Uses `Purchases.purchasePackage`. Throws if package not found. |
 | `restoreScamlyPurchases()` | `Promise<CustomerInfo>` | Restore purchases. | Wraps `Purchases.restorePurchases()`. |
-| `presentScamlyPaywallIfNeeded(offeringId?)` | `Promise<{ result: PAYWALL_RESULT; didUnlockEntitlement: boolean }>` | Present paywall only if entitlement is missing. | Main “Upgrade” entry point. Android early-interest can pass `offeringId="early_interest"`. |
-| `presentScamlyPaywall(offeringId?)` | `Promise<PAYWALL_RESULT>` | Present paywall unconditionally. | Used during onboarding upsell (`app/(auth)/onboarding.tsx`). |
+| `presentScamlyPaywallIfNeeded(offeringId?, analytics?)` | `Promise<{ result: PAYWALL_RESULT; didUnlockEntitlement: boolean }>` | Present paywall only if entitlement is missing. | Main “Upgrade” entry point. Android early-interest can pass `offeringId="early_interest"`. Optional `analytics: { trigger }` emits PostHog `paywall_flow_started` / `paywall_flow_finished` (see below). |
+| `presentScamlyPaywall(offeringId?, analytics?)` | `Promise<PAYWALL_RESULT>` | Present paywall unconditionally. | Used during onboarding upsell (`app/(auth)/onboarding.tsx`). Resolves `offeringId` to a real `PurchasesOffering` before calling RevenueCat UI (do not pass a raw string as `offering`). Optional analytics context as above. |
 | `presentScamlyCustomerCenter()` | `Promise<void>` | Present RevenueCat Customer Center UI. | Used by Profile → “Manage Subscription”. |
 | `trackRevenueCatError(action, error)` | `string` | Report to Sentry (warning) and return user-friendly message. | Used to safely surface purchase/paywall errors via alerts. |
 

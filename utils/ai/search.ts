@@ -1,4 +1,5 @@
 import { trackUserVisibleError } from '@/utils/analytics';
+import { captureError } from '@/utils/sentry';
 import { supabase } from '@/utils/supabase';
 import { SearchResult } from '@/utils/types';
 
@@ -52,16 +53,24 @@ export async function search(companyName: string, userId: string): Promise<Searc
             throw new SearchError(response.error.message, "ai_response");
         }
         
-        console.log("response: ", response.data);
         return response.data as SearchResult;
     } catch (error) {
         if (error instanceof SearchError) {
-            captureSearchError(error, "search_failed");
-            trackUserVisibleError("search", "search_failed", true);
+            captureError(error, {
+                feature: "contact_search",
+                action: "search_failed",
+                severity: "critical",
+                extra: { stage: error.stage },
+            });
+            trackUserVisibleError("contact_search", "search_failed", true);
             throw error;
         }
-        captureSearchError(error, "search_failed");
-        trackUserVisibleError("search", "search_failed", true);
+        captureError(error, {
+            feature: "contact_search",
+            action: "search_failed",
+            severity: "critical",
+        });
+        trackUserVisibleError("contact_search", "search_failed", true);
         throw new SearchError("Failed to search", "ai_response");
     }
 }

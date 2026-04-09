@@ -1,5 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
+import { trackFeedbackCommentPosted, trackFeedbackVote } from "@/utils/analytics";
+import { captureError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { ArrowLeft, Heart, MessageCircle, Send } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -184,7 +186,14 @@ export default function FeedbackDetailModal({
       if (error) {
         setVoted(true);
         setVoteCount((c) => c + 1);
+        captureError(error, {
+          feature: "feedback_wall",
+          action: "feedback_unlike",
+          severity: "warning",
+        });
         Alert.alert("Error", "Failed to remove your vote.");
+      } else {
+        trackFeedbackVote(item.id, "unlike");
       }
     } else {
       const { error } = await supabase
@@ -193,7 +202,14 @@ export default function FeedbackDetailModal({
       if (error) {
         setVoted(false);
         setVoteCount((c) => c - 1);
+        captureError(error, {
+          feature: "feedback_wall",
+          action: "feedback_like",
+          severity: "warning",
+        });
         Alert.alert("Error", "Failed to save your vote.");
+      } else {
+        trackFeedbackVote(item.id, "like");
       }
     }
   };
@@ -216,8 +232,14 @@ export default function FeedbackDetailModal({
     });
 
     if (error) {
+      captureError(error, {
+        feature: "feedback_wall",
+        action: "feedback_comment",
+        severity: "warning",
+      });
       Alert.alert("Error", "Failed to post comment.");
     } else {
+      trackFeedbackCommentPosted(item.id);
       setCommentText("");
       await fetchComments();
     }

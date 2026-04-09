@@ -138,7 +138,9 @@ export default function PhoneSearch() {
 
     setOpeningPaywall(true);
     try {
-      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded();
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(undefined, {
+        trigger: "contact_search_locked",
+      });
       if (didUnlockEntitlement) {
         setIsFreePlan(false);
         setPlanLoading(false);

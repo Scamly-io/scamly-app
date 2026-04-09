@@ -31,7 +31,19 @@ export type FeatureName =
   | 'learning_center'
   | 'article'
   | 'settings'
-  | 'history';
+  | 'history'
+  | 'feedback_wall';
+
+/** Where the in-app paywall flow was started (upgrade button context). */
+export type PaywallTrigger =
+  | 'onboarding'
+  | 'profile_upgrade'
+  | 'chat_locked'
+  | 'contact_search_locked';
+
+export type PaywallPresentationMode = 'always' | 'if_needed';
+
+export type ShortcutSetupEntry = 'subscription_success' | 'scan_tab';
 
 // ============================================================================
 // Configuration
@@ -408,6 +420,127 @@ export function trackArticleEngaged(
 export function trackFeatureOpened(featureName: FeatureName): void {
   captureEvent('feature_opened', {
     feature_name: featureName,
+  });
+}
+
+// ============================================================================
+// Paywall (in-app RevenueCat UI) — complements RevenueCat → PostHog subscription events
+// ============================================================================
+
+/**
+ * User initiated a paywall presentation (tapped Upgrade, etc.).
+ * Pair with `paywall_flow_finished` for conversion funnels.
+ */
+export function trackPaywallFlowStarted(
+  trigger: PaywallTrigger,
+  presentation: PaywallPresentationMode,
+  offeringKey?: string
+): void {
+  captureEvent('paywall_flow_started', {
+    trigger,
+    presentation,
+    offering_key: offeringKey ?? 'default',
+  });
+}
+
+/**
+ * RevenueCat paywall UI finished with a result (including NOT_PRESENTED when already entitled).
+ */
+export function trackPaywallFlowFinished(
+  trigger: PaywallTrigger,
+  presentation: PaywallPresentationMode,
+  result: string,
+  didUnlockEntitlement: boolean,
+  offeringKey?: string
+): void {
+  captureEvent('paywall_flow_finished', {
+    trigger,
+    presentation,
+    result,
+    did_unlock_entitlement: didUnlockEntitlement,
+    offering_key: offeringKey ?? 'default',
+  });
+}
+
+// ============================================================================
+// Feedback wall
+// ============================================================================
+
+export function trackFeedbackWallOpened(entryPoint: string): void {
+  captureEvent('feedback_wall_opened', { entry_point: entryPoint });
+  trackFeatureOpened('feedback_wall');
+}
+
+export function trackFeedbackWallComposerOpened(): void {
+  captureEvent('feedback_wall_composer_opened', {});
+}
+
+export function trackFeedbackPostSubmitted(): void {
+  captureEvent('feedback_post_submitted', {});
+}
+
+export function trackFeedbackItemOpened(feedbackId: string): void {
+  captureEvent('feedback_item_opened', { feedback_id: feedbackId });
+}
+
+export function trackFeedbackVote(feedbackId: string, action: 'like' | 'unlike'): void {
+  captureEvent('feedback_vote', { feedback_id: feedbackId, action });
+}
+
+export function trackFeedbackCommentPosted(feedbackId: string): void {
+  captureEvent('feedback_comment_posted', { feedback_id: feedbackId });
+}
+
+export function trackFeedbackReportSubmitted(feedbackId: string, reasonKey: string): void {
+  captureEvent('feedback_report_submitted', {
+    feedback_id: feedbackId,
+    reason_key: reasonKey,
+  });
+}
+
+// ============================================================================
+// iOS Quick Scan shortcut setup
+// ============================================================================
+
+export function trackShortcutSetupModalOpened(entry: ShortcutSetupEntry): void {
+  captureEvent('shortcut_setup_modal_opened', { entry });
+}
+
+export function trackShortcutInstallLinkOpened(entry: ShortcutSetupEntry): void {
+  captureEvent('shortcut_install_link_opened', { entry });
+}
+
+// ============================================================================
+// Account management
+// ============================================================================
+
+export function trackAccountDeletionConfirmed(): void {
+  captureEvent('account_deletion_confirmed', {});
+}
+
+export function trackAccountDeletionSucceeded(): void {
+  captureEvent('account_deletion_succeeded', {});
+}
+
+export function trackAccountDeletionFailed(errorStage: 'edge_function' | 'unexpected'): void {
+  captureEvent('account_deletion_failed', { error_stage: errorStage });
+}
+
+// ============================================================================
+// Library articles — scroll depth (once per depth band per view)
+// ============================================================================
+
+export type ArticleScrollDepthBand = 25 | 50 | 75 | 100;
+
+export function trackArticleScrollDepthReached(
+  articleId: string,
+  depthPercent: ArticleScrollDepthBand,
+  timeOnPageSeconds: number
+): void {
+  captureEvent('article_scroll_depth_reached', {
+    article_id: articleId,
+    depth_percent: depthPercent,
+    time_on_page_seconds: timeOnPageSeconds,
   });
 }
 

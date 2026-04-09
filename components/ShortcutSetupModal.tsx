@@ -1,11 +1,16 @@
 import { useTheme } from "@/theme";
+import {
+  trackShortcutInstallLinkOpened,
+  trackShortcutSetupModalOpened,
+  type ShortcutSetupEntry,
+} from "@/utils/analytics";
 import * as WebBrowser from "expo-web-browser";
 import {
   Download,
   MousePointerSquareDashed,
   Smartphone,
 } from "lucide-react-native";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FlatList,
   Linking,
@@ -62,11 +67,14 @@ const SETUP_METHODS: SetupMethod[] = [
 type ShortcutSetupModalProps = {
   visible: boolean;
   onClose: () => void;
+  /** Where the user opened Quick Scan setup (for analytics). */
+  entry: ShortcutSetupEntry;
 };
 
 export default function ShortcutSetupModal({
   visible,
   onClose,
+  entry,
 }: ShortcutSetupModalProps) {
   const { colors, radius, shadows } = useTheme();
   const { width } = useWindowDimensions();
@@ -74,8 +82,19 @@ export default function ShortcutSetupModal({
   const flatListRef = useRef<FlatList<SetupMethod>>(null);
   const [step, setStep] = useState<0 | 1>(0);
   const [methodPage, setMethodPage] = useState(0);
+  const hasTrackedOpenRef = useRef(false);
 
   const contentWidth = width - 48;
+
+  useEffect(() => {
+    if (visible && !hasTrackedOpenRef.current) {
+      hasTrackedOpenRef.current = true;
+      trackShortcutSetupModalOpened(entry);
+    }
+    if (!visible) {
+      hasTrackedOpenRef.current = false;
+    }
+  }, [visible, entry]);
 
   const handleClose = () => {
     setStep(0);
@@ -84,6 +103,7 @@ export default function ShortcutSetupModal({
   };
 
   const handleDownload = async () => {
+    trackShortcutInstallLinkOpened(entry);
     try {
       await Linking.openURL(SHORTCUT_URL);
     } catch {

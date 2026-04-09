@@ -8,6 +8,12 @@ import { useTheme } from "@/theme";
 import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
 import { getSupportedPromoOffer } from "@/utils/promo";
 import {
+  trackAccountDeletionConfirmed,
+  trackAccountDeletionFailed,
+  trackAccountDeletionSucceeded,
+  trackFeatureOpened,
+} from "@/utils/analytics";
+import {
   EARLY_INTEREST_STORAGE_KEY,
   getRevenueCatCustomerInfo,
   handleEarlyInterestPromoOffer,
@@ -42,6 +48,7 @@ import {
   Users,
   X,
 } from "lucide-react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -150,6 +157,12 @@ export default function Profile() {
   const displayedPlan = hasPremiumAccess && subscriptionPlan === "free" ? "premium" : subscriptionPlan;
   const isIosPromoFlow = Platform.OS === "ios";
   const canInteractWithPromoCode = !isIosPromoFlow || hasPremiumAccess;
+
+  useFocusEffect(
+    useCallback(() => {
+      trackFeatureOpened("settings");
+    }, []),
+  );
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
@@ -462,6 +475,7 @@ export default function Profile() {
   const handleDeleteAccount = async () => {
     if (!user || deletingAccount || !canConfirmDeletion) return;
 
+    trackAccountDeletionConfirmed();
     setDeletingAccount(true);
 
     try {
@@ -479,8 +493,9 @@ export default function Profile() {
           } catch {}
         }
 
+        trackAccountDeletionFailed("edge_function");
         captureError(error, {
-          feature: "home",
+          feature: "profile",
           action: "delete_account",
           severity: "critical",
           extra: { errorCode, status },
@@ -492,10 +507,12 @@ export default function Profile() {
         return;
       }
 
+      trackAccountDeletionSucceeded();
+
       const { error: signOutError } = await supabase.auth.signOut();
       if (signOutError) {
         captureError(signOutError, {
-          feature: "home",
+          feature: "profile",
           action: "delete_account_sign_out",
           severity: "warning",
         });
@@ -505,8 +522,9 @@ export default function Profile() {
       setDeleteConfirmationText("");
       router.replace("/account-deleted");
     } catch (err) {
+      trackAccountDeletionFailed("unexpected");
       captureError(err, {
-        feature: "home",
+        feature: "profile",
         action: "delete_account",
         severity: "critical",
       });
@@ -528,7 +546,9 @@ export default function Profile() {
         ? "early_interest"
         : undefined;
 
-      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(offeringId);
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(offeringId, {
+        trigger: "profile_upgrade",
+      });
       await refreshRevenueCatStatus();
 
       if (didUnlockEntitlement) {

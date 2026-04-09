@@ -4,6 +4,14 @@ import NewFeedbackItemModal from "@/components/NewFeedbackItemModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { getFeedbackWallRefreshSignal } from "@/utils/feedbackWallRefresh";
+import {
+  trackFeedbackItemOpened,
+  trackFeedbackReportSubmitted,
+  trackFeedbackVote,
+  trackFeedbackWallComposerOpened,
+  trackFeedbackWallOpened,
+} from "@/utils/analytics";
+import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import {
@@ -76,6 +84,19 @@ const REPORT_REASONS = [
   "Inappropriate / NSFW content",
   "Other",
 ] as const;
+
+function feedbackReportReasonKey(reason: string): string {
+  const keys: Record<string, string> = {
+    "Spam / Promotional content": "spam",
+    "Fraud / Scam / Misleading": "fraud",
+    "Harassment / Abuse": "harassment",
+    "Hate Speech / Discrimination": "hate_speech",
+    "Off-topic / Irrelevant": "off_topic",
+    "Inappropriate / NSFW content": "nsfw",
+    "Other": "other",
+  };
+  return keys[reason] ?? "other";
+}
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -241,9 +262,15 @@ function HeartButton({
 export type FeedbackWallModalProps = {
   visible: boolean;
   onClose: () => void;
+  /** Analytics: origin surface (default `home`). */
+  entryPoint?: string;
 };
 
-export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModalProps) {
+export default function FeedbackWallModal({
+  visible,
+  onClose,
+  entryPoint = "home",
+}: FeedbackWallModalProps) {
   const { colors, radius, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -287,6 +314,10 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
     if (error) {
       Alert.alert("Error", "Failed to submit report. Please try again.");
     } else {
+      trackFeedbackReportSubmitted(
+        reportTargetId,
+        feedbackReportReasonKey(reportReason),
+      );
       Alert.alert("Reported", "Thanks for helping keep the community safe.");
     }
     setReportSubmitting(false);
@@ -301,6 +332,7 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
       });
       if (error) {
         console.error(error);
+        captureDataFetchError(error, "feedback_wall", "fetch_feedback_list", "critical");
         Alert.alert("Error", "Failed to load feedback.");
         return;
       }
@@ -326,6 +358,9 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
       .order("created_at", { ascending: false });
 
     if (error || !data) {
+      if (error) {
+        captureDataFetchError(error, "feedback_wall", "fetch_my_feedback", "critical");
+      }
       Alert.alert("Error", "Failed to load your feedback.");
       console.error(error);
       setFeedbacks([]);
@@ -387,6 +422,12 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
       await fetchAllFeedbacks(0, false);
     }
   }, [filter, fetchAllFeedbacks, fetchMyFeedbacks]);
+
+  useEffect(() => {
+    if (visible) {
+      trackFeedbackWallOpened(entryPoint);
+    }
+  }, [visible, entryPoint]);
 
   useEffect(() => {
     if (!visible) return;
@@ -473,6 +514,8 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
           ),
         );
         Alert.alert("Error", "Failed to remove your vote.");
+      } else {
+        trackFeedbackVote(feedbackId, "unlike");
       }
     } else {
       const { error } = await supabase
@@ -487,6 +530,8 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
           ),
         );
         Alert.alert("Error", "Failed to save your vote.");
+      } else {
+        trackFeedbackVote(feedbackId, "like");
       }
     }
   };
@@ -505,6 +550,7 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
     FILTER_OPTIONS.find((f) => f.value === filter)?.label ?? "All Feedback";
 
   const navigateToDetail = (item: feedbackRequest, focusComment = false) => {
+    trackFeedbackItemOpened(item.id);
     setDetailFeedback({
       id: item.id,
       title: item.title ?? item.content ?? "",
@@ -567,7 +613,10 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
       </View>
 
       <Pressable
-        onPress={() => setNewFeedbackVisible(true)}
+        onPress={() => {
+          trackFeedbackWallComposerOpened();
+          setNewFeedbackVisible(true);
+        }}
         style={[
           styles.feedbackBanner,
           {
@@ -798,7 +847,10 @@ export default function FeedbackWallModal({ visible, onClose }: FeedbackWallModa
             ]}
           >
             <Pressable
-              onPress={() => setNewFeedbackVisible(true)}
+              onPress={() => {
+                trackFeedbackWallComposerOpened();
+                setNewFeedbackVisible(true);
+              }}
               style={styles.floatingPillInner}
             >
               <CirclePlus size={20} color={colors.textInverse} />

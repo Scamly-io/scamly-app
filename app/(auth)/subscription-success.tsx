@@ -44,6 +44,7 @@ export default function SubscriptionSuccess() {
       <ShortcutSetupModal
         visible={showShortcutSetup}
         onClose={() => setShowShortcutSetup(false)}
+        entry="subscription_success"
       />
     <ThemedBackground>
       <SafeAreaView style={styles.safeArea}>

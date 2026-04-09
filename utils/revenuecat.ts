@@ -1,3 +1,8 @@
+import {
+  trackPaywallFlowFinished,
+  trackPaywallFlowStarted,
+  type PaywallTrigger,
+} from "@/utils/analytics";
 import { captureError } from "@/utils/sentry";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, Platform } from "react-native";
@@ -22,6 +27,14 @@ const REVENUECAT_API_KEY =
 
 let isConfigured = false;
 let configuredUserId: string | null = null;
+
+export type PaywallAnalyticsContext = {
+  trigger: PaywallTrigger;
+};
+
+function paywallOfferingKey(offeringId?: string): string {
+  return offeringId ?? "default";
+}
 
 function getReadableErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
@@ -245,7 +258,10 @@ export async function restoreScamlyPurchases(): Promise<CustomerInfo> {
   return Purchases.restorePurchases();
 }
 
-export async function presentScamlyPaywallIfNeeded(offeringId?: string): Promise<{
+export async function presentScamlyPaywallIfNeeded(
+  offeringId?: string,
+  analytics?: PaywallAnalyticsContext
+): Promise<{
   result: PAYWALL_RESULT;
   didUnlockEntitlement: boolean;
 }> {
@@ -256,19 +272,86 @@ export async function presentScamlyPaywallIfNeeded(offeringId?: string): Promise
     offering = offerings.all[offeringId] ?? undefined;
   }
 
-  const result = await RevenueCatUI.presentPaywallIfNeeded({
-    requiredEntitlementIdentifier: SCAMLY_PREMIUM_ENTITLEMENT_ID,
-    offering,
-  });
+  const offeringKey = paywallOfferingKey(offeringId);
+  if (analytics) {
+    trackPaywallFlowStarted(analytics.trigger, "if_needed", offeringKey);
+  }
 
-  const didUnlockEntitlement =
-    result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+  try {
+    const result = await RevenueCatUI.presentPaywallIfNeeded({
+      requiredEntitlementIdentifier: SCAMLY_PREMIUM_ENTITLEMENT_ID,
+      offering,
+    });
 
-  return { result, didUnlockEntitlement };
+    const didUnlockEntitlement =
+      result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+
+    if (analytics) {
+      trackPaywallFlowFinished(
+        analytics.trigger,
+        "if_needed",
+        String(result),
+        didUnlockEntitlement,
+        offeringKey
+      );
+    }
+
+    return { result, didUnlockEntitlement };
+  } catch (error) {
+    if (analytics) {
+      trackPaywallFlowFinished(
+        analytics.trigger,
+        "if_needed",
+        "error",
+        false,
+        offeringKey
+      );
+    }
+    throw error;
+  }
 }
 
-export async function presentScamlyPaywall(offeringId?: string): Promise<PAYWALL_RESULT> {
-  return RevenueCatUI.presentPaywall({ offering: offeringId })
+export async function presentScamlyPaywall(
+  offeringId?: string,
+  analytics?: PaywallAnalyticsContext
+): Promise<PAYWALL_RESULT> {
+  let offering = undefined;
+  if (offeringId) {
+    const offerings = await Purchases.getOfferings();
+    offering = offerings.all[offeringId] ?? undefined;
+  }
+
+  const offeringKey = paywallOfferingKey(offeringId);
+  if (analytics) {
+    trackPaywallFlowStarted(analytics.trigger, "always", offeringKey);
+  }
+
+  try {
+    const result = await RevenueCatUI.presentPaywall({ offering });
+    const didUnlockEntitlement =
+      result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+    if (analytics) {
+      trackPaywallFlowFinished(
+        analytics.trigger,
+        "always",
+        String(result),
+        didUnlockEntitlement,
+        offeringKey
+      );
+    }
+    return result;
+  } catch (error) {
+    if (analytics) {
+      trackPaywallFlowFinished(
+        analytics.trigger,
+        "always",
+        "error",
+        false,
+        offeringKey
+      );
+    }
+    throw error;
+  }
 }
 
 export async function presentScamlyCustomerCenter(): Promise<void> {
