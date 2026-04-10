@@ -6,6 +6,7 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/access";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { pickByWeeklyViewsOrRandom, pickFeaturedAndTrending } from "@/utils/articleWeeklyRanking";
 import { captureError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { useFocusEffect } from "@react-navigation/native";
@@ -63,55 +64,41 @@ export default function Learn() {
       const premium = await getIsPremium();
       setIsPremium(premium);
 
-      async function getFeaturedArticle() {
+      async function getFeaturedAndTrendingArticles() {
         let query = supabase
           .from("articles")
-          .select("id, slug, title, description, content")
-          .order("views", { ascending: false })
-          .limit(1)
+          .select("id, slug, title, description, content, primary_image, weekly_views")
           .eq("quick_tip", false);
 
         if (!premium) {
           query = query.eq("free_access", true);
         }
 
-        const { data: featuredArticle, error: featuredArticleError } = await query.single();
+        const { data: pool, error: poolError } = await query;
 
-        if (featuredArticleError || !featuredArticle) {
-          captureWarning(featuredArticleError || new Error("No featured article"), "learn", "fetch_featured_article");
+        if (poolError || !pool) {
+          captureWarning(poolError || new Error("No articles"), "learn", "fetch_featured_trending_articles");
+          setFeaturedArticle(null);
+          setTrendingArticles([]);
           return;
         }
 
-        setFeaturedArticle({
-          id: featuredArticle.id,
-          slug: featuredArticle.slug,
-          title: featuredArticle.title,
-          description: featuredArticle.description,
-          length: featuredArticle.content.length,
-        });
-      }
+        const { featured, trending } = pickFeaturedAndTrending(pool);
 
-      async function getTrendingArticles() {
-        let query = supabase
-          .from("articles")
-          .select("id, slug, title, description, primary_image, content")
-          .order("views", { ascending: false })
-          .eq("quick_tip", false)
-          .range(1, 3);
-
-        if (!premium) {
-          query = query.eq("free_access", true);
-        }
-
-        const { data: trendingArticles, error: trendingArticlesError } = await query;
-
-        if (trendingArticlesError || !trendingArticles) {
-          captureWarning(trendingArticlesError || new Error("No trending articles"), "learn", "fetch_trending_articles");
-          return;
+        if (featured) {
+          setFeaturedArticle({
+            id: featured.id,
+            slug: featured.slug,
+            title: featured.title,
+            description: featured.description,
+            length: featured.content.length,
+          });
+        } else {
+          setFeaturedArticle(null);
         }
 
         setTrendingArticles(
-          trendingArticles.map((article: any) => ({
+          trending.map((article: any) => ({
             id: article.id,
             slug: article.slug,
             title: article.title,
@@ -126,25 +113,25 @@ export default function Learn() {
         let query = supabase
           .from("articles")
           .select(
-            "id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour"
+            "id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour, weekly_views"
           )
-          .eq("quick_tip", true)
-          .order("views", { ascending: false })
-          .range(0, 3);
+          .eq("quick_tip", true);
 
         if (!premium) {
           query = query.eq("free_access", true);
         }
 
-        const { data: quickTips, error: quickTipsError } = await query;
+        const { data: pool, error: quickTipsError } = await query;
 
-        if (quickTipsError || !quickTips) {
+        if (quickTipsError || !pool) {
           captureWarning(quickTipsError || new Error("No quick tips"), "learn", "fetch_quick_tips");
           return;
         }
 
+        const picked = pickByWeeklyViewsOrRandom(pool, 4);
+
         setQuickTips(
-          quickTips.map((quickTip: any) => ({
+          picked.map((quickTip: any) => ({
             id: quickTip.id,
             slug: quickTip.slug,
             title: quickTip.title,
@@ -156,7 +143,7 @@ export default function Learn() {
         );
       }
 
-      await Promise.all([getFeaturedArticle(), getTrendingArticles(), getQuickTips()]);
+      await Promise.all([getFeaturedAndTrendingArticles(), getQuickTips()]);
       setPageLoading(false);
     }
 

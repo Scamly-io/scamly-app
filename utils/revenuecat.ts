@@ -20,7 +20,7 @@ export const EARLY_INTEREST_STORAGE_KEY = "early_interest_user";
 
 const REVENUECAT_API_KEY =
   Platform.OS === "ios"
-    ? "test_ibbaJXEktARooMcrhxSfmlApJGw"
+    ? "appl_EElVohkhYSlZEQtkRyVobgwLfIt"
     : Platform.OS === "android"
     ? "goog_kpAKBeifirsalQZVyHGphyVeWId"
     : "";

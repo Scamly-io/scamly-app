@@ -1,7 +1,9 @@
 import QuickTipTile from "@/components/QuickTipTile";
+import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/access";
+import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
 import { supabase } from "@/utils/supabase";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
@@ -34,6 +36,14 @@ export default function AllQuickTips() {
   const [quickTips, setQuickTips] = useState<QuickTip[]>([]);
   const [pageLoading, setPageLoading] = useState<boolean>(true);
   const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [openingPaywall, setOpeningPaywall] = useState(false);
+
+  const premiumOnlyCount = isPremium
+    ? 0
+    : quickTips.filter((t) => t.free_access === false).length;
+  const visibleQuickTips = isPremium
+    ? quickTips
+    : quickTips.filter((t) => t.free_access !== false);
 
   useEffect(() => {
     async function fetchQuickTips() {
@@ -45,8 +55,7 @@ export default function AllQuickTips() {
         .select(
           "id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour, free_access"
         )
-        .eq("quick_tip", true)
-        .order("views", { ascending: false });
+        .eq("quick_tip", true);
 
       if (quickTipsError || !quickTips) {
         console.error("Error fetching quick tips:", quickTipsError);
@@ -72,6 +81,25 @@ export default function AllQuickTips() {
 
     fetchQuickTips();
   }, []);
+
+  const handleOpenPaywall = async () => {
+    if (openingPaywall) return;
+    setOpeningPaywall(true);
+    try {
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(undefined, {
+        trigger: "library_quick_tips_locked",
+      });
+      if (didUnlockEntitlement) {
+        setIsPremium(true);
+        router.push("/subscription-success");
+      }
+    } catch (error) {
+      const message = trackRevenueCatError("present_paywall_library_quick_tips", error);
+      Alert.alert("Subscription unavailable", message);
+    } finally {
+      setOpeningPaywall(false);
+    }
+  };
 
   if (pageLoading) {
     return (
@@ -100,7 +128,7 @@ export default function AllQuickTips() {
           </TouchableOpacity>
           <View style={[styles.countBadge, { backgroundColor: colors.accentMuted }]}>
             <Text style={[styles.countText, { color: colors.accent }]}>
-              {quickTips.length} tips
+              {visibleQuickTips.length} tips
             </Text>
           </View>
         </Animated.View>
@@ -117,7 +145,7 @@ export default function AllQuickTips() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {quickTips.map((quickTip, index) => (
+          {visibleQuickTips.map((quickTip, index) => (
             <Animated.View
               key={quickTip.id}
               entering={FadeInDown.duration(300).delay(150 + index * 50)}
@@ -129,21 +157,32 @@ export default function AllQuickTips() {
                 iconColour={quickTip.iconColour}
                 iconBackground={quickTip.iconBackground}
                 readMoreVisible={true}
-                locked={!isPremium && quickTip.free_access === false}
-                onPress={() => {
-                  const locked = !isPremium && quickTip.free_access === false;
-                  if (locked) {
-                    Alert.alert(
-                      "Premium required",
-                      "This article is only available to Scamly Premium users."
-                    );
-                    return;
-                  }
-                  router.push(`/learn/${quickTip.slug}`);
-                }}
+                onPress={() => router.push(`/learn/${quickTip.slug}`)}
               />
             </Animated.View>
           ))}
+
+          {!isPremium && premiumOnlyCount > 0 ? (
+            <Animated.View
+              entering={FadeInDown.duration(300).delay(150 + visibleQuickTips.length * 50)}
+              style={[
+                styles.upgradeSection,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius.lg,
+                  ...shadows.sm,
+                },
+              ]}
+            >
+              <Text style={[styles.upgradeTitle, { color: colors.textPrimary }]}>
+                Upgrade to premium to view {premiumOnlyCount} more{" "}
+                {premiumOnlyCount === 1 ? "quick tip" : "quick tips"}
+              </Text>
+              <Button onPress={handleOpenPaywall} loading={openingPaywall} fullWidth>
+                Upgrade to Premium
+              </Button>
+            </Animated.View>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </ThemedBackground>
@@ -206,5 +245,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 40,
     gap: 12,
+  },
+  upgradeSection: {
+    padding: 20,
+    gap: 16,
+    marginTop: 4,
+  },
+  upgradeTitle: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
   },
 });

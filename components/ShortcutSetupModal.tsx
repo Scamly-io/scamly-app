@@ -221,6 +221,8 @@ export default function ShortcutSetupModal({
                   style={({ pressed }) => [
                     styles.secondaryButton,
                     {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.borderStrong,
                       borderRadius: radius.lg,
                       opacity: pressed ? 0.85 : 1,
                     },
@@ -381,6 +383,8 @@ export default function ShortcutSetupModal({
                   style={({ pressed }) => [
                     styles.secondaryButton,
                     {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.borderStrong,
                       borderRadius: radius.lg,
                       opacity: pressed ? 0.85 : 1,
                     },
@@ -576,12 +580,7 @@ const styles = StyleSheet.create({
     height: 52,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 1,
   },
   secondaryButtonText: {
     fontSize: 16,

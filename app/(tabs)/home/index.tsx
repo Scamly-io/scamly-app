@@ -7,6 +7,7 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { pickByWeeklyViewsOrRandom } from "@/utils/articleWeeklyRanking";
 import { captureDataFetchError, captureError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -43,7 +44,7 @@ type Article = {
 };
 
 const HOME_ARTICLES_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const HOME_ARTICLES_CACHE_KEY_PREFIX = "home_articles_cache_v1";
+const HOME_ARTICLES_CACHE_KEY_PREFIX = "home_articles_cache_v2";
 
 type HomeArticlesCache = {
   fetchedAt: number;
@@ -144,23 +145,23 @@ export default function Home() {
     async function getTrendingArticles(premium: boolean): Promise<Article[] | null> {
       let query = supabase
         .from("articles")
-        .select("id, title, primary_image, description, slug, content")
-        .order("views", { ascending: false })
-        .eq("quick_tip", false)
-        .limit(2);
+        .select("id, title, primary_image, description, slug, content, weekly_views")
+        .eq("quick_tip", false);
 
       if (!premium) {
         query = query.eq("free_access", true);
       }
 
-      const { data: trendingArticles, error: trendingArticlesError } = await query;
+      const { data: pool, error: trendingArticlesError } = await query;
 
-      if (!trendingArticles || trendingArticlesError) {
+      if (!pool || trendingArticlesError) {
         captureWarning(trendingArticlesError || new Error("No trending articles"), "home", "fetch_trending_articles");
         return null;
       }
 
-      return trendingArticles.map((article: any) => ({
+      const picked = pickByWeeklyViewsOrRandom(pool, 2);
+
+      return picked.map((article: any) => ({
         id: article.id,
         slug: article.slug,
         title: article.title,
@@ -174,24 +175,24 @@ export default function Home() {
       let query = supabase
         .from("articles")
         .select(
-          "id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour"
+          "id, slug, title, description, quick_tip_icon, quick_tip_icon_colour, quick_tip_icon_background_colour, weekly_views"
         )
-        .eq("quick_tip", true)
-        .order("views", { ascending: false })
-        .limit(3);
+        .eq("quick_tip", true);
 
       if (!premium) {
         query = query.eq("free_access", true);
       }
 
-      const { data: quickTips, error: quickTipsError } = await query;
+      const { data: pool, error: quickTipsError } = await query;
 
-      if (!quickTips || quickTipsError) {
+      if (!pool || quickTipsError) {
         captureWarning(quickTipsError || new Error("No quick tips"), "home", "fetch_quick_tips");
         return null;
       }
 
-      return quickTips.map((quickTip: any) => ({
+      const picked = pickByWeeklyViewsOrRandom(pool, 3);
+
+      return picked.map((quickTip: any) => ({
         id: quickTip.id,
         slug: quickTip.slug,
         title: quickTip.title,

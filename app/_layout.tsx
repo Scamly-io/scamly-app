@@ -1,9 +1,9 @@
+import ThemedBackground from "@/components/ThemedBackground";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider, useTheme } from "@/theme";
 import { initializePostHog, initializeSessionTracking } from "@/utils/analytics";
 import { initializeRevenueCat, trackRevenueCatError } from "@/utils/revenuecat";
 import { initializeSentry } from "@/utils/sentry";
-import ThemedBackground from "@/components/ThemedBackground";
 import * as Sentry from "@sentry/react-native";
 import { useFonts } from "expo-font";
 import { Slot } from "expo-router";

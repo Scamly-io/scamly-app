@@ -4,6 +4,7 @@ import ShimmerText from "@/components/ShimmerText";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
+import { getIsPremium } from "@/utils/access";
 import { ScanError, scanImage } from "@/utils/ai/scan";
 import {
   trackFeatureOpened,
@@ -13,14 +14,13 @@ import {
   trackUserVisibleError,
   type ResultCategory,
 } from "@/utils/analytics";
-import { getIsPremium } from "@/utils/access";
 import { promptReview } from "@/utils/review";
 import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import { ScanResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
-import { router } from "expo-router";
+import { router, useIsFocused } from "expo-router";
 import {
   CheckCircle,
   ChevronDown,
@@ -81,20 +81,30 @@ export default function ClipboardScan() {
   const stageTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const scanInFlightRef = useRef<boolean>(false);
 
+  const [premiumAccess, setPremiumAccess] = useState<boolean | null>(null);
+  const isFocused = useIsFocused();
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      setPremiumAccess(null);
       const checkAccess = async () => {
         const premium = await getIsPremium();
-        if (active && !premium) {
-          router.back();
-          setTimeout(() => {
-            Alert.alert(
-              "Premium Required",
-              "Quick Scan is only available to Scamly Premium subscribers. Upgrade to unlock instant scanning.",
-              [{ text: "OK" }]
-            );
-          }, 0);
+        if (!active) return;
+        setPremiumAccess(premium);
+        if (!premium) {
+          Alert.alert(
+            "Premium Required",
+            "Quick Scan is only available to Scamly Premium subscribers. Upgrade to unlock instant scanning.",
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  router.replace("/scan");
+                },
+              },
+            ]
+          );
         }
       };
       checkAccess();
@@ -282,12 +292,11 @@ export default function ClipboardScan() {
     }
   }, [user]);
 
-  useFocusEffect(
-    useCallback(() => {
-      trackFeatureOpened("scan");
-      startClipboardScan();
-    }, [startClipboardScan])
-  );
+  useEffect(() => {
+    if (!isFocused || premiumAccess !== true) return;
+    trackFeatureOpened("scan");
+    startClipboardScan();
+  }, [isFocused, premiumAccess, startClipboardScan]);
 
   function getRiskColor(riskLevel: string) {
     switch (riskLevel) {

@@ -1,7 +1,9 @@
 import ArticleTile from "@/components/ArticleTile";
+import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/access";
+import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
 import { supabase } from "@/utils/supabase";
 import { router } from "expo-router";
 import { ArrowLeft } from "lucide-react-native";
@@ -34,6 +36,14 @@ export default function AllArticles() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [pageLoading, setPageLoading] = useState<boolean>(true);
   const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [openingPaywall, setOpeningPaywall] = useState(false);
+
+  const premiumOnlyCount = isPremium
+    ? 0
+    : articles.filter((a) => a.free_access === false).length;
+  const visibleArticles = isPremium
+    ? articles
+    : articles.filter((a) => a.free_access !== false);
 
   function calculateReadTime(length: number): number {
     return Math.max(1, Math.round(length / 1500));
@@ -47,8 +57,7 @@ export default function AllArticles() {
       const { data: articles, error: articlesError } = await supabase
         .from("articles")
         .select("id, slug, title, description, primary_image, content, free_access")
-        .eq("quick_tip", false)
-        .order("views", { ascending: false });
+        .eq("quick_tip", false);
 
       if (articlesError || !articles) {
         console.error("Error fetching articles:", articlesError);
@@ -74,6 +83,25 @@ export default function AllArticles() {
 
     fetchArticles();
   }, []);
+
+  const handleOpenPaywall = async () => {
+    if (openingPaywall) return;
+    setOpeningPaywall(true);
+    try {
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(undefined, {
+        trigger: "library_articles_locked",
+      });
+      if (didUnlockEntitlement) {
+        setIsPremium(true);
+        router.push("/subscription-success");
+      }
+    } catch (error) {
+      const message = trackRevenueCatError("present_paywall_library_articles", error);
+      Alert.alert("Subscription unavailable", message);
+    } finally {
+      setOpeningPaywall(false);
+    }
+  };
 
   if (pageLoading) {
     return (
@@ -102,7 +130,7 @@ export default function AllArticles() {
           </TouchableOpacity>
           <View style={[styles.countBadge, { backgroundColor: colors.accentMuted }]}>
             <Text style={[styles.countText, { color: colors.accent }]}>
-              {articles.length} articles
+              {visibleArticles.length} articles
             </Text>
           </View>
         </Animated.View>
@@ -119,7 +147,7 @@ export default function AllArticles() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {articles.map((article, index) => (
+          {visibleArticles.map((article, index) => (
             <Animated.View
               key={article.id}
               entering={FadeInDown.duration(300).delay(150 + index * 50)}
@@ -130,21 +158,32 @@ export default function AllArticles() {
                 readTime={calculateReadTime(article.length!)}
                 image={article.image}
                 slug={article.slug}
-                locked={!isPremium && article.free_access === false}
-                onPress={() => {
-                  const locked = !isPremium && article.free_access === false;
-                  if (locked) {
-                    Alert.alert(
-                      "Premium required",
-                      "This article is only available to Scamly Premium users."
-                    );
-                    return;
-                  }
-                  router.push(`/learn/${article.slug}`);
-                }}
+                onPress={() => router.push(`/learn/${article.slug}`)}
               />
             </Animated.View>
           ))}
+
+          {!isPremium && premiumOnlyCount > 0 ? (
+            <Animated.View
+              entering={FadeInDown.duration(300).delay(150 + visibleArticles.length * 50)}
+              style={[
+                styles.upgradeSection,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius.lg,
+                  ...shadows.sm,
+                },
+              ]}
+            >
+              <Text style={[styles.upgradeTitle, { color: colors.textPrimary }]}>
+                Upgrade to premium to view {premiumOnlyCount} more{" "}
+                {premiumOnlyCount === 1 ? "article" : "articles"}
+              </Text>
+              <Button onPress={handleOpenPaywall} loading={openingPaywall} fullWidth>
+                Upgrade to Premium
+              </Button>
+            </Animated.View>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </ThemedBackground>
@@ -207,5 +246,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 40,
     gap: 16,
+  },
+  upgradeSection: {
+    padding: 20,
+    gap: 16,
+    marginTop: 4,
+  },
+  upgradeTitle: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
   },
 });

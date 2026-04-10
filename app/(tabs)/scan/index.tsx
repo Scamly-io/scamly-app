@@ -4,6 +4,7 @@ import ShimmerText from "@/components/ShimmerText";
 import ShortcutSetupModal from "@/components/ShortcutSetupModal";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuickScanRedirect } from "@/hooks/useQuickScanRedirect";
 import { useTheme } from "@/theme";
 import { ScanError, scanImage } from "@/utils/ai/scan";
 import {
@@ -14,6 +15,7 @@ import {
   trackUserVisibleError,
   type ResultCategory,
 } from "@/utils/analytics";
+import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
 import { promptReview } from "@/utils/review";
 import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
@@ -21,7 +23,7 @@ import { ScanResult } from "@/utils/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { CheckCircle, ChevronDown, ChevronUp, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -88,6 +90,7 @@ type PageMountCache = {
   cachedAt: number;
   scanQuotaReached: boolean;
   scanQuotaResetDate: string | null;
+  isFreePlan: boolean;
 };
 
 const STAGE_OPTIONS = {
@@ -111,6 +114,8 @@ function pickRandom(arr: string[]): string {
 }
 
 export default function Scan() {
+  const { quickscan } = useLocalSearchParams<{ quickscan?: string | string[] }>();
+  useQuickScanRedirect(quickscan);
   const { colors, radius, shadows, isDark } = useTheme();
   const { user } = useAuth();
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
@@ -124,6 +129,8 @@ export default function Scan() {
   const [scanFailureWarning, setScanFailureWarning] = useState<string | null>(null);
   const [expandedDetections, setExpandedDetections] = useState<Set<number>>(new Set());
   const [showShortcutSetup, setShowShortcutSetup] = useState(false);
+  const [isFreePlan, setIsFreePlan] = useState(false);
+  const [openingPaywall, setOpeningPaywall] = useState(false);
 
   const [scanPhase, setScanPhase] = useState<ScanPhase>("idle");
   const [scanStage, setScanStage] = useState<number>(0);
@@ -169,6 +176,7 @@ export default function Scan() {
     if (isCacheValid && cached) {
       setScanQuotaReached(cached.scanQuotaReached);
       setScanQuotaResetDate(cached.scanQuotaResetDate);
+      setIsFreePlan(cached.isFreePlan);
       setPageLoading(false);
       return;
     }
@@ -202,8 +210,10 @@ export default function Scan() {
 
       let nextScanQuotaReached = false;
       let nextScanQuotaResetDate: string | null = null;
+      const nextIsFreePlan = profile.subscription_plan === "free";
+      setIsFreePlan(nextIsFreePlan);
 
-      if (profile.subscription_plan === "free") {
+      if (nextIsFreePlan) {
         const { periodStart, nextPeriodStart } = getUserBillingPeriod(profile.created_at);
 
         const { count, error: countError } = await supabase
@@ -233,6 +243,7 @@ export default function Scan() {
         cachedAt: Date.now(),
         scanQuotaReached: nextScanQuotaReached,
         scanQuotaResetDate: nextScanQuotaResetDate,
+        isFreePlan: nextIsFreePlan,
       };
     })();
 
@@ -530,6 +541,31 @@ export default function Scan() {
 
   const scanButtonDisabled = !image || loading || !user || scanQuotaReached || scanQuotaJustReached;
 
+  const handleOpenPaywall = async () => {
+    if (openingPaywall) return;
+
+    setOpeningPaywall(true);
+    try {
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(undefined, {
+        trigger: "scan_premium_upsell",
+      });
+      if (didUnlockEntitlement) {
+        setIsFreePlan(false);
+        const cached = pageMountCacheRef.current;
+        if (cached?.userRef === user) {
+          pageMountCacheRef.current = { ...cached, isFreePlan: false };
+        }
+        void handlePageMount({ forceRefresh: true });
+        router.push("/subscription-success");
+      }
+    } catch (error) {
+      const message = trackRevenueCatError("present_paywall_scan", error);
+      Alert.alert("Subscription unavailable", message);
+    } finally {
+      setOpeningPaywall(false);
+    }
+  };
+
   return (
     <>
     <ShortcutSetupModal
@@ -596,13 +632,13 @@ export default function Scan() {
                         </Text>
                       </TouchableOpacity>
 
-                      {Platform.OS === "ios" && (
+                      {Platform.OS === "ios" && !isFreePlan && (
                         <TouchableOpacity
                           style={styles.addShortcutButton}
                           onPress={() => setShowShortcutSetup(true)}
                         >
                           <Text style={[styles.howToUseText, { color: colors.accent }]}>
-                            Add Shortcut
+                            Enable Quick Scan
                           </Text>
                         </TouchableOpacity>
                       )}
@@ -1021,6 +1057,33 @@ export default function Scan() {
                 </Animated.View>
               )}
 
+              {(isFreePlan && scanPhase === "idle") && (
+                <Animated.View entering={FadeInDown.duration(350)}>
+                  <Card style={styles.premiumUpsellCard} pressable={false}>
+                    <Text style={[styles.premiumUpsellTitle, { color: colors.textPrimary }]}>
+                      Get more with Scamly Premium
+                    </Text>
+                    <View style={styles.premiumBenefitsList}>
+                      <View style={styles.premiumBenefitItem}>
+                        <View style={[styles.premiumBenefitDot, { backgroundColor: colors.accent }]} />
+                        <Text style={[styles.premiumBenefitText, { color: colors.textSecondary }]}>
+                          Unlimited number of scans per month
+                        </Text>
+                      </View>
+                      <View style={styles.premiumBenefitItem}>
+                        <View style={[styles.premiumBenefitDot, { backgroundColor: colors.accent }]} />
+                        <Text style={[styles.premiumBenefitText, { color: colors.textSecondary }]}>
+                          Access to the quick scan feature on iOS for faster, easier scans.
+                        </Text>
+                      </View>
+                    </View>
+                    <Button onPress={handleOpenPaywall} loading={openingPaywall} fullWidth>
+                      Upgrade to Premium
+                    </Button>
+                  </Card>
+                </Animated.View>
+              )}
+
               {/* Disclaimer */}
               <View style={styles.disclaimer}>
                 <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>
@@ -1189,6 +1252,43 @@ const styles = StyleSheet.create({
   },
   scanButtonContainer: {
     marginBottom: 24,
+  },
+  premiumUpsellCard: {
+    padding: 24,
+    gap: 14,
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  premiumUpsellTitle: {
+    fontFamily: "Poppins-Bold",
+    fontSize: 22,
+    lineHeight: 30,
+  },
+  premiumUpsellSubtitle: {
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  premiumBenefitsList: {
+    gap: 10,
+    marginBottom: 4,
+  },
+  premiumBenefitItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  premiumBenefitDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    marginTop: 7,
+  },
+  premiumBenefitText: {
+    flex: 1,
+    fontFamily: "Poppins-Regular",
+    fontSize: 14,
+    lineHeight: 21,
   },
   scanFailureCard: {
     marginBottom: 16,

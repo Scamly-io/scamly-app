@@ -46,7 +46,10 @@ export type PaywallTrigger =
   | 'onboarding'
   | 'profile_upgrade'
   | 'chat_locked'
-  | 'contact_search_locked';
+  | 'contact_search_locked'
+  | 'library_articles_locked'
+  | 'library_quick_tips_locked'
+  | 'scan_premium_upsell';
 
 export type PaywallPresentationMode = 'always' | 'if_needed';
 
