@@ -26,7 +26,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const SHORTCUT_URL =
-  "https://www.icloud.com/shortcuts/71e686bdc4ec408ab780826245fc1336";
+  "https://www.icloud.com/shortcuts/0746d764f06a46b4b50f599d1fd80786";
 
 type SetupMethod = {
   id: string;

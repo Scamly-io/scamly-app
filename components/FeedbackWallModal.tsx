@@ -790,6 +790,8 @@ export default function FeedbackWallModal({
             {
               borderBottomColor: colors.divider,
               backgroundColor: colors.background,
+              paddingTop:
+                Platform.OS === "android" ? insets.top + 16 : undefined,
             },
           ]}
         >
