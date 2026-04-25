@@ -10,6 +10,7 @@
 
 import * as Application from 'expo-application';
 import { PostHog } from 'posthog-react-native';
+import type { User } from '@supabase/supabase-js';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 
 // ============================================================================
@@ -44,6 +45,7 @@ export type FeatureName =
 /** Where the in-app paywall flow was started (upgrade button context). */
 export type PaywallTrigger =
   | 'onboarding'
+  | 'onboarding_tutorial'
   | 'profile_upgrade'
   | 'chat_locked'
   | 'contact_search_locked'
@@ -131,9 +133,24 @@ export function isAnalyticsActive(): boolean {
  * - platform: Device platform (ios, android, web)
  * - app_version: Current app version
  */
+/**
+ * Supabase auth provider for acquisition / signup method reporting (no PII).
+ */
+export function getAuthenticationMethodForAnalytics(
+  user: User | null
+): 'email' | 'google' | 'apple' | 'unknown' {
+  if (!user) return 'unknown';
+  const provider = user.identities?.[0]?.provider;
+  if (provider === 'email' || provider === 'google' || provider === 'apple') {
+    return provider;
+  }
+  return 'unknown';
+}
+
 export function identifyUser(
   userId: string,
-  plan: UserPlan
+  plan: UserPlan,
+  authMethod: 'email' | 'google' | 'apple' | 'unknown' = 'unknown',
 ): void {
   if (!posthogClient) return;
 
@@ -145,6 +162,7 @@ export function identifyUser(
     plan,
     platform,
     app_version: appVersion,
+    auth_provider: authMethod,
   });
 
   enableAnalytics();
@@ -284,6 +302,58 @@ export function capturePreAuthEvent(
 }
 
 // ============================================================================
+// Onboarding funnel (profile + in-app tutorial + paywall)
+// ============================================================================
+
+export type OnboardingFunnelStep =
+  | 'profile_name'
+  | 'profile_dob'
+  | 'profile_gender'
+  | 'profile_country'
+  | 'profile_referral'
+  | 'tutorial_email_reminder'
+  | 'tutorial_offer'
+  | 'tutorial_how_it_works'
+  | 'tutorial_screenshot'
+  | 'first_scan'
+  | 'tutorial_celebration';
+
+/**
+ * Funnel position for finding drop-off points. Includes auth method for signup method reports.
+ */
+export function trackOnboardingStepViewed(
+  step: OnboardingFunnelStep,
+  properties?: { auth_method?: 'email' | 'google' | 'apple' | 'unknown' }
+): void {
+  captureEvent('onboarding_step_viewed', { step, ...properties });
+}
+
+/**
+ * User left the in-app tutorial without finishing the guided flow.
+ */
+export function trackOnboardingTutorialDismissed(
+  atStep:
+    | 'tutorial_offer'
+    | 'tutorial_how_it_works'
+    | 'tutorial_screenshot'
+    | 'tutorial_email_reminder'
+    | 'first_scan',
+  properties?: { auth_method?: 'email' | 'google' | 'apple' | 'unknown' }
+): void {
+  captureEvent('onboarding_tutorial_dismissed', { at_step: atStep, ...properties });
+}
+
+/**
+ * Outcome of the post-tutorial paywall (dismissed vs purchase).
+ */
+export function trackOnboardingTutorialPaywallResult(
+  result: 'dismissed' | 'purchased' | 'restored' | 'error',
+  properties?: { auth_method?: 'email' | 'google' | 'apple' | 'unknown' }
+): void {
+  captureEvent('onboarding_tutorial_paywall_result', { result, ...properties });
+}
+
+// ============================================================================
 // Signup Funnel Events
 // ============================================================================
 
@@ -293,6 +363,20 @@ export function capturePreAuthEvent(
  */
 export function trackSignupStarted(): void {
   capturePreAuthEvent('signup_started');
+}
+
+/**
+ * Email + password account created in-app; profile is completed in the onboarding flow.
+ */
+export function trackEmailPasswordSignupAccountCreated(): void {
+  capturePreAuthEvent('email_password_signup_account_created', { signup_method: 'email' });
+}
+
+/**
+ * oAuth sign-in from the login screen (used with Supabase `signInWithIdToken`).
+ */
+export function trackOAuthSignInCompleted(provider: 'google' | 'apple'): void {
+  capturePreAuthEvent('oauth_sign_in_completed', { provider });
 }
 
 /**

@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
 
-type SignUpData = {
+export type SignUpData = {
   email: string;
   password: string;
   firstName: string;
+  /** DD/MM/YYYY while collecting; parsed on final sign-up */
   dob: string;
   country: string;
   gender: string;
