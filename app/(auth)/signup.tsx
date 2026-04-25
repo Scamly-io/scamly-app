@@ -4,6 +4,7 @@ import { useSignUp } from "@/contexts/SignUpContext";
 import { useTheme } from "@/theme";
 import { trackSignupStarted } from "@/utils/analytics";
 import { addActionBreadcrumb } from "@/utils/sentry";
+import { onboardingHref } from "@/utils/onboarding-href";
 import { signUpStep1Schema } from "@/utils/validation/auth";
 import { useRouter } from "expo-router";
 import { Lock, Mail } from "lucide-react-native";
@@ -55,8 +56,8 @@ export default function SignUp() {
 
     setErrors({});
     updateSignUpData({ email, password });
-    addActionBreadcrumb("signup_step1_completed", "signup");
-    router.push("/signup-profile");
+    addActionBreadcrumb("signup_step1_to_profile", "signup");
+    router.push(onboardingHref("/onboarding/collect-profile"));
   };
 
   const clearError = (field: string) => {
@@ -190,7 +191,7 @@ export default function SignUp() {
               </View>
 
               <Button onPress={handleNext} fullWidth size="lg">
-                Next
+                Continue
               </Button>
 
               <View style={[styles.footer, { borderTopColor: colors.divider }]}>

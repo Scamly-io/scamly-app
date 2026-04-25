@@ -1,5 +1,6 @@
 import Button from "@/components/Button";
 import FeedbackDetailModal, { type FeedbackDetailItem } from "@/components/FeedbackDetailModal";
+import NativeMenu from "@/components/NativeMenu";
 import NewFeedbackItemModal from "@/components/NewFeedbackItemModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
@@ -125,62 +126,6 @@ function formatRelativeDate(dateString: string): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   if (diffWeeks < 5) return `${diffWeeks}w ago`;
   return `${diffMonths}mo ago`;
-}
-
-function NativeMenu({
-  trigger,
-  options,
-  onSelect,
-}: {
-  trigger: React.ReactNode;
-  options: { label: string; value: string }[];
-  onSelect: (value: string) => void;
-}) {
-  if (Platform.OS === "ios") {
-    const { Host, Menu, Button: MenuButton } = require("@expo/ui/swift-ui");
-    return (
-      <Host matchContents>
-        <Menu label={trigger}>
-          {options.map((opt: { label: string; value: string }) => (
-            <MenuButton
-              key={opt.value}
-              label={opt.label}
-              onPress={() => onSelect(opt.value)}
-            />
-          ))}
-        </Menu>
-      </Host>
-    );
-  }
-
-  const [expanded, setExpanded] = useState(false);
-  const { Host, DropdownMenu, DropdownMenuItem, Text: ComposeText } = require(
-    "@expo/ui/jetpack-compose",
-  );
-  return (
-    <Host matchContents>
-      <DropdownMenu expanded={expanded} onDismissRequest={() => setExpanded(false)}>
-        <DropdownMenu.Trigger>
-          <Pressable onPress={() => setExpanded(true)}>{trigger}</Pressable>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Items>
-          {options.map((opt: { label: string; value: string }) => (
-            <DropdownMenuItem
-              key={opt.value}
-              onClick={() => {
-                setExpanded(false);
-                onSelect(opt.value);
-              }}
-            >
-              <DropdownMenuItem.Text>
-                <ComposeText>{opt.label}</ComposeText>
-              </DropdownMenuItem.Text>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenu.Items>
-      </DropdownMenu>
-    </Host>
-  );
 }
 
 function AvatarCircle({

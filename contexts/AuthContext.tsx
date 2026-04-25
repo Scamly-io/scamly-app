@@ -6,7 +6,12 @@
  * onboarding completion gate, and sign-out logic.
  */
 
-import { identifyUser, resetUser, type UserPlan } from "@/utils/analytics";
+import {
+  getAuthenticationMethodForAnalytics,
+  identifyUser,
+  resetUser,
+  type UserPlan,
+} from "@/utils/analytics";
 import { checkOnboardingStatus, ProfileNotFoundError } from "@/utils/onboarding";
 import { clearUserContext, setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
@@ -51,7 +56,7 @@ function getPlanCategory(subscriptionPlan: string): UserPlan {
  * Identify user for analytics and error tracking.
  * Fetches profile to get subscription plan and sets up PostHog/Sentry context.
  */
-async function identifyUserForTracking(userId: string): Promise<void> {
+async function identifyUserForTracking(userId: string, user?: User | null): Promise<void> {
   try {
     const { data: profile } = await supabase
       .from("profiles")
@@ -61,7 +66,10 @@ async function identifyUserForTracking(userId: string): Promise<void> {
 
     if (profile) {
       const planCategory = getPlanCategory(profile.subscription_plan);
-      identifyUser(userId, planCategory);
+      const authMethod = user
+        ? getAuthenticationMethodForAnalytics(user)
+        : "unknown";
+      identifyUser(userId, planCategory, authMethod);
       setUserContext(userId, planCategory);
     }
   } catch {
@@ -126,7 +134,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
-      await identifyUserForTracking(refreshedSession.user.id);
+      await identifyUserForTracking(refreshedSession.user.id, refreshedSession.user);
 
       try {
         const isComplete = await checkOnboardingStatus(refreshedSession.user.id);
@@ -164,7 +172,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setSession(newSession);
 
         if (newSession?.user) {
-          identifyUserForTracking(newSession.user.id);
+          identifyUserForTracking(newSession.user.id, newSession.user);
 
           // Check onboarding status on initial session load
           try {
@@ -203,7 +211,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Handle user identification and onboarding check on sign in
       if (event === "SIGNED_IN" && newSession?.user) {
         try {
-          await identifyUserForTracking(newSession.user.id);
+          await identifyUserForTracking(newSession.user.id, newSession.user);
         } catch {
           // Non-blocking - continue even if identification fails
         }

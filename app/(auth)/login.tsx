@@ -1,7 +1,13 @@
 import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
-import { identifyUser, trackUserVisibleError, type UserPlan } from "@/utils/analytics";
+import {
+  getAuthenticationMethodForAnalytics,
+  identifyUser,
+  trackOAuthSignInCompleted,
+  trackUserVisibleError,
+  type UserPlan,
+} from "@/utils/analytics";
 import { captureError, setUserContext } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import {
@@ -87,7 +93,11 @@ export default function Login() {
           if (profile) {
             const planCategory = getPlanCategory(profile.subscription_plan);
             // Identify user with PostHog using Supabase user ID and plan
-            identifyUser(data.user.id, planCategory);
+            identifyUser(
+              data.user.id,
+              planCategory,
+              getAuthenticationMethodForAnalytics(data.user)
+            );
             // Set Sentry user context for error tracking
             setUserContext(data.user.id, planCategory);
           }
@@ -157,10 +167,12 @@ export default function Login() {
               .update({ first_name: firstName })
               .eq("id", userId);
           }
+          trackOAuthSignInCompleted("google");
           router.replace("/onboarding");
           return;
         }
 
+        trackOAuthSignInCompleted("google");
         router.replace("/");
       }
     } catch (error: any) {
@@ -231,10 +243,12 @@ export default function Login() {
               .update({ first_name: firstName })
               .eq("id", userId);
           }
+          trackOAuthSignInCompleted("apple");
           router.replace("/onboarding");
           return;
         }
 
+        trackOAuthSignInCompleted("apple");
         router.replace("/");
         return;
       }
