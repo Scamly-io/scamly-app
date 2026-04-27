@@ -10,6 +10,7 @@ import { captureChatError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 
 const AI_CHAT_FUNCTION = __DEV__ ? "ai-chat-dev" : "ai-chat";
+console.log("AI_CHAT_FUNCTION", AI_CHAT_FUNCTION);
 
 /**
  * Base URL for the Supabase `ai-chat` / `ai-chat-dev` edge function.

@@ -20,16 +20,7 @@ import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { Menu, X } from "lucide-react-native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Alert,
-  BackHandler,
-  FlatList,
-  Keyboard,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Alert, BackHandler, FlatList, Platform, StyleSheet, Text, View } from "react-native";
 import { KeyboardAvoidingView, KeyboardGestureArea } from "react-native-keyboard-controller";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
@@ -391,10 +382,12 @@ export default function ChatInterface({
           </View>
 
           {/*
-            react-native-keyboard-controller exposes KeyboardAvoidingView (not RN core).
-            This matches the spec’s “KeyboardAwareView” role — smooth keyboard-linked padding.
+            One KeyboardAvoidingView for list + composer so overlap math matches the full column
+            below the header (messages stay readable). Wrapping only the FlatList broke avoidance
+            because the measured frame didn’t include the composer strip. Jitter stays fixed by *not*
+            driving composer height from onContentSizeChange (see ChatGlassInputBar).
           */}
-          <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+          <KeyboardAvoidingView behavior="padding" style={styles.flex} keyboardVerticalOffset={35}>
             <View style={styles.flex}>
               <KeyboardGestureArea style={styles.flex} textInputNativeID={CHAT_COMPOSER_NATIVE_ID}>
                 <FlatList
@@ -406,7 +399,6 @@ export default function ChatInterface({
                   renderItem={renderItem}
                   keyboardShouldPersistTaps="handled"
                   keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-                  onScrollBeginDrag={() => Keyboard.dismiss()}
                   contentContainerStyle={[
                     styles.listContent,
                     listData.length === 0 ? styles.listEmptyGrow : undefined,
@@ -424,7 +416,6 @@ export default function ChatInterface({
                 style={[
                   styles.inputShell,
                   {
-                    borderTopColor: colors.border,
                     paddingBottom: Math.max(insets.bottom, 10),
                   },
                 ]}
@@ -533,7 +524,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   inputShell: {
-    borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
     paddingTop: 8,
   },
