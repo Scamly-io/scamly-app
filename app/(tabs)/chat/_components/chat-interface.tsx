@@ -14,6 +14,11 @@ import {
   getChatHistoryCache,
   setChatHistoryCache,
 } from "@/utils/chat-history-cache";
+import {
+  buildInitialChatRowPayload,
+  insertInitialChatRow,
+  needsInitialChatRowInsert,
+} from "@/utils/chat-initial-row";
 import { captureChatError, captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import * as Haptics from "expo-haptics";
@@ -143,7 +148,6 @@ export default function ChatInterface({
   const insets = useSafeAreaInsets();
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const activeConversationId = useChatStore((s) => s.activeConversationId);
 
   const [input, setInput] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -152,14 +156,9 @@ export default function ChatInterface({
 
   const flatListRef = useRef<FlatList<StoreMessage>>(null);
 
-  const currentDrawerChatId = useMemo(() => {
-    if (routeChatSegment === "new") {
-      return activeConversationId ?? "";
-    }
-    return routeChatSegment;
-  }, [routeChatSegment, activeConversationId]);
+  const currentDrawerChatId = routeChatSegment;
 
-  const menuDisabled = routeChatSegment === "new" && !activeConversationId;
+  const menuDisabled = false;
 
   /**
    * Inverted list: data is reverse-chronological (newest first) so the latest turn
@@ -238,7 +237,32 @@ export default function ChatInterface({
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
 
+    const beforeSend = useChatStore.getState();
+    if (
+      needsInitialChatRowInsert({
+        chatRowPersistedInDb: beforeSend.chatRowPersistedInDb,
+        messageCount: beforeSend.messages.length,
+      })
+    ) {
+      const rowResult = await insertInitialChatRow(
+        supabase,
+        buildInitialChatRowPayload({
+          chatId: routeChatSegment,
+          userId,
+          lastMessage: trimmed,
+        })
+      );
+      if (!rowResult.ok) {
+        trackUserVisibleError("chat", "chat_row_insert_failed", true);
+        Alert.alert("Couldn't start chat", rowResult.message || "Please try again.");
+        return;
+      }
+      useChatStore.getState().setChatRowPersistedInDb(true);
+    }
+
+    /** AI thread id from edge only — null until `X-Conversation-Id` on a prior response */
     const conversationIdForPost = useChatStore.getState().activeConversationId;
+    console.log("conversationIdForPost", conversationIdForPost);
 
     const userMsg: StoreMessage = {
       id: uuid.v4().toString(),
@@ -297,7 +321,7 @@ export default function ChatInterface({
           message: trimmed,
           conversationId: conversationIdForPost ?? null,
           userId,
-          ...(routeChatSegment !== "new" ? { chatId: routeChatSegment } : {}),
+          chatId: routeChatSegment,
         }),
       });
 
@@ -313,7 +337,6 @@ export default function ChatInterface({
         const prev = useChatStore.getState().activeConversationId;
         if (!prev) {
           useChatStore.getState().setConversationId(headerConversationId);
-          router.replace(`/chat/${headerConversationId}`);
         } else {
           useChatStore.getState().setConversationId(headerConversationId);
         }
@@ -440,7 +463,10 @@ export default function ChatInterface({
         chats={historyChats}
         loading={historyLoading}
         currentChatId={currentDrawerChatId}
-        onSelectChat={(id) => router.replace(`/chat/${id}`)}
+        onSelectChat={(id) => {
+          useChatStore.getState().setConversationId(null);
+          router.replace(`/chat/${id}`);
+        }}
         onDeleteChat={(targetId) => {
           Alert.alert("Delete chat", "This conversation will be permanently deleted.", [
             { text: "Cancel", style: "cancel" },
@@ -458,7 +484,7 @@ export default function ChatInterface({
                   if (targetId === currentDrawerChatId || targetId === routeChatSegment) {
                     clearChatHistoryCache();
                     useChatStore.getState().resetSession();
-                    router.replace("/chat/new");
+                    router.replace("/chat");
                   }
                 } catch (err) {
                   if (err instanceof ChatError) {

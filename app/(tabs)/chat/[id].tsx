@@ -1,4 +1,3 @@
-import ChatInterface from "./_components/chat-interface";
 import ThemedBackground from "@/components/ThemedBackground";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
@@ -10,6 +9,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ChatInterface from "./_components/chat-interface";
 
 export default function ChatDetail() {
   const { colors, radius } = useTheme();
@@ -70,35 +70,36 @@ export default function ChatDetail() {
         return;
       }
 
-      if (chatRowId === "new") {
-        useChatStore.getState().resetSession();
-        if (!cancelled) {
-          setCreatedAt("");
-          setHydrateLoading(false);
-        }
-        return;
-      }
+      setHydrateLoading(true);
 
-      const st = useChatStore.getState();
-      if (st.activeConversationId === chatRowId && st.messages.length > 0) {
-        const { data } = await supabase.from("chats").select("created_at").eq("id", chatRowId).single();
-        if (!cancelled && data?.created_at) {
-          setCreatedAt(data.created_at);
-        }
+      const { data: chatRow, error: chatErr } = await supabase
+        .from("chats")
+        .select("created_at")
+        .eq("id", chatRowId)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (chatErr) {
+        captureDataFetchError(chatErr, "chat", "fetch_chat_meta", "critical");
         setHydrateLoading(false);
         return;
       }
 
-      setHydrateLoading(true);
+      // Client-generated id: no DB row yet — empty thread, insert `chats` on first send.
+      if (!chatRow) {
+        useChatStore.getState().setMessages([]);
+        useChatStore.getState().setChatRowPersistedInDb(false);
+        setCreatedAt("");
+        setHydrateLoading(false);
+        return;
+      }
 
-      const [chatRes, msgRes] = await Promise.all([
-        supabase.from("chats").select("created_at").eq("id", chatRowId).single(),
-        supabase
-          .from("messages")
-          .select("id, role, content")
-          .eq("chat_id", chatRowId)
-          .order("created_at", { ascending: true }),
-      ]);
+      const msgRes = await supabase
+        .from("messages")
+        .select("id, role, content")
+        .eq("chat_id", chatRowId)
+        .order("created_at", { ascending: true });
 
       if (cancelled) return;
 
@@ -111,11 +112,9 @@ export default function ChatDetail() {
           content: r.content,
         }));
 
-      useChatStore.getState().setConversationId(chatRowId);
       useChatStore.getState().setMessages(mapped);
-      if (chatRes.data?.created_at) {
-        setCreatedAt(chatRes.data.created_at);
-      }
+      useChatStore.getState().setChatRowPersistedInDb(true);
+      if (chatRow.created_at) setCreatedAt(chatRow.created_at);
       setHydrateLoading(false);
     }
 
@@ -126,12 +125,7 @@ export default function ChatDetail() {
     };
   }, [chatRowId, planLoading, isFreePlan]);
 
-  const headerDateLabel =
-    chatRowId === "new"
-      ? ""
-      : createdAt
-        ? new Date(createdAt).toLocaleDateString()
-        : "";
+  const headerDateLabel = createdAt ? new Date(createdAt).toLocaleDateString() : "";
 
   if (planLoading || hydrateLoading) {
     return (

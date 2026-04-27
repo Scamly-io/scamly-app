@@ -4,6 +4,7 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { clearChatHistoryCache } from "@/utils/chat-history-cache";
+import { useChatStore } from "@/store/chatStore";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
 import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
 import { captureDataFetchError } from "@/utils/sentry";
@@ -13,6 +14,7 @@ import { router } from "expo-router";
 import { MessageCircle, Sparkles } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import uuid from "react-native-uuid";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -101,7 +103,9 @@ export default function ChatIndex() {
       return;
     }
     clearChatHistoryCache();
-    router.push("/chat/new");
+    useChatStore.getState().resetSession();
+    const newChatId = uuid.v4().toString();
+    router.push(`/chat/${newChatId}`);
   }
 
   return (

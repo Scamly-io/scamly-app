@@ -11,6 +11,8 @@ export interface ChatStore {
   activeConversationId: string | null;
   messages: Message[];
   isStreaming: boolean;
+  /** True once `chats` row exists for this thread (hydrated from DB or inserted before first edge send). */
+  chatRowPersistedInDb: boolean;
   setConversationId: (id: string | null) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (msg: Message) => void;
@@ -19,6 +21,7 @@ export interface ChatStore {
   failLastAssistant: (errorText: string) => void;
   clearMessages: () => void;
   setStreaming: (val: boolean) => void;
+  setChatRowPersistedInDb: (value: boolean) => void;
   resetSession: () => void;
 }
 
@@ -26,6 +29,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   activeConversationId: null,
   messages: [],
   isStreaming: false,
+  chatRowPersistedInDb: false,
 
   setConversationId: (id) => set({ activeConversationId: id }),
 
@@ -73,10 +77,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setStreaming: (val) => set({ isStreaming: val }),
 
+  setChatRowPersistedInDb: (value) => set({ chatRowPersistedInDb: value }),
+
   resetSession: () =>
     set({
       activeConversationId: null,
       messages: [],
       isStreaming: false,
+      chatRowPersistedInDb: false,
     }),
 }));
