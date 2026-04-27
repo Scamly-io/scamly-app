@@ -16,7 +16,7 @@ import { ScanResult } from "@/utils/types";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { CheckCircle, ChevronDown, ChevronUp, TriangleAlert, Upload, XCircle } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 
@@ -47,21 +47,33 @@ function getResultCategory(isScam: boolean, riskLevel: string): ResultCategory {
   return "unsure";
 }
 
-type Phase = "idle" | "scanning" | "complete";
+export type FirstOnboardingScanPhase = "idle" | "scanning" | "complete";
+
+export type FirstOnboardingScanPanelHandle = {
+  /** Call from tutorial footer when the scan has finished (`phase === "complete"`). */
+  finishTutorial: () => void;
+};
 
 type Props = {
   userId: string;
   onContinueAfterSuccess: () => void;
+  /** Tutorial host: drive a footer button (e.g. disabled while idle/scanning). */
+  onTutorialScanPhaseChange?: (phase: FirstOnboardingScanPhase) => void;
 };
 
 /**
  * Onboarding first scan: matches the main Scan tab UI (upload, scanning header, result + key detections)
  * but omits the post-scan "Stay Safe" tips card.
  */
-export default function FirstOnboardingScanPanel({ userId, onContinueAfterSuccess }: Props) {
+const FirstOnboardingScanPanel = forwardRef<FirstOnboardingScanPanelHandle, Props>(function FirstOnboardingScanPanel(
+  { userId, onContinueAfterSuccess, onTutorialScanPhaseChange },
+  ref,
+) {
   const { colors, radius, isDark } = useTheme();
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<FirstOnboardingScanPhase>("idle");
+  const phaseRef = useRef<FirstOnboardingScanPhase>("idle");
+  phaseRef.current = phase;
   const [results, setResults] = useState<ScanResult | null>(null);
   const [failureWarning, setFailureWarning] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
@@ -74,6 +86,34 @@ export default function FirstOnboardingScanPanel({ userId, onContinueAfterSucces
   useEffect(() => {
     hasTrackedView.current = false;
   }, [results?.risk_level, results?.is_scam]);
+
+  useEffect(() => {
+    onTutorialScanPhaseChange?.(phase);
+  }, [phase, onTutorialScanPhaseChange]);
+
+  const onContinue = useCallback(() => {
+    if (results) {
+      const c = getResultCategory(results.is_scam, results.risk_level);
+      if (!hasTrackedView.current) {
+        trackResultViewed(c);
+        hasTrackedView.current = true;
+      }
+    }
+    onContinueAfterSuccess();
+  }, [results, onContinueAfterSuccess]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      finishTutorial: () => {
+        if (phaseRef.current !== "complete") {
+          return;
+        }
+        onContinue();
+      },
+    }),
+    [onContinue],
+  );
 
   useEffect(() => {
     if (phase === "scanning") {
@@ -303,17 +343,6 @@ export default function FirstOnboardingScanPanel({ userId, onContinueAfterSucces
       setPhase("idle");
     }
   }, [convertImageToB64, image?.uri]);
-
-  const onContinue = () => {
-    if (results) {
-      const c = getResultCategory(results.is_scam, results.risk_level);
-      if (!hasTrackedView.current) {
-        trackResultViewed(c);
-        hasTrackedView.current = true;
-      }
-    }
-    onContinueAfterSuccess();
-  };
 
   return (
     <ScrollView
@@ -639,12 +668,6 @@ export default function FirstOnboardingScanPanel({ userId, onContinueAfterSucces
             </View>
           </Card>
 
-          <View style={styles.tutorialCtaRow}>
-            <Button onPress={onContinue} fullWidth size="lg">
-              Continue
-            </Button>
-          </View>
-
           <View style={styles.disclaimer}>
             <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>Disclaimer</Text>
             <Text style={[styles.disclaimerText, { color: colors.textTertiary }]}>
@@ -656,7 +679,9 @@ export default function FirstOnboardingScanPanel({ userId, onContinueAfterSucces
       )}
     </ScrollView>
   );
-}
+});
+
+export default FirstOnboardingScanPanel;
 
 const styles = StyleSheet.create({
   scrollContent: {
@@ -839,9 +864,6 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     fontSize: 14,
     lineHeight: 20,
-  },
-  tutorialCtaRow: {
-    marginBottom: 8,
   },
   disclaimer: {
     marginTop: 8,

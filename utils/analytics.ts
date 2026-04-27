@@ -307,6 +307,7 @@ export function capturePreAuthEvent(
 
 export type OnboardingFunnelStep =
   | 'profile_name'
+  | 'profile_oauth_welcome'
   | 'profile_dob'
   | 'profile_gender'
   | 'profile_country'

@@ -7,8 +7,8 @@ import {
   trackOnboardingStepViewed,
   trackOnboardingTutorialDismissed,
 } from "@/utils/analytics";
-import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding-tutorial-exit";
 import { onboardingHref } from "@/utils/onboarding-href";
+import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding-tutorial-exit";
 import { captureError } from "@/utils/sentry";
 import { useRouter } from "expo-router";
 import { BookOpen, Sparkles } from "lucide-react-native";
@@ -156,8 +156,6 @@ export default function OnboardingTutorialOffer() {
               width: "100%",
               maxWidth: "100%",
               alignSelf: "stretch",
-              borderTopWidth: 1,
-              borderTopColor: colors.divider,
               paddingHorizontal: 20,
               paddingTop: 12,
               paddingBottom: footerPadBottom,

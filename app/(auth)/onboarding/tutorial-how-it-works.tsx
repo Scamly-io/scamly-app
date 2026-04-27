@@ -1,5 +1,8 @@
 import ThemedBackground from "@/components/ThemedBackground";
-import FirstOnboardingScanPanel from "@/components/onboarding/first-onboarding-scan-panel";
+import FirstOnboardingScanPanel, {
+  type FirstOnboardingScanPanelHandle,
+  type FirstOnboardingScanPhase,
+} from "@/components/onboarding/first-onboarding-scan-panel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import {
@@ -55,6 +58,8 @@ export default function OnboardingTutorialHowItWorks() {
   }, [subStep]);
   const [loadDone, setLoadDone] = useState(false);
   const [exitLoading, setExitLoading] = useState(false);
+  const [tutorialScanPhase, setTutorialScanPhase] = useState<FirstOnboardingScanPhase>("idle");
+  const scanPanelRef = useRef<FirstOnboardingScanPanelHandle | null>(null);
   const navDir = useRef<"forward" | "back">("forward");
   const hasNavigated = useRef(false);
   const backScale = useSharedValue(1);
@@ -89,6 +94,12 @@ export default function OnboardingTutorialHowItWorks() {
     const step = subStep === 0 ? "tutorial_screenshot" : "first_scan";
     trackOnboardingStepViewed(step, { auth_method: authMethod });
   }, [loadDone, subStep, authMethod]);
+
+  useEffect(() => {
+    if (subStep !== 1) {
+      setTutorialScanPhase("idle");
+    }
+  }, [subStep]);
 
   // Match previous first-scan: persist so cold resume lands on the scan sub-step.
   useFocusEffect(
@@ -337,7 +348,12 @@ export default function OnboardingTutorialHowItWorks() {
                   the app.
                 </Text>
                 <View style={{ flex: 1, minHeight: 0 }}>
-                  <FirstOnboardingScanPanel userId={user.id} onContinueAfterSuccess={onContinueAfterScan} />
+                  <FirstOnboardingScanPanel
+                    ref={scanPanelRef}
+                    userId={user.id}
+                    onContinueAfterSuccess={onContinueAfterScan}
+                    onTutorialScanPhaseChange={setTutorialScanPhase}
+                  />
                 </View>
               </View>
             )}
@@ -347,7 +363,7 @@ export default function OnboardingTutorialHowItWorks() {
         <View
           style={[
             styles.footer,
-            { borderTopColor: colors.divider, paddingBottom: footerPadBottom },
+            { paddingBottom: footerPadBottom },
           ]}
         >
           <View style={styles.footerBackSlot}>
@@ -394,7 +410,57 @@ export default function OnboardingTutorialHowItWorks() {
                   <Text style={[styles.pillNextText, { color: colors.textInverse }]}>Next</Text>
                 </Pressable>
               </Animated.View>
-            ) : null}
+            ) : (
+              <Animated.View style={nextAnimStyle}>
+                <Pressable
+                  onPress={() => {
+                    scanPanelRef.current?.finishTutorial();
+                  }}
+                  disabled={tutorialScanPhase !== "complete"}
+                  onPressIn={() => {
+                    if (tutorialScanPhase === "complete") {
+                      nextScale.value = withSpring(0.94, { damping: 12, stiffness: 300 });
+                    }
+                  }}
+                  onPressOut={() => {
+                    nextScale.value = withSpring(1, { damping: 12, stiffness: 300 });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Finish tutorial"
+                  accessibilityState={{ disabled: tutorialScanPhase !== "complete" }}
+                  style={[
+                    styles.pillNext,
+                    {
+                      maxWidth: "100%",
+                      borderRadius: radius.full,
+                      borderCurve: "continuous" as const,
+                      ...(tutorialScanPhase === "complete"
+                        ? {
+                            backgroundColor: colors.accent,
+                            boxShadow: glowShadow,
+                          }
+                        : {
+                            backgroundColor: colors.backgroundSecondary,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            opacity: 0.9,
+                          }),
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.pillNextText,
+                      {
+                        color: tutorialScanPhase === "complete" ? colors.textInverse : colors.textTertiary,
+                      },
+                    ]}
+                  >
+                    Finish tutorial
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            )}
           </View>
         </View>
       </SafeAreaView>
@@ -479,7 +545,6 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 20,
     paddingTop: 12,
-    borderTopWidth: 1,
   },
   footerBackSlot: {
     width: 52,

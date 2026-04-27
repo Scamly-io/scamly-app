@@ -2,8 +2,8 @@ import NativeMenu from "@/components/NativeMenu";
 import PickerModal from "@/components/PickerModal";
 import ThemedBackground from "@/components/ThemedBackground";
 import { countries } from "@/constants/countries";
-import { useSignUp } from "@/contexts/SignUpContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSignUp } from "@/contexts/SignUpContext";
 import { useTheme } from "@/theme";
 import {
   getAuthenticationMethodForAnalytics,
@@ -15,13 +15,20 @@ import {
 } from "@/utils/analytics";
 import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
 import { getPublicIp } from "@/utils/network";
-import { getProfileCollectStepIndex, type ProfileOnboardingRow, COLLECT_PROFILE_HREF } from "@/utils/onboarding";
+import { getOAuthCollectWelcomeSeen, setOAuthCollectWelcomeSeen } from "@/utils/oauth-collect-welcome-seen";
+import {
+  COLLECT_PROFILE_HREF,
+  getInitialCollectProfileUiStep,
+  getProfileCollectStepIndex,
+  type ProfileOnboardingRow,
+} from "@/utils/onboarding";
 import { onboardingHref } from "@/utils/onboarding-href";
 import { replaceFromProfileStep } from "@/utils/profile-onboarding-nav";
 import { addActionBreadcrumb, captureError } from "@/utils/sentry";
 import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/signup-profile-draft";
 import { supabase } from "@/utils/supabase";
 import { genderOptions, referralSourceOptions, signUpSchema } from "@/utils/validation/auth";
+import type { User } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import {
   ArrowLeft,
@@ -30,6 +37,7 @@ import {
   Globe,
   HelpCircle,
   Megaphone,
+  Sparkles,
   User as UserIcon,
   Users,
   X,
@@ -55,7 +63,6 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import type { User } from "@supabase/supabase-js";
 
 const COUNTRY_LIST = countries as readonly string[];
 const SLIDE_MS = 260;
@@ -71,6 +78,16 @@ const STEP_ANALYTICS = [
   "profile_country",
   "profile_referral",
 ] as const;
+
+function collectProfileStepAnalytics(
+  step: number,
+  oauth: boolean,
+): (typeof STEP_ANALYTICS)[number] | "profile_oauth_welcome" {
+  if (oauth && step === 0) {
+    return "profile_oauth_welcome";
+  }
+  return STEP_ANALYTICS[step] ?? "profile_name";
+}
 
 // Per-step icons
 const STEP_ICONS = [UserIcon, Calendar, Users, Globe, Megaphone] as const;
@@ -108,10 +125,65 @@ type StepBodyProps = {
   referral: string;
   referralError: string | null;
   onReferral: (r: string) => void;
+  /** OAuth-only: first screen = welcome + display name (same step index 0) */
+  oauthWelcomeStep: boolean;
 };
 
 function StepFormFields(p: StepBodyProps) {
   const { colors, radius } = p;
+  if (p.oauthWelcomeStep) {
+    return (
+      <View style={{ gap: 10 }}>
+        <Text
+          style={{
+            fontSize: 15,
+            lineHeight: 20,
+            fontFamily: "Poppins-SemiBold",
+            color: colors.textPrimary,
+          }}
+          selectable
+        >
+          Adjust your display name
+        </Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            borderWidth: 1.5,
+            borderColor: p.nameError ? colors.error : colors.border,
+            borderRadius: radius.lg,
+            paddingHorizontal: 16,
+            minHeight: 56,
+            gap: 10,
+            backgroundColor: colors.backgroundSecondary,
+            borderCurve: "continuous" as const,
+          }}
+        >
+          <UserIcon size={20} color={colors.textTertiary} />
+          <TextInput
+            value={p.firstName}
+            onChangeText={p.setFirstName}
+            placeholder="First name"
+            placeholderTextColor={colors.textTertiary}
+            style={{
+              flex: 1,
+              color: colors.textPrimary,
+              fontSize: 17,
+              fontFamily: "Poppins-Regular",
+            }}
+            autoCapitalize="words"
+            editable={!p.loading}
+            autoFocus
+          />
+        </View>
+        {p.nameError ? (
+          <Text style={{ color: colors.error, fontSize: 13, fontFamily: "Poppins-Regular" }} selectable>
+            {p.nameError}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
   if (p.step === 0) {
     return (
       <View style={{ gap: 6 }}>
@@ -331,7 +403,7 @@ export default function OnboardingCollectProfile() {
   const insets = useSafeAreaInsets();
   const footerPadBottom = Math.max(insets.bottom, 10);
   const { user, refreshAuth } = useAuth();
-  const { signUpData, updateSignUpData, resetSignUpData } = useSignUp();
+  const { signUpData, resetSignUpData } = useSignUp();
   const router = useRouter();
   const isDraft = isEmailPasswordProfileDraft(signUpData);
   const authForStep = isDraft ? "email" : getAuthenticationMethodForAnalytics(user);
@@ -346,11 +418,8 @@ export default function OnboardingCollectProfile() {
   const accountCreatedRef = useRef(false);
   const oauth = Boolean(user && signedInWithOAuth(user));
 
-  /**
-   * OAuth: name is supplied by the provider; users must not return from DOB to re-edit (step 0).
-   * Step 0 still shows Back to leave onboarding; every other step shows Back except DOB (step 1) for OAuth.
-   */
-  const showBackButton = step === 0 || !(oauth && step === 1);
+  /** OAuth has no prior in-app sign-up; back on step 0 would drop users on sign-in and break the flow. */
+  const showBackButton = !(oauth && step === 0);
 
   // Button press animations
   const backScale = useSharedValue(1);
@@ -393,9 +462,11 @@ export default function OnboardingCollectProfile() {
   );
 
   useEffect(() => {
-    const a = STEP_ANALYTICS[step] ?? "profile_name";
-    trackOnboardingStepViewed(a, { auth_method: authForStep });
-  }, [step, authForStep]);
+    if (!loadDone) {
+      return;
+    }
+    trackOnboardingStepViewed(collectProfileStepAnalytics(step, oauth), { auth_method: authForStep });
+  }, [loadDone, step, authForStep, oauth]);
 
   // Session users: load profile and initial step only when `user.id` changes.
   const userId = user?.id ?? null;
@@ -432,12 +503,21 @@ export default function OnboardingCollectProfile() {
       if (p.referral_source) {
         setReferral(String(p.referral_source));
       }
-      const initialStep = getProfileCollectStepIndex({
+      const dataStep = getProfileCollectStepIndex({
         first_name: p.first_name ?? null,
         dob: p.dob ?? null,
         gender: p.gender ?? null,
         country: p.country ?? null,
         referral_source: p.referral_source ?? null,
+      });
+      const fnTrim = String(p.first_name ?? "").trim();
+      const oauthUser = Boolean(user && signedInWithOAuth(user));
+      const welcomeSeen = oauthUser ? await getOAuthCollectWelcomeSeen(userId) : true;
+      const initialStep = getInitialCollectProfileUiStep({
+        dataStep,
+        oauth: oauthUser,
+        firstNameTrim: fnTrim,
+        oauthWelcomeSeen: welcomeSeen,
       });
       setStep(initialStep);
       setLoadDone(true);
@@ -487,11 +567,11 @@ export default function OnboardingCollectProfile() {
   }, []);
 
   const goBack = () => {
-    if (step <= 0) {
-      replaceFromProfileStep(router, COLLECT_PROFILE_HREF, signUpData);
+    if (oauth && step === 0) {
       return;
     }
-    if (step > 0 && !showBackButton) {
+    if (step <= 0) {
+      replaceFromProfileStep(router, COLLECT_PROFILE_HREF, signUpData);
       return;
     }
     hasNavigated.current = true;
@@ -506,6 +586,27 @@ export default function OnboardingCollectProfile() {
     }
     nextInFlight.current = true;
     try {
+      if (step === 0 && oauth) {
+        if (!user) {
+          return;
+        }
+        const t = firstName.trim();
+        if (!t) {
+          setNameError("Please enter a display name");
+          return;
+        }
+        if (t.length > 50) {
+          setNameError("That name is a little long");
+          return;
+        }
+        setNameError(null);
+        await setOAuthCollectWelcomeSeen(user.id);
+        hasNavigated.current = true;
+        navDir.current = "forward";
+        setStep(1);
+        clearAllErrors();
+        return;
+      }
       if (step === 0) {
         const t = firstName.trim();
         if (!t) {
@@ -517,30 +618,13 @@ export default function OnboardingCollectProfile() {
           return;
         }
         setNameError(null);
-        if (isDraft) {
-          updateSignUpData({ firstName: t });
-        } else if (user) {
-          setLoading(true);
-          const { error: uErr } = await supabase.from("profiles").update({ first_name: t }).eq("id", user.id);
-          if (uErr) {
-            captureError(uErr, { feature: "onboarding", action: "save_name", severity: "critical" });
-            setNameError("Couldn't save. Try again.");
-            setLoading(false);
-            return;
-          }
-          await refreshAuth();
-          setLoading(false);
-        } else {
+        if (!isDraft && !user) {
           return;
         }
       } else if (step === 1) {
         const d = dobText.trim();
         if (d.length === 0) {
           setDobError(null);
-          if (isDraft) {
-            updateSignUpData({ dob: "" });
-          }
-          // Session: leave dob unset (optional)
         } else {
           if (d.length < 10) {
             setDobError("Please enter a full date (DD/MM/YYYY)");
@@ -556,68 +640,15 @@ export default function OnboardingCollectProfile() {
             return;
           }
           setDobError(null);
-          if (isDraft) {
-            updateSignUpData({ dob: dobText });
-          } else if (user) {
-            const iso = toISODate(parsed);
-            setLoading(true);
-            const { error: uErr } = await supabase.from("profiles").update({ dob: iso }).eq("id", user.id);
-            if (uErr) {
-              captureError(uErr, { feature: "onboarding", action: "save_dob", severity: "critical" });
-              setDobError("Couldn't save. Try again.");
-              setLoading(false);
-              return;
-            }
-            await refreshAuth();
-            setLoading(false);
-          } else {
-            return;
-          }
         }
       } else if (step === 2) {
         setGenderError(null);
-        const genderValue = gender.trim() || "Prefer not to say";
-        if (isDraft) {
-          updateSignUpData({ gender: genderValue });
-        } else if (user) {
-          setLoading(true);
-          const { error: uErr } = await supabase
-            .from("profiles")
-            .update({ gender: genderValue })
-            .eq("id", user.id);
-          if (uErr) {
-            captureError(uErr, { feature: "onboarding", action: "save_gender", severity: "critical" });
-            setGenderError("Couldn't save. Try again.");
-            setLoading(false);
-            return;
-          }
-          await refreshAuth();
-          setLoading(false);
-        } else {
-          return;
-        }
       } else if (step === 3) {
         if (!country.trim()) {
           setCountryError("Please select your country");
           return;
         }
         setCountryError(null);
-        if (isDraft) {
-          updateSignUpData({ country });
-        } else if (user) {
-          setLoading(true);
-          const { error: uErr } = await supabase.from("profiles").update({ country }).eq("id", user.id);
-          if (uErr) {
-            captureError(uErr, { feature: "onboarding", action: "save_country", severity: "critical" });
-            setCountryError("Couldn't save. Try again.");
-            setLoading(false);
-            return;
-          }
-          await refreshAuth();
-          setLoading(false);
-        } else {
-          return;
-        }
       } else if (step === 4) {
         if (!referral.trim()) {
           setReferralError("Please select one option");
@@ -626,16 +657,36 @@ export default function OnboardingCollectProfile() {
         setReferralError(null);
 
         if (isDraft) {
-          const parsedDob = signUpData.dob ? parseDob(signUpData.dob) : null;
+          const tName = firstName.trim();
+          const genderValue = gender.trim() || "Prefer not to say";
+          const c = country.trim();
+          const r = referral.trim();
+          const dRaw = dobText.trim();
+          let parsedDob: Date | null = null;
+          if (dRaw.length > 0) {
+            if (dRaw.length < 10) {
+              setDobError("Please enter a full date (DD/MM/YYYY)");
+              return;
+            }
+            parsedDob = parseDob(dRaw) ?? null;
+            if (!parsedDob) {
+              setDobError("That date doesn't look right");
+              return;
+            }
+            if (parsedDob > new Date()) {
+              setDobError("Date of birth can't be in the future");
+              return;
+            }
+          }
           const dobIso = parsedDob ? toISODate(parsedDob) : undefined;
           const formData = {
             email: signUpData.email,
             password: signUpData.password,
-            firstName: signUpData.firstName,
-            country: signUpData.country,
-            referralSource: referral.trim(),
+            firstName: tName,
+            country: c,
+            referralSource: r,
             ...(dobIso ? { dob: dobIso } : {}),
-            ...(signUpData.gender ? { gender: signUpData.gender } : {}),
+            ...(genderValue ? { gender: genderValue } : {}),
           };
           const parsed = signUpSchema.safeParse(formData);
           if (!parsed.success) {
@@ -645,7 +696,7 @@ export default function OnboardingCollectProfile() {
           }
 
           setLoading(true);
-          trackSignupAttempted(referral.trim(), signUpData.country);
+          trackSignupAttempted(r, c);
           addActionBreadcrumb("email_signup_single_payload", "signup");
 
           const ip = await getPublicIp();
@@ -659,17 +710,15 @@ export default function OnboardingCollectProfile() {
             gender?: string;
             ip_address?: string;
           } = {
-            first_name: signUpData.firstName,
-            country: signUpData.country,
-            referral_source: referral.trim(),
+            first_name: tName,
+            country: c,
+            referral_source: r,
             onboarding_completed: true,
             app_tutorial_completed: false,
+            gender: genderValue,
           };
           if (dobIso) {
             profileData.dob = dobIso;
-          }
-          if (signUpData.gender) {
-            profileData.gender = signUpData.gender;
           }
           if (ip) {
             profileData.ip_address = ip;
@@ -692,7 +741,7 @@ export default function OnboardingCollectProfile() {
           }
 
           trackEmailPasswordSignupAccountCreated();
-          trackSignupCompleted(referral.trim(), signUpData.country);
+          trackSignupCompleted(r, c);
           addActionBreadcrumb("signup_account_created", "signup");
           accountCreatedRef.current = true;
           resetSignUpData();
@@ -706,18 +755,58 @@ export default function OnboardingCollectProfile() {
           return;
         }
 
+        const tName = firstName.trim();
+        if (!tName) {
+          setNameError("Please add your name");
+          return;
+        }
+        if (tName.length > 50) {
+          setNameError("That name is a little long");
+          return;
+        }
+        if (!country.trim()) {
+          setCountryError("Please select your country");
+          return;
+        }
+        const genderValue = gender.trim() || "Prefer not to say";
+        const dRaw = dobText.trim();
+        let dobValue: string | null = null;
+        if (dRaw.length > 0) {
+          if (dRaw.length < 10) {
+            setDobError("Please enter a full date (DD/MM/YYYY)");
+            setStep(1);
+            return;
+          }
+          const p = parseDob(dRaw);
+          if (!p) {
+            setDobError("That date doesn't look right");
+            setStep(1);
+            return;
+          }
+          if (p > new Date()) {
+            setDobError("Date of birth can't be in the future");
+            setStep(1);
+            return;
+          }
+          dobValue = toISODate(p);
+        }
+
         setLoading(true);
         const ip = await getPublicIp();
         const { error: uErr } = await supabase
           .from("profiles")
           .update({
-            referral_source: referral,
+            first_name: tName,
+            gender: genderValue,
+            country: country.trim(),
+            referral_source: referral.trim(),
             onboarding_completed: true,
+            ...(dobValue != null ? { dob: dobValue } : { dob: null }),
             ...(ip ? { ip_address: ip } : {}),
           })
           .eq("id", user.id);
         if (uErr) {
-          captureError(uErr, { feature: "onboarding", action: "save_referral", severity: "critical" });
+          captureError(uErr, { feature: "onboarding", action: "save_profile_complete", severity: "critical" });
           setReferralError("Couldn't save. Try again.");
           setLoading(false);
           return;
@@ -786,7 +875,17 @@ export default function OnboardingCollectProfile() {
       "We're curious how people discover Scamly. Your answer really helps us.",
     ],
   ];
-  const [title, subtitle] = TITLES[step] ?? TITLES[0];
+  const isOauthFirstScreen = oauth && step === 0;
+  const [title, subtitle] = (() => {
+    if (isOauthFirstScreen) {
+      const name = firstName.trim();
+      return [
+        name ? `Welcome, ${name}!` : "Welcome!",
+        "We need a few quick details to continue. This helps us keep Scamly relevant and secure for you.",
+      ] as const;
+    }
+    return TITLES[step] ?? TITLES[0];
+  })();
 
   const currentDisabled =
     (step === 0 && !firstName.trim()) ||
@@ -806,7 +905,7 @@ export default function OnboardingCollectProfile() {
       : SlideInLeft.duration(SLIDE_MS)
     : undefined;
 
-  const StepIcon = STEP_ICONS[step] ?? UserIcon;
+  const StepIcon = isOauthFirstScreen ? Sparkles : (STEP_ICONS[step] ?? UserIcon);
 
   return (
     <>
@@ -937,6 +1036,7 @@ export default function OnboardingCollectProfile() {
                   ]}
                 >
                   <StepFormFields
+                    oauthWelcomeStep={isOauthFirstScreen}
                     step={step}
                     colors={colors}
                     radius={radius}
@@ -973,7 +1073,6 @@ export default function OnboardingCollectProfile() {
             style={[
               styles.footer,
               {
-                borderTopColor: colors.divider,
                 paddingBottom: footerPadBottom,
               },
             ]}
@@ -998,12 +1097,14 @@ export default function OnboardingCollectProfile() {
                       styles.circleBack,
                       {
                         opacity: loading ? 0.6 : 1,
-                        backgroundColor: "#fff",
+                        backgroundColor: colors.surface,
+                        borderWidth: isDark ? 1 : 0,
+                        borderColor: colors.border,
                         ...shadows.md,
                       },
                     ]}
                   >
-                    <ArrowLeft size={20} color="#111" />
+                    <ArrowLeft size={20} color={colors.textPrimary} />
                   </Pressable>
                 </Animated.View>
               ) : null}
@@ -1020,7 +1121,15 @@ export default function OnboardingCollectProfile() {
                   }}
                   disabled={currentDisabled || loading}
                   accessibilityRole="button"
-                  accessibilityLabel={step === 4 && isDraft ? "Create account" : "Next"}
+                  accessibilityLabel={
+                    step === 4 && isDraft
+                      ? "Create account"
+                      : step === 4
+                        ? "Finish"
+                        : isOauthFirstScreen
+                          ? "Continue"
+                          : "Next"
+                  }
                   style={[
                     styles.pillNext,
                     {
@@ -1044,7 +1153,13 @@ export default function OnboardingCollectProfile() {
                       minimumFontScale={0.85}
                       style={[styles.pillNextText, { color: colors.textInverse }]}
                     >
-                      {step === 4 && isDraft ? "Create account" : "Next"}
+                      {step === 4 && isDraft
+                        ? "Create account"
+                        : step === 4
+                          ? "Finish"
+                          : isOauthFirstScreen
+                            ? "Continue"
+                            : "Next"}
                     </Text>
                   )}
                 </Pressable>
@@ -1125,7 +1240,6 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 20,
     paddingTop: 12,
-    borderTopWidth: 1,
   },
   footerBackSlot: {
     width: 52,
@@ -1150,7 +1264,7 @@ const styles = StyleSheet.create({
   // Glowing pill next button
   pillNext: {
     paddingVertical: 14,
-    paddingHorizontal: 22,
+    paddingHorizontal: 36,
     minHeight: 52,
     alignItems: "center",
     justifyContent: "center",

@@ -63,6 +63,8 @@ export function getPreviousProfileOnboardingHref(currentHref: string): string | 
 
 /**
  * First in-app step index (0 = name … 4 = referral) for the collect-profile flow.
+ * For OAuth users with a name, the UI may insert a "welcome" screen at index 0 before DOB;
+ * use {@link getInitialCollectProfileUiStep} after loading `oauth_welcome_seen` from device storage.
  */
 export function getProfileCollectStepIndex(
   p: Pick<
@@ -86,6 +88,30 @@ export function getProfileCollectStepIndex(
     return 4;
   }
   return 0;
+}
+
+/**
+ * Maps server/profile progress (`dataStep` from {@link getProfileCollectStepIndex}) to the
+ * first screen index shown in `collect-profile`. OAuth users with a name see a one-time
+ * welcome step at index 0 before DOB until they tap Continue (persisted via AsyncStorage).
+ */
+export function getInitialCollectProfileUiStep(input: {
+  dataStep: number;
+  oauth: boolean;
+  firstNameTrim: string;
+  oauthWelcomeSeen: boolean;
+}): number {
+  const { dataStep, oauth, firstNameTrim, oauthWelcomeSeen } = input;
+  if (!oauth) {
+    return dataStep;
+  }
+  if (dataStep === 0) {
+    return 0;
+  }
+  if (dataStep === 1 && firstNameTrim && !oauthWelcomeSeen) {
+    return 0;
+  }
+  return dataStep;
 }
 
 /**

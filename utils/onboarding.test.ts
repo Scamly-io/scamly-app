@@ -1,6 +1,7 @@
 import {
   checkOnboardingStatus,
   checkProfileComplete,
+  getInitialCollectProfileUiStep,
   getNextProfileOnboardingHref,
   ProfileNotFoundError,
   resolveOnboardingEntryPath,
@@ -127,6 +128,63 @@ describe("checkProfileComplete", () => {
     mockProfileSingle({ data: null, error: { message: "x" } });
 
     await expect(checkProfileComplete("u1")).resolves.toBe(false);
+  });
+});
+
+describe("getInitialCollectProfileUiStep", () => {
+  it("non-oAuth mirrors data step from profile", () => {
+    expect(
+      getInitialCollectProfileUiStep({
+        dataStep: 2,
+        oauth: false,
+        firstNameTrim: "Ada",
+        oauthWelcomeSeen: false,
+      }),
+    ).toBe(2);
+  });
+
+  it("oAuth with no name stays on data step 0 (name field)", () => {
+    expect(
+      getInitialCollectProfileUiStep({
+        dataStep: 0,
+        oauth: true,
+        firstNameTrim: "",
+        oauthWelcomeSeen: false,
+      }),
+    ).toBe(0);
+  });
+
+  it("oAuth at DOB step shows welcome (UI 0) until device flag is set", () => {
+    expect(
+      getInitialCollectProfileUiStep({
+        dataStep: 1,
+        oauth: true,
+        firstNameTrim: "Sam",
+        oauthWelcomeSeen: false,
+      }),
+    ).toBe(0);
+  });
+
+  it("oAuth resumes at DOB after welcome was completed", () => {
+    expect(
+      getInitialCollectProfileUiStep({
+        dataStep: 1,
+        oauth: true,
+        firstNameTrim: "Sam",
+        oauthWelcomeSeen: true,
+      }),
+    ).toBe(1);
+  });
+
+  it("oAuth never inserts welcome when profile is past DOB", () => {
+    expect(
+      getInitialCollectProfileUiStep({
+        dataStep: 3,
+        oauth: true,
+        firstNameTrim: "Sam",
+        oauthWelcomeSeen: false,
+      }),
+    ).toBe(3);
   });
 });
 
