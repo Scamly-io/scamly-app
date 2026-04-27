@@ -18,6 +18,7 @@
       "usesAppleSignIn": true
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/icons/android/android-icon-foreground.png",

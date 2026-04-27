@@ -9,7 +9,12 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-export default function ThinkingIndicator() {
+type Props = {
+  /** Plain dots only — no pill background (matches full-width assistant layout). */
+  variant?: "default" | "plain";
+};
+
+export default function ThinkingIndicator({ variant = "default" }: Props) {
   const { colors } = useTheme();
   const dot1 = useSharedValue(0.3);
   const dot2 = useSharedValue(0.3);
@@ -47,8 +52,10 @@ export default function ThinkingIndicator() {
     transform: [{ scale: 0.8 + dot3.value * 0.2 }],
   }));
 
+  const isPlain = variant === "plain";
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.backgroundSecondary }]}>
+    <View style={!isPlain ? [styles.container, { backgroundColor: colors.backgroundSecondary }] : styles.plain}>
       <Animated.View style={[styles.dot, { backgroundColor: colors.accent }, dot1Style]} />
       <Animated.View style={[styles.dot, { backgroundColor: colors.accent }, dot2Style]} />
       <Animated.View style={[styles.dot, { backgroundColor: colors.accent }, dot3Style]} />
@@ -64,6 +71,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 16,
     gap: 6,
+  },
+  plain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
   },
   dot: {
     width: 8,

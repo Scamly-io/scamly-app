@@ -9,12 +9,7 @@ export default function ChatLayout() {
             }}
         >
             <Stack.Screen name="index" />
-            <Stack.Screen
-                name="[id]"
-                options={{
-                    tabBarStyle: { display: "none" },
-                }}
-            />
+            <Stack.Screen name="[id]" />
         </Stack>
     )
 }
