@@ -1,3 +1,5 @@
+import "react-native-gesture-handler";
+
 import ThemedBackground from "@/components/ThemedBackground";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider, useTheme } from "@/theme";

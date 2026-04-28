@@ -1,31 +1,29 @@
 import ChatChromeIconButton from "@/components/chat-chrome-icon-button";
+import ChatGlassPillButton from "@/components/chat-glass-pill-button";
 import ChatGlassInputBar from "@/components/chat-glass-input-bar";
-import ChatHistoryDrawer from "@/components/chat-history-drawer";
 import MessageBlock, { type ChatMessage } from "@/components/MessageBlock";
 import ThemedBackground from "@/components/ThemedBackground";
 import ThinkingIndicator from "@/components/ThinkingIndicator";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
-import { ChatError, deleteConversationId, getAiChatEdgeFunctionUrl } from "@/utils/ai/chat";
+import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
+import { getAiChatEdgeFunctionUrl } from "@/utils/ai/chat";
 import { trackUserVisibleError } from "@/utils/analytics";
-import {
-  clearChatHistoryCache,
-  getChatHistoryCache,
-  setChatHistoryCache,
-} from "@/utils/chat-history-cache";
+import { clearChatHistoryCache } from "@/utils/chat-history-cache";
 import {
   buildInitialChatRowPayload,
   insertInitialChatRow,
   needsInitialChatRowInsert,
 } from "@/utils/chat-initial-row";
-import { captureChatError, captureDataFetchError } from "@/utils/sentry";
+import { captureChatError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import * as Haptics from "expo-haptics";
+import { DrawerActions, useNavigation } from "@react-navigation/native";
 import { router, useFocusEffect } from "expo-router";
-import { Menu, X } from "lucide-react-native";
+import { Menu, Plus, X } from "lucide-react-native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, BackHandler, FlatList, Platform, StyleSheet, Text, View } from "react-native";
+import { Alert, BackHandler, FlatList, Keyboard, Platform, StyleSheet, Text, View } from "react-native";
 import { KeyboardAvoidingView, KeyboardGestureArea } from "react-native-keyboard-controller";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
@@ -47,68 +45,6 @@ function toBlockMessage(m: StoreMessage): ChatMessage {
     role: m.role,
     content: m.content,
   };
-}
-
-async function consumeAssistantStream(
-  response: Response,
-  appendChunk: (s: string) => void
-): Promise<void> {
-  const body = response.body;
-  if (!body) return;
-
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  const contentType = response.headers.get("content-type") ?? "";
-
-  if (contentType.includes("text/event-stream")) {
-    let carry = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      carry += decoder.decode(value, { stream: true });
-      let boundary = carry.indexOf("\n\n");
-      while (boundary !== -1) {
-        const frame = carry.slice(0, boundary);
-        carry = carry.slice(boundary + 2);
-        boundary = carry.indexOf("\n\n");
-        const lines = frame.split(/\r?\n/);
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-          const payload = trimmed.slice(5).trim();
-          if (!payload || payload === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(payload) as Record<string, unknown>;
-            const chunk =
-              (typeof parsed.text === "string" && parsed.text) ||
-              (typeof parsed.delta === "string" && parsed.delta) ||
-              (typeof parsed.content === "string" && parsed.content) ||
-              "";
-            if (chunk) appendChunk(chunk);
-          } catch {
-            appendChunk(payload);
-          }
-        }
-      }
-    }
-    if (carry.trim()) {
-      const lines = carry.split(/\r?\n/);
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const payload = trimmed.slice(5).trim();
-        if (payload && payload !== "[DONE]") appendChunk(payload);
-      }
-    }
-    return;
-  }
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    if (chunk) appendChunk(chunk);
-  }
 }
 
 const MessageRow = memo(
@@ -146,19 +82,13 @@ export default function ChatInterface({
 }: ChatInterfaceProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
 
   const [input, setInput] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [historyChats, setHistoryChats] = useState<{ id: string; created_at: string }[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
 
   const flatListRef = useRef<FlatList<StoreMessage>>(null);
-
-  const currentDrawerChatId = routeChatSegment;
-
-  const menuDisabled = false;
 
   /**
    * Inverted list: data is reverse-chronological (newest first) so the latest turn
@@ -171,12 +101,14 @@ export default function ChatInterface({
   }, []);
 
   const confirmExitChat = useCallback(() => {
+    Keyboard.dismiss();
     Alert.alert("Leave chat?", "You can return anytime from the Chat tab.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Leave",
         style: "destructive",
         onPress: () => {
+          Keyboard.dismiss();
           clearChatHistoryCache();
           exitHome();
         },
@@ -194,33 +126,16 @@ export default function ChatInterface({
     }, [confirmExitChat])
   );
 
-  const loadChatHistoryForDrawer = useCallback(async () => {
-    const cached = getChatHistoryCache();
-    if (cached) {
-      setHistoryChats(cached);
-      return;
-    }
-    if (!userId) return;
-    setHistoryLoading(true);
-    const { data, error } = await supabase
-      .from("chats")
-      .select("id, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-    setHistoryLoading(false);
-    if (error) {
-      captureDataFetchError(error, "chat", "fetch_chats_drawer", "critical");
-      return;
-    }
-    const rows = data ?? [];
-    setChatHistoryCache(rows);
-    setHistoryChats(rows);
-  }, [userId]);
-
   const openDrawer = useCallback(() => {
-    setDrawerOpen(true);
-    void loadChatHistoryForDrawer();
-  }, [loadChatHistoryForDrawer]);
+    navigation.dispatch(DrawerActions.openDrawer());
+  }, [navigation]);
+
+  const startNewChat = useCallback(() => {
+    navigation.dispatch(DrawerActions.closeDrawer());
+    const newId = uuid.v4().toString();
+    useChatStore.getState().resetSession();
+    router.replace(`/chat/${newId}`);
+  }, [navigation]);
 
   /** Inverted + newest-first: staying “pinned” means offset 0 */
   const scrollToPinnedEnd = useCallback((animated: boolean) => {
@@ -310,40 +225,22 @@ export default function ChatInterface({
         return;
       }
 
-      const response = await fetch(edgeUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      await streamAssistantMessage({
+        url: edgeUrl,
+        token,
+        body: {
           action: "sendMessage",
           message: trimmed,
           conversationId: conversationIdForPost ?? null,
           userId,
           chatId: routeChatSegment,
-        }),
-      });
-
-      const headerConversationId =
-        response.headers.get("x-conversation-id") ?? response.headers.get("X-Conversation-Id");
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        throw new Error(errText || `Request failed (${response.status})`);
-      }
-
-      if (headerConversationId) {
-        const prev = useChatStore.getState().activeConversationId;
-        if (!prev) {
-          useChatStore.getState().setConversationId(headerConversationId);
-        } else {
-          useChatStore.getState().setConversationId(headerConversationId);
-        }
-      }
-
-      await consumeAssistantStream(response, (chunk) => {
-        useChatStore.getState().appendToLastMessage(chunk);
+        },
+        onConversationId: (id) => {
+          useChatStore.getState().setConversationId(id);
+        },
+        onChunk: (chunk) => {
+          useChatStore.getState().appendToLastMessage(chunk);
+        },
       });
 
       useChatStore.getState().completeLastAssistantMessage();
@@ -381,27 +278,42 @@ export default function ChatInterface({
       <SafeAreaView style={styles.flex} edges={["top", "left", "right"]}>
         <View style={styles.flex}>
           {/* Fixed header — keep height stable (no flex growth) */}
-          <View style={[styles.headerRow, { height: HEADER_HEIGHT }]}>
-            <ChatChromeIconButton
-              accessibilityLabel="Open chat history"
-              onPress={openDrawer}
-              bg={colors.backgroundSecondary}
-              disabled={menuDisabled}
+          <View style={[styles.headerRow, { minHeight: HEADER_HEIGHT }]}>
+            <View style={styles.headerColStart}>
+              <View style={styles.headerLeftActions}>
+                <ChatChromeIconButton
+                  accessibilityLabel="Open chat history"
+                  onPress={openDrawer}
+                  bg={colors.surface}
+                >
+                  <Menu size={22} color={colors.textPrimary} strokeWidth={2} />
+                </ChatChromeIconButton>
+                <ChatGlassPillButton
+                  label="New chat"
+                  icon={<Plus size={18} color={colors.textPrimary} strokeWidth={2} />}
+                  onPress={startNewChat}
+                  accessibilityLabel="Start a new chat"
+                  bg={colors.surface}
+                  labelColor={colors.textPrimary}
+                />
+              </View>
+            </View>
+            <Text
+              style={[styles.headerDate, { color: colors.textTertiary }]}
+              numberOfLines={1}
+              selectable
             >
-              <Menu size={22} color={colors.textPrimary} strokeWidth={2} />
-            </ChatChromeIconButton>
-
-            <Text style={[styles.headerDate, { color: colors.textTertiary }]} selectable>
               {headerDateLabel}
             </Text>
-
-            <ChatChromeIconButton
-              accessibilityLabel="Close chat"
-              onPress={confirmExitChat}
-              bg={colors.backgroundSecondary}
-            >
-              <X size={22} color={colors.textPrimary} strokeWidth={2} />
-            </ChatChromeIconButton>
+            <View style={styles.headerColEnd}>
+              <ChatChromeIconButton
+                accessibilityLabel="Close chat"
+                onPress={confirmExitChat}
+                bg={colors.surface}
+              >
+                <X size={22} color={colors.textPrimary} strokeWidth={2} />
+              </ChatChromeIconButton>
+            </View>
           </View>
 
           {/*
@@ -421,7 +333,7 @@ export default function ChatInterface({
                   keyExtractor={(item) => item.id}
                   renderItem={renderItem}
                   keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                  keyboardDismissMode={Platform.OS === "ios" ? "none" : "on-drag"}
                   contentContainerStyle={[
                     styles.listContent,
                     listData.length === 0 ? styles.listEmptyGrow : undefined,
@@ -456,49 +368,6 @@ export default function ChatInterface({
           </KeyboardAvoidingView>
         </View>
       </SafeAreaView>
-
-      <ChatHistoryDrawer
-        visible={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        chats={historyChats}
-        loading={historyLoading}
-        currentChatId={currentDrawerChatId}
-        onSelectChat={(id) => {
-          useChatStore.getState().setConversationId(null);
-          router.replace(`/chat/${id}`);
-        }}
-        onDeleteChat={(targetId) => {
-          Alert.alert("Delete chat", "This conversation will be permanently deleted.", [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Delete",
-              style: "destructive",
-              onPress: async () => {
-                try {
-                  await deleteConversationId(targetId);
-                  const cached = getChatHistoryCache();
-                  if (cached) {
-                    setChatHistoryCache(cached.filter((c) => c.id !== targetId));
-                  }
-                  setHistoryChats((prev) => prev.filter((c) => c.id !== targetId));
-                  if (targetId === currentDrawerChatId || targetId === routeChatSegment) {
-                    clearChatHistoryCache();
-                    useChatStore.getState().resetSession();
-                    router.replace("/chat");
-                  }
-                } catch (err) {
-                  if (err instanceof ChatError) {
-                    Alert.alert("Error", "Could not delete chat. Please try again.");
-                  } else {
-                    trackUserVisibleError("chat", "chat_delete_failed", true);
-                    Alert.alert("Error", "Could not delete chat.");
-                  }
-                }
-              },
-            },
-          ]);
-        }}
-      />
     </ThemedBackground>
   );
 }
@@ -513,14 +382,32 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 16,
+  },
+  headerColStart: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  headerColEnd: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  headerLeftActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   headerDate: {
     fontFamily: "Poppins-Regular",
     fontSize: 12,
-    flex: 1,
+    flexShrink: 0,
+    maxWidth: 120,
     textAlign: "center",
+    paddingHorizontal: 4,
   },
   listContent: {
     paddingHorizontal: 16,

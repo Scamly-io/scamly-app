@@ -1,26 +1,38 @@
 import { GlassView, isGlassEffectAPIAvailable } from "expo-glass-effect";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import { useTheme } from "@/theme";
 
 type Props = {
-  children: ReactNode;
+  /** Label displayed next to the icon (truncates on narrow layouts). */
+  label: string;
+  icon: ReactNode;
   onPress: () => void;
   accessibilityLabel: string;
+  /** Fallback background when glass is unavailable (Android / older iOS). */
   bg: string;
+  /** Primary text colour for the label */
+  labelColor: string;
   disabled?: boolean;
 };
 
-export default function ChatChromeIconButton({
-  children,
+/**
+ * Horizontal glass “pill” control matching {@link ChatChromeIconButton} iOS behaviour.
+ */
+export default function ChatGlassPillButton({
+  label,
+  icon,
   onPress,
   accessibilityLabel,
   bg,
+  labelColor,
   disabled,
 }: Props) {
   const { colors } = useTheme();
   const iosGlass =
-    Platform.OS === "ios" && typeof isGlassEffectAPIAvailable === "function" && isGlassEffectAPIAvailable();
+    Platform.OS === "ios" &&
+    typeof isGlassEffectAPIAvailable === "function" &&
+    isGlassEffectAPIAvailable();
 
   const inner = (
     <Pressable
@@ -30,17 +42,20 @@ export default function ChatChromeIconButton({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: !!disabled }}
       style={({ pressed }) => [
-        styles.chromeBtnInner,
+        styles.inner,
         { opacity: disabled ? 0.35 : pressed ? 0.75 : 1 },
       ]}
     >
-      {children}
+      {icon}
+      <Text style={[styles.label, { color: labelColor }]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 
   if (iosGlass) {
     return (
-      <GlassView style={styles.chromeGlass} glassEffectStyle="regular" colorScheme="auto">
+      <GlassView style={styles.glass} glassEffectStyle="regular" colorScheme="auto">
         {inner}
       </GlassView>
     );
@@ -49,7 +64,7 @@ export default function ChatChromeIconButton({
   return (
     <View
       style={[
-        styles.chromeFallback,
+        styles.fallback,
         Platform.OS === "android"
           ? {
               backgroundColor: colors.surface,
@@ -65,22 +80,31 @@ export default function ChatChromeIconButton({
 }
 
 const styles = StyleSheet.create({
-  chromeGlass: {
-    width: 44,
+  glass: {
     height: 44,
     borderRadius: 22,
     overflow: "hidden",
+    alignSelf: "flex-start",
+    maxWidth: 200,
   },
-  chromeFallback: {
-    width: 44,
+  fallback: {
     height: 44,
     borderRadius: 22,
     overflow: "hidden",
+    alignSelf: "flex-start",
+    maxWidth: 200,
   },
-  chromeBtnInner: {
-    width: 44,
-    height: 44,
+  inner: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    height: 44,
     justifyContent: "center",
+  },
+  label: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+    flexShrink: 1,
   },
 });

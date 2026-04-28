@@ -41,7 +41,8 @@ export default function ChatGlassInputBar({
         styles.textCluster,
         {
           borderRadius: radius.xl,
-          backgroundColor: Platform.OS === "android" ? colors.backgroundSecondary : "transparent",
+          /** Android: keep transparent so the outer `fallbackOuter` (`surface`) is one flat white field — no inner grey inset. */
+          backgroundColor: "transparent",
         },
       ]}
     >
@@ -58,6 +59,7 @@ export default function ChatGlassInputBar({
         blurOnSubmit={false}
         returnKeyType="default"
         textAlignVertical="top"
+        underlineColorAndroid="transparent"
       />
       {canSend ? (
         <Pressable
@@ -92,6 +94,7 @@ export default function ChatGlassInputBar({
           flex: 1,
           backgroundColor: colors.surface,
           borderColor: colors.border,
+          borderWidth: StyleSheet.hairlineWidth,
           borderRadius: radius["2xl"],
         },
       ]}
@@ -105,7 +108,7 @@ export default function ChatGlassInputBar({
       <ChatChromeIconButton
         accessibilityLabel="Add attachment"
         onPress={onPressPlus}
-        bg={colors.backgroundSecondary}
+        bg={colors.surface}
       >
         <Plus size={22} color={colors.textPrimary} strokeWidth={2} />
       </ChatChromeIconButton>
