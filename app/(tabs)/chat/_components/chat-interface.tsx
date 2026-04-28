@@ -1,14 +1,14 @@
 import ChatChromeIconButton from "@/components/chat-chrome-icon-button";
-import ChatGlassPillButton from "@/components/chat-glass-pill-button";
 import ChatGlassInputBar from "@/components/chat-glass-input-bar";
+import ChatGlassPillButton from "@/components/chat-glass-pill-button";
 import MessageBlock, { type ChatMessage } from "@/components/MessageBlock";
 import ThemedBackground from "@/components/ThemedBackground";
 import ThinkingIndicator from "@/components/ThinkingIndicator";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
-import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
 import { getAiChatEdgeFunctionUrl } from "@/utils/ai/chat";
+import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
 import { trackUserVisibleError } from "@/utils/analytics";
 import { clearChatHistoryCache } from "@/utils/chat-history-cache";
 import {
@@ -18,8 +18,8 @@ import {
 } from "@/utils/chat-initial-row";
 import { captureChatError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
-import * as Haptics from "expo-haptics";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { Menu, Plus, X } from "lucide-react-native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -264,7 +264,7 @@ export default function ChatInterface({
   const listEmpty = useMemo(
     () => (
       <View style={styles.emptyBlock}>
-        <Text style={[styles.greeting, { color: colors.textPrimary }]}>How can Scamly help?</Text>
+        <Text style={[styles.greeting, { color: colors.textPrimary }]}>How can I help?</Text>
         <Text style={[styles.greetingSub, { color: colors.textSecondary }]}>
           Ask about scams, fraud, phishing, or what to do next if something feels off.
         </Text>

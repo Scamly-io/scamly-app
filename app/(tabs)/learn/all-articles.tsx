@@ -1,5 +1,6 @@
 import ArticleTile from "@/components/ArticleTile";
 import Button from "@/components/Button";
+import { SwiftGlassLabeledBackButton } from "@/components/SwiftGlassChrome";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/access";
@@ -118,16 +119,21 @@ export default function AllArticles() {
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         {/* Header */}
         <Animated.View entering={FadeIn.duration(300)} style={styles.header}>
-          <TouchableOpacity
-            style={[
-              styles.backButton,
-              { backgroundColor: colors.surface, borderRadius: radius.md, ...shadows.sm },
-            ]}
-            onPress={() => router.replace("/learn")}
-          >
-            <ArrowLeft size={18} color={colors.textPrimary} />
-            <Text style={[styles.backLabel, { color: colors.textPrimary }]}>Back</Text>
-          </TouchableOpacity>
+          {SwiftGlassLabeledBackButton({
+            onPress: () => router.replace("/learn"),
+            textColorHex: colors.textPrimary,
+          }) ?? (
+            <TouchableOpacity
+              style={[
+                styles.backButton,
+                { backgroundColor: colors.surface, borderRadius: radius.md, ...shadows.sm },
+              ]}
+              onPress={() => router.replace("/learn")}
+            >
+              <ArrowLeft size={18} color={colors.textPrimary} />
+              <Text style={[styles.backLabel, { color: colors.textPrimary }]}>Back</Text>
+            </TouchableOpacity>
+          )}
           <View style={[styles.countBadge, { backgroundColor: colors.accentMuted }]}>
             <Text style={[styles.countText, { color: colors.accent }]}>
               {visibleArticles.length} articles
