@@ -2,12 +2,27 @@
  * Chat Utility Module for Scamly
  *
 
- * body.action Enum: createConversation, deleteConversation, generateResponse
+ * body.action Enum: createConversationId, deleteConversationId, generateResponse, sendMessage (streaming)
  */
 
 import { trackUserVisibleError } from "@/utils/analytics";
 import { captureChatError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
+
+const AI_CHAT_FUNCTION = __DEV__ ? "ai-chat-dev" : "ai-chat";
+console.log("AI_CHAT_FUNCTION", AI_CHAT_FUNCTION);
+
+/**
+ * Base URL for the Supabase `ai-chat` / `ai-chat-dev` edge function.
+ * In development (`__DEV__`), uses the `ai-chat-dev` function.
+ */
+export function getAiChatEdgeFunctionUrl(): string {
+  const base = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  if (!base) {
+    throw new Error("EXPO_PUBLIC_SUPABASE_URL is not set");
+  }
+  return `${base.replace(/\/$/, "")}/functions/v1/${AI_CHAT_FUNCTION}`;
+}
 
 /**
  * Custom error class for chat-related errors.
@@ -30,7 +45,7 @@ export async function createConversationID(chatId: string): Promise<string> {
         const { data: { session } } = await supabase.auth.getSession();
         const accessToken = session.access_token;
 
-        const result =await fetch("https://rdrumcjwntyfnjhownbd.supabase.co/functions/v1/ai-chat", {
+        const result =await fetch(getAiChatEdgeFunctionUrl(), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -70,7 +85,7 @@ export async function deleteConversationId(chatId: string): Promise<void> {
         const { data: { session } } = await supabase.auth.getSession();
         const accessToken = session.access_token;
     
-        const result = await fetch("https://rdrumcjwntyfnjhownbd.supabase.co/functions/v1/ai-chat", {
+        const result = await fetch(getAiChatEdgeFunctionUrl(), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -118,7 +133,7 @@ export async function generateResponse(content: string, chatId: string, conversa
         const { data: { session } } = await supabase.auth.getSession();
         const accessToken = session.access_token;
 
-        const result = await fetch("https://rdrumcjwntyfnjhownbd.supabase.co/functions/v1/ai-chat", {
+        const result = await fetch(getAiChatEdgeFunctionUrl(), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

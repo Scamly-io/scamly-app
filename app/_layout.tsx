@@ -1,3 +1,5 @@
+import "react-native-gesture-handler";
+
 import ThemedBackground from "@/components/ThemedBackground";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider, useTheme } from "@/theme";
@@ -12,6 +14,7 @@ import { StatusBar } from "expo-status-bar";
 import { PostHogProvider, usePostHog } from "posthog-react-native";
 import { useEffect } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // Initialize Sentry as early as possible
@@ -107,11 +110,13 @@ export default function Layout() {
         }}
       >
         <SafeAreaProvider>
-          <ThemeProvider>
-            <AuthProvider>
-              <AppContent />
-            </AuthProvider>
-          </ThemeProvider>
+          <KeyboardProvider preload={false}>
+            <ThemeProvider>
+              <AuthProvider>
+                <AppContent />
+              </AuthProvider>
+            </ThemeProvider>
+          </KeyboardProvider>
         </SafeAreaProvider>
       </PostHogProvider>
     </Sentry.ErrorBoundary>
