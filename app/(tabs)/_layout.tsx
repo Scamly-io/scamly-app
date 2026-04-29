@@ -1,5 +1,6 @@
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useTheme } from "@/theme";
+import { openNewChatSession } from "@/utils/chat-nav";
 import { Tabs, usePathname } from "expo-router";
 import { BookOpen, House, MessageCircle, SearchCode, Sparkles } from "lucide-react-native";
 import { Platform, StyleSheet } from "react-native";
@@ -66,6 +67,12 @@ export default function TabsLayout() {
             tabBarIcon: ({ focused, color }) => (
               <MessageCircle size={22} color={color} strokeWidth={focused ? 2.5 : 2} />
             ),
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              openNewChatSession();
+            },
           }}
         />
         <Tabs.Screen

@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
 import { pickByWeeklyViewsOrRandom } from "@/utils/articleWeeklyRanking";
+import { openNewChatSession } from "@/utils/chat-nav";
 import { captureDataFetchError, captureError, captureWarning } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -257,7 +258,13 @@ export default function Home() {
     }
   }
 
-  const navOptions = [
+  const navOptions: {
+    icon: typeof Scan;
+    label: string;
+    route: string;
+    color: string;
+    openChatTab?: boolean;
+  }[] = [
     {
       icon: Scan,
       label: "Scanner",
@@ -269,6 +276,7 @@ export default function Home() {
       label: "AI Chat",
       route: "/chat",
       color: colors.accent,
+      openChatTab: true,
     },
     {
       icon: Search,
@@ -316,7 +324,9 @@ export default function Home() {
             {navOptions.map((option, index) => (
               <Card
                 key={option.label}
-                onPress={() => router.push(option.route as any)}
+                onPress={() =>
+                  option.openChatTab ? openNewChatSession() : router.push(option.route as any)
+                }
                 style={styles.navOption}
               >
                 <View style={[styles.navIconContainer, { backgroundColor: colors.accentMuted }]}>

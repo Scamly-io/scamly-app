@@ -1,25 +1,26 @@
+import Button from "@/components/Button";
 import ChatChromeIconButton from "@/components/chat-chrome-icon-button";
-import ChatGlassPillButton from "@/components/chat-glass-pill-button";
 import ChatGlassInputBar from "@/components/chat-glass-input-bar";
+import ChatGlassPillButton from "@/components/chat-glass-pill-button";
 import MessageBlock, { type ChatMessage } from "@/components/MessageBlock";
 import ThemedBackground from "@/components/ThemedBackground";
 import ThinkingIndicator from "@/components/ThinkingIndicator";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
-import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
 import { getAiChatEdgeFunctionUrl } from "@/utils/ai/chat";
+import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
 import { trackUserVisibleError } from "@/utils/analytics";
-import { clearChatHistoryCache } from "@/utils/chat-history-cache";
 import {
   buildInitialChatRowPayload,
   insertInitialChatRow,
   needsInitialChatRowInsert,
 } from "@/utils/chat-initial-row";
+import { openNewChatSession } from "@/utils/chat-nav";
 import { captureChatError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
-import * as Haptics from "expo-haptics";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { Menu, Plus, X } from "lucide-react-native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -37,6 +38,9 @@ export type ChatInterfaceProps = {
   userId: string;
   isFreePlan: boolean;
   planLoading: boolean;
+  /** Shown in empty state when `isFreePlan`; opens RevenueCat paywall from parent. */
+  onOpenPaywall?: () => void | Promise<void>;
+  paywallLoading?: boolean;
 };
 
 function toBlockMessage(m: StoreMessage): ChatMessage {
@@ -79,6 +83,8 @@ export default function ChatInterface({
   userId,
   isFreePlan,
   planLoading,
+  onOpenPaywall,
+  paywallLoading = false,
 }: ChatInterfaceProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -96,34 +102,22 @@ export default function ChatInterface({
    */
   const listData = useMemo(() => [...messages].reverse(), [messages]);
 
-  const exitHome = useCallback(() => {
-    router.replace("/chat");
-  }, []);
-
-  const confirmExitChat = useCallback(() => {
+  const goHome = useCallback(() => {
     Keyboard.dismiss();
-    Alert.alert("Leave chat?", "You can return anytime from the Chat tab.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Leave",
-        style: "destructive",
-        onPress: () => {
-          Keyboard.dismiss();
-          clearChatHistoryCache();
-          exitHome();
-        },
-      },
-    ]);
-  }, [exitHome]);
+    // Replace the current `/chat/[id]` with `/chat?exit=1`. The chat stack is now just
+    // the index route; index sees `exit=1` and redirects to `/home`, leaving the chat
+    // stack cleared for next time the tab is opened.
+    router.replace("/chat?exit=1");
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-        confirmExitChat();
+        goHome();
         return true;
       });
       return () => sub.remove();
-    }, [confirmExitChat])
+    }, [goHome])
   );
 
   const openDrawer = useCallback(() => {
@@ -132,9 +126,7 @@ export default function ChatInterface({
 
   const startNewChat = useCallback(() => {
     navigation.dispatch(DrawerActions.closeDrawer());
-    const newId = uuid.v4().toString();
-    useChatStore.getState().resetSession();
-    router.replace(`/chat/${newId}`);
+    openNewChatSession();
   }, [navigation]);
 
   /** Inverted + newest-first: staying “pinned” means offset 0 */
@@ -261,16 +253,38 @@ export default function ChatInterface({
     []
   );
 
+  const interactionLocked = isFreePlan;
+
   const listEmpty = useMemo(
-    () => (
-      <View style={styles.emptyBlock}>
-        <Text style={[styles.greeting, { color: colors.textPrimary }]}>How can Scamly help?</Text>
-        <Text style={[styles.greetingSub, { color: colors.textSecondary }]}>
-          Ask about scams, fraud, phishing, or what to do next if something feels off.
-        </Text>
-      </View>
-    ),
-    [colors.textPrimary, colors.textSecondary]
+    () =>
+      interactionLocked && onOpenPaywall ? (
+        <View style={styles.emptyBlock}>
+          <Text style={[styles.greeting, { color: colors.textPrimary }]}>
+            Scamly Chat is only available to premium users
+          </Text>
+          <Button
+            onPress={() => void onOpenPaywall()}
+            loading={paywallLoading}
+            fullWidth
+          >
+            Upgrade to Premium
+          </Button>
+        </View>
+      ) : (
+        <View style={styles.emptyBlock}>
+          <Text style={[styles.greeting, { color: colors.textPrimary }]}>How can I help?</Text>
+          <Text style={[styles.greetingSub, { color: colors.textSecondary }]}>
+            Ask about scams, fraud, phishing, or what to do next if something feels off.
+          </Text>
+        </View>
+      ),
+    [
+      interactionLocked,
+      onOpenPaywall,
+      paywallLoading,
+      colors.textPrimary,
+      colors.textSecondary,
+    ]
   );
 
   return (
@@ -285,6 +299,7 @@ export default function ChatInterface({
                   accessibilityLabel="Open chat history"
                   onPress={openDrawer}
                   bg={colors.surface}
+                  disabled={interactionLocked}
                 >
                   <Menu size={22} color={colors.textPrimary} strokeWidth={2} />
                 </ChatChromeIconButton>
@@ -295,6 +310,7 @@ export default function ChatInterface({
                   accessibilityLabel="Start a new chat"
                   bg={colors.surface}
                   labelColor={colors.textPrimary}
+                  disabled={interactionLocked}
                 />
               </View>
             </View>
@@ -308,7 +324,7 @@ export default function ChatInterface({
             <View style={styles.headerColEnd}>
               <ChatChromeIconButton
                 accessibilityLabel="Close chat"
-                onPress={confirmExitChat}
+                onPress={goHome}
                 bg={colors.surface}
               >
                 <X size={22} color={colors.textPrimary} strokeWidth={2} />
@@ -361,7 +377,7 @@ export default function ChatInterface({
                   onChangeText={setInput}
                   onSend={sendWithStreaming}
                   placeholder="Message Scamly..."
-                  disabled={planLoading || isStreaming}
+                  disabled={planLoading || isStreaming || interactionLocked}
                 />
               </View>
             </View>

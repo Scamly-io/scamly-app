@@ -30,7 +30,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import uuid from "react-native-uuid";
+import { openNewChatSession } from "@/utils/chat-nav";
 
 function formatChatTitleDate(iso: string): string {
   const date = new Date(iso);
@@ -127,10 +127,8 @@ export default function ChatDrawerContent(props: DrawerContentComponentProps) {
 
       let navigatedToNewChat = false;
       if (deletingCurrentChat) {
-        useChatStore.getState().resetSession();
-        const newId = uuid.v4().toString();
-        router.replace(`/chat/${newId}`);
         navigation.closeDrawer();
+        openNewChatSession();
         navigatedToNewChat = true;
       }
 

@@ -1263,8 +1263,8 @@ const styles = StyleSheet.create({
 
   // Glowing pill next button
   pillNext: {
-    paddingVertical: 14,
-    paddingHorizontal: 36,
+    paddingVertical: 24,
+    paddingHorizontal: 46,
     minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
