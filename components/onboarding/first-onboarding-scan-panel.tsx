@@ -528,13 +528,9 @@ const FirstOnboardingScanPanel = forwardRef<FirstOnboardingScanPanelHandle, Prop
               {phase === "complete" && (
                 <Animated.View entering={FadeIn.duration(300)}>
                   <Text style={[styles.scanCompleteText, { color: colors.textPrimary }]}>Scan Complete</Text>
-                  <View style={styles.scanCompleteActions}>
-                    <Button variant="secondary" size="sm" onPress={resetScan}>
-                      Clear Results
-                    </Button>
-                    <Button variant="primary" size="sm" onPress={runScan}>
-                      Rescan
-                    </Button>
+                  <View style={styles.viewResultsHint}>
+                    <Text style={[styles.viewResultsText, { color: colors.textSecondary }]}>View Results</Text>
+                    <ChevronDown size={16} color={colors.textSecondary} />
                   </View>
                 </Animated.View>
               )}
@@ -758,11 +754,16 @@ const styles = StyleSheet.create({
   scanCompleteText: {
     fontFamily: "Poppins-SemiBold",
     fontSize: 16,
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  scanCompleteActions: {
+  viewResultsHint: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    gap: 6,
+  },
+  viewResultsText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
   },
   scanFailureCard: {
     marginBottom: 16,

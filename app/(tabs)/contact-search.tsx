@@ -28,8 +28,15 @@ import {
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const CONTACT_SEARCH_LOCKED_BULLETS = [
+  "Find official websites & contact pages",
+  "Confirm phone numbers before calling",
+  "Cross-check suspicious messages",
+  "Investigate scams faster",
+] as const;
+
 export default function PhoneSearch() {
-  const { colors, radius, shadows, isDark } = useTheme();
+  const { colors, radius, shadows } = useTheme();
   const [searchInput, setSearchInput] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -174,12 +181,7 @@ export default function PhoneSearch() {
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Contact Search</Text>
-            <View style={[styles.betaTag, { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)' }]}>
-              <Text style={[styles.betaTagText, { color: colors.accent }]}>Beta</Text>
-            </View>
-          </View>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Contact Search</Text>
           <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
             Find contact info for any organisation worldwide
           </Text>
@@ -198,40 +200,51 @@ export default function PhoneSearch() {
             >
               <Animated.View entering={FadeInDown.duration(350)}>
                 <Card style={styles.lockedCard} pressable={false}>
-                  <Text style={[styles.lockedTitle, { color: colors.textPrimary }]}>
-                    The Contact Search tool cannot be accessed on free accounts.
+                  <Text style={[styles.lockedTitle, { color: colors.textPrimary }]} selectable>
+                    Verify any business contact in seconds
                   </Text>
-                  <Text style={[styles.lockedSubtitle, { color: colors.textSecondary }]}>
-                    Upgrade to Scamly Premium to unlock fast, AI-assisted contact verification:
-                  </Text>
+                  <View
+                    style={[
+                      styles.lockedPremiumPill,
+                      {
+                        backgroundColor: colors.accentMuted,
+                        borderCurve: "continuous" as const,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.lockedPremiumPillText, { color: colors.accent }]} selectable>
+                      Available on Premium
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.lockedHookWrap,
+                      { borderLeftColor: colors.accent, backgroundColor: colors.backgroundSecondary },
+                    ]}
+                  >
+                    <Text style={[styles.lockedHook, { color: colors.textPrimary }]} selectable>
+                      {"Don't call a scammer by mistake."}
+                    </Text>
+                  </View>
                   <View style={styles.benefitsList}>
-                    <View style={styles.benefitItem}>
-                      <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
-                      <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
-                        Find official websites and contact pages for organizations.
-                      </Text>
-                    </View>
-                    <View style={styles.benefitItem}>
-                      <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
-                      <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
-                        Confirm public phone numbers before calling unknown senders.
-                      </Text>
-                    </View>
-                    <View style={styles.benefitItem}>
-                      <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
-                      <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
-                        Cross-check scam outreach against trusted company details.
-                      </Text>
-                    </View>
-                    <View style={styles.benefitItem}>
-                      <View style={[styles.benefitDot, { backgroundColor: colors.accent }]} />
-                      <Text style={[styles.benefitText, { color: colors.textSecondary }]}>
-                        Speed up investigation when time-sensitive fraud appears.
-                      </Text>
-                    </View>
+                    {CONTACT_SEARCH_LOCKED_BULLETS.map((line) => (
+                      <View key={line} style={styles.benefitItem}>
+                        <View
+                          style={[
+                            styles.benefitCheckWrap,
+                            { backgroundColor: colors.accentMuted, borderCurve: "continuous" as const },
+                          ]}
+                        >
+                          <Check size={14} color={colors.accent} strokeWidth={2.5} />
+                        </View>
+                        <Text style={[styles.benefitText, { color: colors.textSecondary }]} selectable>
+                          {line}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
                   <Button onPress={handleOpenPaywall} loading={openingPaywall} fullWidth>
-                    Upgrade to Premium
+                    Verify Now
                   </Button>
                 </Card>
               </Animated.View>
@@ -547,26 +560,10 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     marginBottom: 24,
   },
-  headerTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
   headerTitle: {
     fontFamily: "Poppins-Bold",
     fontSize: 28,
-  },
-  betaTag: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  betaTagText: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   headerSubtitle: {
     fontFamily: "Poppins-Regular",
@@ -603,38 +600,61 @@ const styles = StyleSheet.create({
   lockedCard: {
     marginTop: 8,
     padding: 24,
-    gap: 14,
+    gap: 16,
   },
   lockedTitle: {
     fontFamily: "Poppins-Bold",
-    fontSize: 22,
-    lineHeight: 30,
+    fontSize: 24,
+    lineHeight: 32,
+    letterSpacing: -0.3,
   },
-  lockedSubtitle: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    lineHeight: 21,
+  lockedPremiumPill: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  lockedPremiumPillText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 12,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  lockedHookWrap: {
+    borderLeftWidth: 3,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderCurve: "continuous" as const,
+  },
+  lockedHook: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 16,
+    lineHeight: 24,
   },
   benefitsList: {
-    gap: 10,
-    marginBottom: 4,
+    gap: 12,
+    marginBottom: 2,
   },
   benefitItem: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
   },
-  benefitDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    marginTop: 7,
+  benefitCheckWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
   },
   benefitText: {
     flex: 1,
-    fontFamily: "Poppins-Regular",
+    fontFamily: "Poppins-Medium",
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 22,
   },
   resultsCard: {
     marginBottom: 24,

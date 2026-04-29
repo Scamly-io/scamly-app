@@ -260,14 +260,17 @@ export default function ChatInterface({
       interactionLocked && onOpenPaywall ? (
         <View style={styles.emptyBlock}>
           <Text style={[styles.greeting, { color: colors.textPrimary }]}>
-            Scamly Chat is only available to premium users
+            Discuss complex scams{'\n'}Get personalised advice.
+          </Text>
+          <Text style={[styles.greetingSub, { color: colors.textSecondary, marginBottom: 30 }]}>
+            Ask any question about scams, or describe your situation for personalised advice.{'\n'}Only available to Premium users.
           </Text>
           <Button
             onPress={() => void onOpenPaywall()}
             loading={paywallLoading}
-            fullWidth
+                style={styles.paywallButton}
           >
-            Upgrade to Premium
+            Unlock AI Scam Chat
           </Button>
         </View>
       ) : (
@@ -451,6 +454,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     textAlign: "center",
+  },
+  paywallButton: {
+    alignSelf: "center",
+    minWidth: 236,
   },
   inputShell: {
     paddingHorizontal: 16,

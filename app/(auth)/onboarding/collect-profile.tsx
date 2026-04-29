@@ -173,7 +173,6 @@ function StepFormFields(p: StepBodyProps) {
             }}
             autoCapitalize="words"
             editable={!p.loading}
-            autoFocus
           />
         </View>
         {p.nameError ? (
@@ -215,7 +214,6 @@ function StepFormFields(p: StepBodyProps) {
             }}
             autoCapitalize="words"
             editable={!p.loading}
-            autoFocus
           />
         </View>
         {p.nameError ? (
@@ -258,7 +256,6 @@ function StepFormFields(p: StepBodyProps) {
               fontFamily: "Poppins-Regular",
             }}
             editable={!p.loading}
-            autoFocus
           />
         </View>
         {p.dobError ? (

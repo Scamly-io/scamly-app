@@ -24,7 +24,18 @@ import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import { CheckCircle, ChevronDown, ChevronUp, Info, Lock, Shield, TriangleAlert, Upload, XCircle } from "lucide-react-native";
+import {
+  Check,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Lock,
+  Shield,
+  TriangleAlert,
+  Upload,
+  XCircle,
+} from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -72,6 +83,12 @@ function getUserBillingPeriod(createdAt: string | Date) {
 
 const FREE_USER_SCAN_QUOTA = 6;
 const PAGE_MOUNT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+const SCAN_PREMIUM_UPSELL_BULLETS = [
+  "Unlimited scans per month",
+  "Our most advanced scam detection models",
+  "Faster, easier scanning with Quick Scan on iOS.",
+] as const;
 
 /**
  * Map scan results to analytics result category.
@@ -1060,25 +1077,34 @@ export default function Scan() {
               {(isFreePlan && scanPhase === "idle") && (
                 <Animated.View entering={FadeInDown.duration(350)}>
                   <Card style={styles.premiumUpsellCard} pressable={false}>
-                    <Text style={[styles.premiumUpsellTitle, { color: colors.textPrimary }]}>
-                      Get more with Scamly Premium
+                    <Text style={[styles.premiumUpsellTitle, { color: colors.textPrimary }]} selectable>
+                      Get more accurate scanning.
+                    </Text>
+                    <Text style={[styles.premiumUpsellSubtitle, { color: colors.textSecondary }]} selectable>
+                      Premium users get:
                     </Text>
                     <View style={styles.premiumBenefitsList}>
-                      <View style={styles.premiumBenefitItem}>
-                        <View style={[styles.premiumBenefitDot, { backgroundColor: colors.accent }]} />
-                        <Text style={[styles.premiumBenefitText, { color: colors.textSecondary }]}>
-                          Unlimited number of scans per month
-                        </Text>
-                      </View>
-                      <View style={styles.premiumBenefitItem}>
-                        <View style={[styles.premiumBenefitDot, { backgroundColor: colors.accent }]} />
-                        <Text style={[styles.premiumBenefitText, { color: colors.textSecondary }]}>
-                          Access to the quick scan feature on iOS for faster, easier scans.
-                        </Text>
-                      </View>
+                      {SCAN_PREMIUM_UPSELL_BULLETS.map((line) => (
+                        <View key={line} style={styles.premiumBenefitItem}>
+                          <View
+                            style={[
+                              styles.premiumBenefitCheckWrap,
+                              {
+                                backgroundColor: colors.accentMuted,
+                                borderCurve: "continuous" as const,
+                              },
+                            ]}
+                          >
+                            <Check size={14} color={colors.accent} strokeWidth={2.5} />
+                          </View>
+                          <Text style={[styles.premiumBenefitText, { color: colors.textSecondary }]} selectable>
+                            {line}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
                     <Button onPress={handleOpenPaywall} loading={openingPaywall} fullWidth>
-                      Upgrade to Premium
+                      Get Protected
                     </Button>
                   </Card>
                 </Animated.View>
@@ -1255,38 +1281,42 @@ const styles = StyleSheet.create({
   },
   premiumUpsellCard: {
     padding: 24,
-    gap: 14,
+    gap: 12,
     marginTop: 24,
     marginBottom: 16,
   },
   premiumUpsellTitle: {
     fontFamily: "Poppins-Bold",
-    fontSize: 22,
-    lineHeight: 30,
+    fontSize: 24,
+    lineHeight: 32,
+    letterSpacing: -0.3,
   },
   premiumUpsellSubtitle: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    lineHeight: 21,
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 15,
+    lineHeight: 22,
   },
   premiumBenefitsList: {
-    gap: 10,
-    marginBottom: 4,
+    gap: 12,
+    marginBottom: 2,
   },
   premiumBenefitItem: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
   },
-  premiumBenefitDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    marginTop: 7,
+  premiumBenefitCheckWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
   },
   premiumBenefitText: {
     flex: 1,
-    fontFamily: "Poppins-Regular",
+    fontFamily: "Poppins-Medium",
     fontSize: 14,
     lineHeight: 21,
   },
