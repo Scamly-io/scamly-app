@@ -1,9 +1,5 @@
 import NativeMenu from "@/components/NativeMenu";
 import PickerModal from "@/components/PickerModal";
-import {
-  SwiftGlassAccentPillButton,
-  SwiftGlassCircularBackButton,
-} from "@/components/SwiftGlassChrome";
 import ThemedBackground from "@/components/ThemedBackground";
 import { countries } from "@/constants/countries";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1086,133 +1082,87 @@ export default function OnboardingCollectProfile() {
             >
               {showBackButton ? (
                 <Animated.View style={backAnimStyle}>
-                  {SwiftGlassCircularBackButton({
-                    onPress: goBack,
-                    disabled: loading,
-                  }) ?? (
-                    <Pressable
-                      onPress={goBack}
-                      onPressIn={() => {
-                        backScale.value = withSpring(0.88, { damping: 12, stiffness: 300 });
-                      }}
-                      onPressOut={() => {
-                        backScale.value = withSpring(1, { damping: 12, stiffness: 300 });
-                      }}
-                      disabled={loading}
-                      accessibilityRole="button"
-                      accessibilityLabel="Back"
-                      style={[
-                        styles.circleBack,
-                        {
-                          opacity: loading ? 0.6 : 1,
-                          backgroundColor: colors.surface,
-                          borderWidth: isDark ? 1 : 0,
-                          borderColor: colors.border,
-                          ...shadows.md,
-                        },
-                      ]}
-                    >
-                      <ArrowLeft size={20} color={colors.textPrimary} />
-                    </Pressable>
-                  )}
+                  <Pressable
+                    onPress={goBack}
+                    onPressIn={() => {
+                      backScale.value = withSpring(0.88, { damping: 12, stiffness: 300 });
+                    }}
+                    onPressOut={() => {
+                      backScale.value = withSpring(1, { damping: 12, stiffness: 300 });
+                    }}
+                    disabled={loading}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back"
+                    style={[
+                      styles.circleBack,
+                      {
+                        opacity: loading ? 0.6 : 1,
+                        backgroundColor: colors.surface,
+                        borderWidth: isDark ? 1 : 0,
+                        borderColor: colors.border,
+                        ...shadows.md,
+                      },
+                    ]}
+                  >
+                    <ArrowLeft size={20} color={colors.textPrimary} />
+                  </Pressable>
                 </Animated.View>
               ) : null}
             </View>
             <View style={styles.footerNextSlot}>
               <Animated.View style={nextAnimStyle}>
-                {loading ? (
-                  <Pressable
-                    onPress={goNext}
-                    disabled
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      step === 4 && isDraft
-                        ? "Create account"
-                        : step === 4
-                          ? "Finish"
-                          : isOauthFirstScreen
-                            ? "Continue"
-                            : "Next"
-                    }
-                    style={[
-                      styles.pillNext,
-                      {
-                        maxWidth: "100%",
-                        opacity: 0.6,
-                        backgroundColor: colors.accent,
-                        borderRadius: radius.full,
-                        boxShadow: `0px 4px 20px ${
-                          isDark ? "rgba(167, 139, 250, 0.5)" : "rgba(124, 92, 252, 0.4)"
-                        }`,
-                      },
-                    ]}
-                  >
+                <Pressable
+                  onPress={goNext}
+                  onPressIn={() => {
+                    nextScale.value = withSpring(0.94, { damping: 12, stiffness: 300 });
+                  }}
+                  onPressOut={() => {
+                    nextScale.value = withSpring(1, { damping: 12, stiffness: 300 });
+                  }}
+                  disabled={currentDisabled || loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    step === 4 && isDraft
+                      ? "Create account"
+                      : step === 4
+                        ? "Finish"
+                        : isOauthFirstScreen
+                          ? "Continue"
+                          : "Next"
+                  }
+                  style={[
+                    styles.pillNext,
+                    {
+                      maxWidth: "100%",
+                      opacity: currentDisabled || loading ? 0.6 : 1,
+                      backgroundColor: colors.accent,
+                      borderRadius: radius.full,
+                      // Accent-coloured glow — overrides the neutral shadow from theme
+                      boxShadow: `0px 4px 20px ${
+                        isDark ? "rgba(167, 139, 250, 0.5)" : "rgba(124, 92, 252, 0.4)"
+                      }`,
+                    },
+                  ]}
+                >
+                  {loading ? (
                     <ActivityIndicator size="small" color={colors.textInverse} />
-                  </Pressable>
-                ) : (
-                  SwiftGlassAccentPillButton({
-                    label:
-                      step === 4 && isDraft
+                  ) : (
+                    <Text
+                      numberOfLines={2}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.85}
+                      style={[styles.pillNextText, { color: colors.textInverse }]}
+                    >
+                      {step === 4 && isDraft
                         ? "Create account"
                         : step === 4
                           ? "Finish"
                           : isOauthFirstScreen
                             ? "Continue"
-                            : "Next",
-                    onPress: goNext,
-                    disabled: currentDisabled || loading,
-                    tintHex: colors.accent,
-                    titleColorHex: colors.textInverse,
-                  }) ?? (
-                    <Pressable
-                      onPress={goNext}
-                      onPressIn={() => {
-                        nextScale.value = withSpring(0.94, { damping: 12, stiffness: 300 });
-                      }}
-                      onPressOut={() => {
-                        nextScale.value = withSpring(1, { damping: 12, stiffness: 300 });
-                      }}
-                      disabled={currentDisabled || loading}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        step === 4 && isDraft
-                          ? "Create account"
-                          : step === 4
-                            ? "Finish"
-                            : isOauthFirstScreen
-                              ? "Continue"
-                              : "Next"
-                      }
-                      style={[
-                        styles.pillNext,
-                        {
-                          maxWidth: "100%",
-                          opacity: currentDisabled || loading ? 0.6 : 1,
-                          backgroundColor: colors.accent,
-                          borderRadius: radius.full,
-                          boxShadow: `0px 4px 20px ${
-                            isDark ? "rgba(167, 139, 250, 0.5)" : "rgba(124, 92, 252, 0.4)"
-                          }`,
-                        },
-                      ]}
-                    >
-                      <Text
-                        numberOfLines={2}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.85}
-                        style={[styles.pillNextText, { color: colors.textInverse }]}
-                      >
-                        {step === 4 && isDraft
-                          ? "Create account"
-                          : step === 4
-                            ? "Finish"
-                            : isOauthFirstScreen
-                              ? "Continue"
-                              : "Next"}
-                      </Text>
-                    </Pressable>
-                  )
-                )}
+                            : "Next"}
+                    </Text>
+                  )}
+                </Pressable>
               </Animated.View>
             </View>
           </View>

@@ -1,8 +1,3 @@
-import {
-  SwiftGlassAccentPillButton,
-  SwiftGlassCircularBackButton,
-  SwiftGlassMutedPillButton,
-} from "@/components/SwiftGlassChrome";
 import ThemedBackground from "@/components/ThemedBackground";
 import FirstOnboardingScanPanel, {
   type FirstOnboardingScanPanelHandle,
@@ -373,139 +368,97 @@ export default function OnboardingTutorialHowItWorks() {
         >
           <View style={styles.footerBackSlot}>
             <Animated.View style={backAnimStyle}>
-              {SwiftGlassCircularBackButton({
-                onPress: goBack,
-              }) ?? (
-                <Pressable
-                  onPress={goBack}
-                  onPressIn={() => {
-                    backScale.value = withSpring(0.88, { damping: 12, stiffness: 300 });
-                  }}
-                  onPressOut={() => {
-                    backScale.value = withSpring(1, { damping: 12, stiffness: 300 });
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back"
-                  style={[styles.circleBack, { backgroundColor: "#fff", ...shadows.md }]}
-                >
-                  <ArrowLeft size={20} color="#111" />
-                </Pressable>
-              )}
+              <Pressable
+                onPress={goBack}
+                onPressIn={() => {
+                  backScale.value = withSpring(0.88, { damping: 12, stiffness: 300 });
+                }}
+                onPressOut={() => {
+                  backScale.value = withSpring(1, { damping: 12, stiffness: 300 });
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                style={[styles.circleBack, { backgroundColor: "#fff", ...shadows.md }]}
+              >
+                <ArrowLeft size={20} color="#111" />
+              </Pressable>
             </Animated.View>
           </View>
           <View style={styles.footerNextSlot}>
             {subStep === 0 ? (
               <Animated.View style={nextAnimStyle}>
-                {SwiftGlassAccentPillButton({
-                  label: "Next",
-                  onPress: goNext,
-                  disabled: false,
-                  tintHex: colors.accent,
-                  titleColorHex: colors.textInverse,
-                }) ?? (
-                  <Pressable
-                    onPress={goNext}
-                    onPressIn={() => {
-                      nextScale.value = withSpring(0.94, { damping: 12, stiffness: 300 });
-                    }}
-                    onPressOut={() => {
-                      nextScale.value = withSpring(1, { damping: 12, stiffness: 300 });
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Next"
-                    style={[
-                      styles.pillNext,
-                      {
-                        maxWidth: "100%",
-                        backgroundColor: colors.accent,
-                        borderRadius: radius.full,
-                        boxShadow: glowShadow,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.pillNextText, { color: colors.textInverse }]}>Next</Text>
-                  </Pressable>
-                )}
+                <Pressable
+                  onPress={goNext}
+                  onPressIn={() => {
+                    nextScale.value = withSpring(0.94, { damping: 12, stiffness: 300 });
+                  }}
+                  onPressOut={() => {
+                    nextScale.value = withSpring(1, { damping: 12, stiffness: 300 });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next"
+                  style={[
+                    styles.pillNext,
+                    {
+                      maxWidth: "100%",
+                      backgroundColor: colors.accent,
+                      borderRadius: radius.full,
+                      boxShadow: glowShadow,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.pillNextText, { color: colors.textInverse }]}>Next</Text>
+                </Pressable>
               </Animated.View>
             ) : (
               <Animated.View style={nextAnimStyle}>
-                {tutorialScanPhase === "complete"
-                  ? SwiftGlassAccentPillButton({
-                      label: "Finish tutorial",
-                      onPress: () => {
-                        scanPanelRef.current?.finishTutorial();
-                      },
-                      disabled: false,
-                      tintHex: colors.accent,
-                      titleColorHex: colors.textInverse,
-                    }) ?? (
-                      <Pressable
-                        onPress={() => {
-                          scanPanelRef.current?.finishTutorial();
-                        }}
-                        onPressIn={() => {
-                          nextScale.value = withSpring(0.94, { damping: 12, stiffness: 300 });
-                        }}
-                        onPressOut={() => {
-                          nextScale.value = withSpring(1, { damping: 12, stiffness: 300 });
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Finish tutorial"
-                        style={[
-                          styles.pillNext,
-                          {
-                            maxWidth: "100%",
-                            borderRadius: radius.full,
-                            borderCurve: "continuous" as const,
+                <Pressable
+                  onPress={() => {
+                    scanPanelRef.current?.finishTutorial();
+                  }}
+                  disabled={tutorialScanPhase !== "complete"}
+                  onPressIn={() => {
+                    if (tutorialScanPhase === "complete") {
+                      nextScale.value = withSpring(0.94, { damping: 12, stiffness: 300 });
+                    }
+                  }}
+                  onPressOut={() => {
+                    nextScale.value = withSpring(1, { damping: 12, stiffness: 300 });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Finish tutorial"
+                  accessibilityState={{ disabled: tutorialScanPhase !== "complete" }}
+                  style={[
+                    styles.pillNext,
+                    {
+                      maxWidth: "100%",
+                      borderRadius: radius.full,
+                      borderCurve: "continuous" as const,
+                      ...(tutorialScanPhase === "complete"
+                        ? {
                             backgroundColor: colors.accent,
                             boxShadow: glowShadow,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.pillNextText, { color: colors.textInverse }]}>
-                          Finish tutorial
-                        </Text>
-                      </Pressable>
-                    )
-                  : SwiftGlassMutedPillButton({
-                      label: "Finish tutorial",
-                      onPress: () => {
-                        scanPanelRef.current?.finishTutorial();
-                      },
-                      disabled: true,
-                      tintHex: colors.textTertiary,
-                      titleColorHex: colors.textTertiary,
-                    }) ?? (
-                      <Pressable
-                        onPress={() => {
-                          scanPanelRef.current?.finishTutorial();
-                        }}
-                        disabled
-                        onPressIn={() => {}}
-                        onPressOut={() => {
-                          nextScale.value = withSpring(1, { damping: 12, stiffness: 300 });
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Finish tutorial"
-                        accessibilityState={{ disabled: true }}
-                        style={[
-                          styles.pillNext,
-                          {
-                            maxWidth: "100%",
-                            borderRadius: radius.full,
-                            borderCurve: "continuous" as const,
+                          }
+                        : {
                             backgroundColor: colors.backgroundSecondary,
                             borderWidth: 1,
                             borderColor: colors.border,
                             opacity: 0.9,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.pillNextText, { color: colors.textTertiary }]}>
-                          Finish tutorial
-                        </Text>
-                      </Pressable>
-                    )}
+                          }),
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.pillNextText,
+                      {
+                        color: tutorialScanPhase === "complete" ? colors.textInverse : colors.textTertiary,
+                      },
+                    ]}
+                  >
+                    Finish tutorial
+                  </Text>
+                </Pressable>
               </Animated.View>
             )}
           </View>

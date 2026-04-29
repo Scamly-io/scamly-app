@@ -2,17 +2,19 @@ import ThemedBackground from "@/components/ThemedBackground";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
-import { trackUserVisibleError } from "@/utils/analytics";
+import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
+import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
 import { captureDataFetchError } from "@/utils/sentry";
 import { supabase } from "@/utils/supabase";
+import { useFocusEffect } from "@react-navigation/native";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ChatInterface from "../_components/chat-interface";
 
 export default function ChatDetail() {
-  const { colors, radius } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { id: chatRowId } = useLocalSearchParams<{ id: string }>();
 
@@ -21,6 +23,13 @@ export default function ChatDetail() {
   const [userId, setUserId] = useState("");
   const [createdAt, setCreatedAt] = useState("");
   const [hydrateLoading, setHydrateLoading] = useState(true);
+  const [openingPaywall, setOpeningPaywall] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      trackFeatureOpened("chat");
+    }, [])
+  );
 
   useEffect(() => {
     const fetchSubscriptionPlan = async () => {
@@ -60,6 +69,12 @@ export default function ChatDetail() {
   }, []);
 
   useEffect(() => {
+    if (!planLoading && isFreePlan) {
+      useChatStore.getState().resetSession();
+    }
+  }, [planLoading, isFreePlan]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function hydrate() {
@@ -86,7 +101,6 @@ export default function ChatDetail() {
         return;
       }
 
-      // Client-generated id: no DB row yet — empty thread, insert `chats` on first send.
       if (!chatRow) {
         useChatStore.getState().setMessages([]);
         useChatStore.getState().setChatRowPersistedInDb(false);
@@ -125,6 +139,24 @@ export default function ChatDetail() {
     };
   }, [chatRowId, planLoading, isFreePlan]);
 
+  const handleOpenPaywall = useCallback(async () => {
+    if (openingPaywall) return;
+    setOpeningPaywall(true);
+    try {
+      const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(undefined, {
+        trigger: "chat_locked",
+      });
+      if (didUnlockEntitlement) {
+        setIsFreePlan(false);
+      }
+    } catch (error) {
+      const message = trackRevenueCatError("present_paywall_chat", error);
+      Alert.alert("Subscription unavailable", message);
+    } finally {
+      setOpeningPaywall(false);
+    }
+  }, [openingPaywall]);
+
   const headerDateLabel = createdAt ? new Date(createdAt).toLocaleDateString() : "";
 
   if (planLoading || hydrateLoading) {
@@ -137,25 +169,6 @@ export default function ChatDetail() {
     );
   }
 
-  if (isFreePlan) {
-    return (
-      <ThemedBackground>
-        <View style={[styles.lockContainer, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-          <Text style={[styles.lockTitle, { color: colors.textPrimary }]}>AI Chat is for paid plans</Text>
-          <Text style={[styles.lockSubtitle, { color: colors.textSecondary }]}>
-            Upgrade to continue this conversation
-          </Text>
-          <Pressable
-            style={[styles.lockBack, { backgroundColor: colors.accentMuted, borderRadius: radius.md }]}
-            onPress={() => router.replace("/chat")}
-          >
-            <Text style={[styles.lockBackLabel, { color: colors.accent }]}>Back</Text>
-          </Pressable>
-        </View>
-      </ThemedBackground>
-    );
-  }
-
   return (
     <ChatInterface
       routeChatSegment={chatRowId ?? ""}
@@ -163,6 +176,8 @@ export default function ChatDetail() {
       userId={userId}
       isFreePlan={isFreePlan}
       planLoading={planLoading}
+      onOpenPaywall={handleOpenPaywall}
+      paywallLoading={openingPaywall}
     />
   );
 }
@@ -172,31 +187,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  lockContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    paddingHorizontal: 32,
-  },
-  lockTitle: {
-    fontFamily: "Poppins-Bold",
-    fontSize: 20,
-    textAlign: "center",
-  },
-  lockSubtitle: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 15,
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  lockBack: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  lockBackLabel: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 15,
   },
 });

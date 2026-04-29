@@ -2,11 +2,6 @@ import Button from "@/components/Button";
 import FeedbackDetailModal, { type FeedbackDetailItem } from "@/components/FeedbackDetailModal";
 import NativeMenu from "@/components/NativeMenu";
 import NewFeedbackItemModal from "@/components/NewFeedbackItemModal";
-import {
-  SwiftGlassCloseIconButton,
-  SwiftGlassComposerPill,
-  SwiftGlassMenu,
-} from "@/components/SwiftGlassChrome";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { getFeedbackWallRefreshSignal } from "@/utils/feedbackWallRefresh";
@@ -516,67 +511,50 @@ export default function FeedbackWallModal({
   const ListHeader = () => (
     <View style={{ paddingTop: 8 }}>
       <View style={styles.controlsRow}>
-        {SwiftGlassMenu({
-          options: FILTER_OPTIONS,
-          onSelect: (val) => setFilter(val as FilterOption),
-          glassTrigger: {
-            variant: "filter",
-            title: filterLabel,
-            textColor: colors.textPrimary,
-            iconColor: colors.textSecondary,
-          },
-        }) ?? (
-          <NativeMenu
-            trigger={
-              <View
-                style={[
-                  styles.dropdownTrigger,
-                  {
-                    backgroundColor: isDark ? colors.accentMuted : colors.surface,
-                    boxShadow: isDark
-                      ? "0px 2px 8px rgba(0, 0, 0, 0.35)"
-                      : "0px 2px 8px rgba(0, 0, 0, 0.12)",
-                  },
-                ]}
+        <NativeMenu
+          trigger={
+            <View
+              style={[
+                styles.dropdownTrigger,
+                {
+                  backgroundColor: isDark ? colors.accentMuted : colors.surface,
+                  boxShadow: isDark
+                    ? "0px 2px 8px rgba(0, 0, 0, 0.35)"
+                    : "0px 2px 8px rgba(0, 0, 0, 0.12)",
+                },
+              ]}
+            >
+              <Text
+                style={[styles.dropdownLabel, { color: colors.textPrimary }]}
               >
-                <Text
-                  style={[styles.dropdownLabel, { color: colors.textPrimary }]}
-                >
-                  {filterLabel}
-                </Text>
-                <ChevronDown size={16} color={colors.textSecondary} />
-              </View>
-            }
-            options={FILTER_OPTIONS}
-            onSelect={(val) => setFilter(val as FilterOption)}
-          />
-        )}
-        {SwiftGlassMenu({
-          options: SORT_OPTIONS,
-          onSelect: (val) => setSortBy(val as SortOption),
-          glassTrigger: { variant: "sortIcons", iconColor: colors.textSecondary },
-        }) ?? (
-          <NativeMenu
-            trigger={
-              <View
-                style={[
-                  styles.dropdownTrigger,
-                  {
-                    backgroundColor: isDark ? colors.accentMuted : colors.surface,
-                    boxShadow: isDark
-                      ? "0px 2px 8px rgba(0, 0, 0, 0.35)"
-                      : "0px 2px 8px rgba(0, 0, 0, 0.12)",
-                  },
-                ]}
-              >
-                <ArrowDownUp size={16} color={colors.textSecondary} />
-                <ChevronDown size={14} color={colors.textSecondary} />
-              </View>
-            }
-            options={SORT_OPTIONS}
-            onSelect={(val) => setSortBy(val as SortOption)}
-          />
-        )}
+                {filterLabel}
+              </Text>
+              <ChevronDown size={16} color={colors.textSecondary} />
+            </View>
+          }
+          options={FILTER_OPTIONS}
+          onSelect={(val) => setFilter(val as FilterOption)}
+        />
+        <NativeMenu
+          trigger={
+            <View
+              style={[
+                styles.dropdownTrigger,
+                {
+                  backgroundColor: isDark ? colors.accentMuted : colors.surface,
+                  boxShadow: isDark
+                    ? "0px 2px 8px rgba(0, 0, 0, 0.35)"
+                    : "0px 2px 8px rgba(0, 0, 0, 0.12)",
+                },
+              ]}
+            >
+              <ArrowDownUp size={16} color={colors.textSecondary} />
+              <ChevronDown size={14} color={colors.textSecondary} />
+            </View>
+          }
+          options={SORT_OPTIONS}
+          onSelect={(val) => setSortBy(val as SortOption)}
+        />
       </View>
 
       <Pressable
@@ -765,14 +743,9 @@ export default function FeedbackWallModal({
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
             Feedback
           </Text>
-          {SwiftGlassCloseIconButton({
-            onPress: onClose,
-            hostStyle: styles.headerAction,
-          }) ?? (
-            <Pressable onPress={onClose} hitSlop={8} style={styles.headerAction}>
-              <X size={20} color={colors.textSecondary} />
-            </Pressable>
-          )}
+          <Pressable onPress={onClose} hitSlop={8} style={styles.headerAction}>
+            <X size={20} color={colors.textSecondary} />
+          </Pressable>
         </View>
 
         {loading ? (
@@ -814,41 +787,26 @@ export default function FeedbackWallModal({
               styles.floatingPill,
               {
                 bottom: insets.bottom + 18,
+                backgroundColor: colors.accent,
                 borderRadius: radius.full,
+                boxShadow: `0px 4px 20px ${isDark ? "rgba(167, 139, 250, 0.5)" : "rgba(124, 92, 252, 0.4)"}`,
               },
             ]}
           >
-            {SwiftGlassComposerPill({
-              label: "Give Feedback",
-              onPress: () => {
+            <Pressable
+              onPress={() => {
                 trackFeedbackWallComposerOpened();
                 setNewFeedbackVisible(true);
-              },
-              tintHex: colors.accent,
-              titleColorHex: colors.textInverse,
-            }) ?? (
-              <Pressable
-                onPress={() => {
-                  trackFeedbackWallComposerOpened();
-                  setNewFeedbackVisible(true);
-                }}
-                style={[
-                  styles.floatingPillInner,
-                  {
-                    backgroundColor: colors.accent,
-                    borderRadius: radius.full,
-                    boxShadow: `0px 4px 20px ${isDark ? "rgba(167, 139, 250, 0.5)" : "rgba(124, 92, 252, 0.4)"}`,
-                  },
-                ]}
+              }}
+              style={styles.floatingPillInner}
+            >
+              <CirclePlus size={20} color={colors.textInverse} />
+              <Text
+                style={[styles.floatingPillText, { color: colors.textInverse }]}
               >
-                <CirclePlus size={20} color={colors.textInverse} />
-                <Text
-                  style={[styles.floatingPillText, { color: colors.textInverse }]}
-                >
-                  Give Feedback
-                </Text>
-              </Pressable>
-            )}
+                Give Feedback
+              </Text>
+            </Pressable>
           </Animated.View>
         )}
       </View>
