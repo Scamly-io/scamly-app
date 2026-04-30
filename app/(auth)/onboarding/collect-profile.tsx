@@ -12,22 +12,22 @@ import {
   trackSignupAttempted,
   trackSignupCompleted,
   trackSignupFailed,
-} from "@/utils/analytics";
-import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
-import { getPublicIp } from "@/utils/network";
-import { getOAuthCollectWelcomeSeen, setOAuthCollectWelcomeSeen } from "@/utils/oauth-collect-welcome-seen";
+} from "@/utils/shared/analytics";
+import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/shared/date";
+import { getPublicIp } from "@/utils/shared/network";
+import { getOAuthCollectWelcomeSeen, setOAuthCollectWelcomeSeen } from "@/utils/onboarding/oauth-collect-welcome-seen";
 import {
   COLLECT_PROFILE_HREF,
   getInitialCollectProfileUiStep,
   getProfileCollectStepIndex,
   type ProfileOnboardingRow,
-} from "@/utils/onboarding";
-import { onboardingHref } from "@/utils/onboarding-href";
-import { replaceFromProfileStep } from "@/utils/profile-onboarding-nav";
-import { addActionBreadcrumb, captureError } from "@/utils/sentry";
-import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/signup-profile-draft";
-import { supabase } from "@/utils/supabase";
-import { genderOptions, referralSourceOptions, signUpSchema } from "@/utils/validation/auth";
+} from "@/utils/onboarding/onboarding";
+import { onboardingHref } from "@/utils/onboarding/onboarding-href";
+import { replaceFromProfileStep } from "@/utils/onboarding/profile-onboarding-nav";
+import { addActionBreadcrumb, captureError } from "@/utils/shared/sentry";
+import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/auth/signup-profile-draft";
+import { supabase } from "@/utils/shared/supabase";
+import { genderOptions, referralSourceOptions, signUpSchema } from "@/utils/auth/auth";
 import type { User } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import {
@@ -402,7 +402,7 @@ export default function OnboardingCollectProfile() {
   const { user, refreshAuth } = useAuth();
   const { signUpData, resetSignUpData } = useSignUp();
   const router = useRouter();
-  const isDraft = isEmailPasswordProfileDraft(signUpData);
+  const isDraft = isEmailPasswordProfileDraft(signUpData, user?.id ?? null);
   const authForStep = isDraft ? "email" : getAuthenticationMethodForAnalytics(user);
 
   const [step, setStep] = useState(0);
@@ -549,7 +549,7 @@ export default function OnboardingCollectProfile() {
       return;
     }
     if (shouldRedirectMissingEmailDraftToSignup({ userId, isDraft, accountCreated: accountCreatedRef.current })) {
-      router.replace(onboardingHref("/signup"));
+      router.replace(onboardingHref("/onboarding/signup"));
     }
   }, [userId, isDraft, signUpData, router]);
 
@@ -568,7 +568,7 @@ export default function OnboardingCollectProfile() {
       return;
     }
     if (step <= 0) {
-      replaceFromProfileStep(router, COLLECT_PROFILE_HREF, signUpData);
+      replaceFromProfileStep(router, COLLECT_PROFILE_HREF, signUpData, user?.id ?? null);
       return;
     }
     hasNavigated.current = true;
@@ -743,7 +743,7 @@ export default function OnboardingCollectProfile() {
           accountCreatedRef.current = true;
           resetSignUpData();
           setLoading(false);
-          // `replace` from a nested onboarding screen can leave the (auth) stack on /signup.
+          // `replace` from a nested onboarding screen can leave the (auth) stack on /onboarding/signup.
           router.dismissTo(onboardingHref("/signup-confirm"));
           return;
         }

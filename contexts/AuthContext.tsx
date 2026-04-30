@@ -11,10 +11,10 @@ import {
   identifyUser,
   resetUser,
   type UserPlan,
-} from "@/utils/analytics";
-import { checkOnboardingStatus, ProfileNotFoundError } from "@/utils/onboarding";
-import { clearUserContext, setUserContext } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+} from "@/utils/shared/analytics";
+import { checkOnboardingStatus, ProfileNotFoundError } from "@/utils/onboarding/onboarding";
+import { clearUserContext, setUserContext } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 

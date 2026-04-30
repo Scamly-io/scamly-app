@@ -5,5 +5,5 @@ import { Redirect } from "expo-router";
  * Unauthenticated users start at sign-up; `/onboarding` requires a session or in-progress draft from there.
  */
 export default function SignUpProfileRedirect() {
-  return <Redirect href="/signup" />;
+  return <Redirect href="/onboarding/signup" />;
 }

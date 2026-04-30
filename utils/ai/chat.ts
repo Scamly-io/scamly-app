@@ -5,9 +5,9 @@
  * body.action Enum: createConversationId, deleteConversationId, generateResponse, sendMessage (streaming)
  */
 
-import { trackUserVisibleError } from "@/utils/analytics";
-import { captureChatError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+import { trackUserVisibleError } from "@/utils/shared/analytics";
+import { captureChatError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 
 const AI_CHAT_FUNCTION = __DEV__ ? "ai-chat-dev" : "ai-chat";
 console.log("AI_CHAT_FUNCTION", AI_CHAT_FUNCTION);

@@ -4,7 +4,7 @@ import ShimmerText from "@/components/ShimmerText";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
-import { getIsPremium } from "@/utils/access";
+import { getIsPremium } from "@/utils/shared/access";
 import { ScanError, scanImage } from "@/utils/ai/scan";
 import {
   trackFeatureOpened,
@@ -13,11 +13,11 @@ import {
   trackScanStarted,
   trackUserVisibleError,
   type ResultCategory,
-} from "@/utils/analytics";
-import { promptReview } from "@/utils/review";
-import { captureDataFetchError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
-import { ScanResult } from "@/utils/types";
+} from "@/utils/shared/analytics";
+import { promptReview } from "@/utils/shared/review";
+import { captureDataFetchError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
+import { ScanResult } from "@/utils/shared/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import { router, useIsFocused } from "expo-router";

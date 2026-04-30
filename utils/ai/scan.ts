@@ -10,11 +10,11 @@
  * - Current model: Gemini 3 Flash Preview
  */
 
-import type { ScanStage } from "@/utils/analytics";
-import { trackScanFailed } from "@/utils/analytics";
-import { ScanResult } from "@/utils/types";
-import { captureScanError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+import type { ScanStage } from "@/utils/shared/analytics";
+import { trackScanFailed } from "@/utils/shared/analytics";
+import { ScanResult } from "@/utils/shared/types";
+import { captureScanError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 
 /** Edge function URL for image scan (used by tests for request contract assertions). */
 export const SCAN_IMAGE_EDGE_URL =

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FlatList, Modal, Platform, Pressable, Text, View } from "react-native";
+import { FlatList, Modal, Platform, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTheme } from "@/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -7,6 +7,14 @@ type NativeMenuProps = {
   trigger: React.ReactNode;
   options: { label: string; value: string }[];
   onSelect: (value: string) => void;
+  /**
+   * **iOS:** Pins the SwiftUI `Host` size and disables `matchContents`. Use beside keyboards (e.g.
+   * chat composer): `matchContents` can report 0×0 after the text field focuses and the trigger
+   * stays invisible until remount.
+   * **Android:** Optional `hostStyle` still applies; fixed sizing is not used (Compose `Host` stays `matchContents`).
+   */
+  fixedHostSize?: { width: number; height: number };
+  hostStyle?: StyleProp<ViewStyle>;
 };
 
 /**
@@ -14,14 +22,18 @@ type NativeMenuProps = {
  * Same pattern as the feature wall in `FeedbackWallModal`.
  * `require` keeps @expo/ui from loading on non-native bundles.
  */
-export default function NativeMenu({ trigger, options, onSelect }: NativeMenuProps) {
+export default function NativeMenu({ trigger, options, onSelect, fixedHostSize, hostStyle }: NativeMenuProps) {
   const [androidMenuExpanded, setAndroidMenuExpanded] = useState(false);
 
   if (Platform.OS === "ios") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Host, Menu, Button: MenuButton } = require("@expo/ui/swift-ui");
+    const pinHost = fixedHostSize != null;
     return (
-      <Host matchContents>
+      <Host
+        matchContents={pinHost ? false : true}
+        style={pinHost ? [{ width: fixedHostSize.width, height: fixedHostSize.height }, hostStyle] : hostStyle}
+      >
         <Menu label={trigger}>
           {options.map((opt: { label: string; value: string }) => (
             <MenuButton key={opt.value} label={opt.label} onPress={() => onSelect(opt.value)} />
@@ -37,7 +49,7 @@ export default function NativeMenu({ trigger, options, onSelect }: NativeMenuPro
       "@expo/ui/jetpack-compose",
     );
     return (
-      <Host matchContents>
+      <Host matchContents style={hostStyle}>
         <DropdownMenu
           expanded={androidMenuExpanded}
           onDismissRequest={() => setAndroidMenuExpanded(false)}

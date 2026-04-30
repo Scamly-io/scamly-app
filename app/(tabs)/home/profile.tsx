@@ -5,29 +5,33 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { countries } from "@/constants/countries";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
-import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
-import { getSupportedPromoOffer } from "@/utils/promo";
+import { genderOptions } from "@/utils/auth/auth";
 import {
   trackAccountDeletionConfirmed,
   trackAccountDeletionFailed,
   trackAccountDeletionSucceeded,
   trackFeatureOpened,
-} from "@/utils/analytics";
+} from "@/utils/shared/analytics";
+import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/shared/date";
+import { getSupportedPromoOffer } from "@/utils/shared/promo";
 import {
-  EARLY_INTEREST_STORAGE_KEY,
+  clearStoredPromoOffer,
+  getAndroidOfferingIdForPromoOffer,
+  getStoredPromoOfferId,
   getRevenueCatCustomerInfo,
-  handleEarlyInterestPromoOffer,
+  handlePromoOffer,
   hasScamlyPremiumEntitlement,
-  isEarlyInterestUser,
   presentScamlyCustomerCenter,
   presentScamlyPaywallIfNeeded,
+  setStoredPromoOfferId,
   tagEarlyInterestUser,
+  tagDiscountUser,
   trackRevenueCatError,
-} from "@/utils/revenuecat";
-import { captureError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
-import { genderOptions } from "@/utils/validation/auth";
+} from "@/utils/shared/revenuecat";
+import { captureError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import {
@@ -48,7 +52,6 @@ import {
   Users,
   X,
 } from "lucide-react-native";
-import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -418,20 +421,18 @@ export default function Profile() {
         return;
       }
 
-      if (supportedOffer === "early_interest") {
-        if (isIosPromoFlow) {
-          await handleEarlyInterestPromoOffer();
-        } else {
-          await AsyncStorage.setItem("early_interest_user", "true");
-          await AsyncStorage.setItem("promoCode", trimmedPromoCode); // e.g. "early40"
+      if (isIosPromoFlow) {
+        await setStoredPromoOfferId(supportedOffer.id);
+        await handlePromoOffer(supportedOffer.id);
+      } else {
+        await setStoredPromoOfferId(supportedOffer.id);
+        await AsyncStorage.setItem("promoCode", trimmedPromoCode); // entered code (e.g. "early40")
+        if (supportedOffer.id === "early_interest") {
           await tagEarlyInterestUser();
+        } else {
+          await tagDiscountUser(supportedOffer.id);
         }
       }
-      // TODO: Re-enable for social media discount launch
-      // else if (offer === "social_discount") {
-      //   await AsyncStorage.setItem("social_media_discount", "true");
-      //   await AsyncStorage.setItem("promoCode", trimmedPromoCode); // e.g. "scamly10"
-      // }
 
       setPromoCodeValid(true);
     } catch (error) {
@@ -541,10 +542,11 @@ export default function Profile() {
     setOpeningPaywall(true);
 
     try {
-      const earlyInterest = await isEarlyInterestUser();
-      const offeringId = Platform.OS === "android" && earlyInterest
-        ? "early_interest"
-        : undefined;
+      const storedOfferId = await getStoredPromoOfferId();
+      const offeringId =
+        Platform.OS === "android" && storedOfferId
+          ? getAndroidOfferingIdForPromoOffer(storedOfferId)
+          : undefined;
 
       const { didUnlockEntitlement } = await presentScamlyPaywallIfNeeded(offeringId, {
         trigger: "profile_upgrade",
@@ -555,9 +557,8 @@ export default function Profile() {
         await refreshAuth();
         await loadProfile();
 
-        if (earlyInterest) {
-          await AsyncStorage.removeItem(EARLY_INTEREST_STORAGE_KEY);
-          await AsyncStorage.removeItem("promoCode");
+        if (storedOfferId) {
+          await clearStoredPromoOffer();
         }
         router.push("/subscription-success");
       }

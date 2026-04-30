@@ -1,14 +1,14 @@
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
 import { deleteConversationId } from "@/utils/ai/chat";
-import { trackUserVisibleError } from "@/utils/analytics";
-import type { CachedChatSummary } from "@/utils/chat-history-cache";
+import { trackUserVisibleError } from "@/utils/shared/analytics";
+import type { CachedChatSummary } from "@/utils/chat/chat-history-cache";
 import {
   getChatHistoryCache,
   setChatHistoryCache,
-} from "@/utils/chat-history-cache";
-import { captureChatError, captureDataFetchError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+} from "@/utils/chat/chat-history-cache";
+import { captureChatError, captureDataFetchError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import { foregroundColor, frame, padding, scaleEffect } from "@expo/ui/swift-ui/modifiers";
 import type { DrawerContentComponentProps } from "@react-navigation/drawer";
 import {
@@ -30,7 +30,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { openNewChatSession } from "@/utils/chat-nav";
+import { openNewChatSession } from "@/utils/chat/chat-nav";
 
 function formatChatTitleDate(iso: string): string {
   const date = new Date(iso);

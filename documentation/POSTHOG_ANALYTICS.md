@@ -399,7 +399,7 @@ These complement **RevenueCat → PostHog** subscription events (`rc_trial_start
 | `feedback_comment_posted` | Comment saved | `feedback_id` |
 | `feedback_report_submitted` | Report saved | `feedback_id`, `reason_key` (e.g. `spam`, `fraud`, …) |
 
-**Locations:** `components/FeedbackWallModal.tsx`, `components/NewFeedbackItemModal.tsx`, `components/FeedbackDetailModal.tsx`
+**Locations:** `app/(tabs)/home/_components/FeedbackWallModal.tsx`, `app/(tabs)/home/_components/NewFeedbackItemModal.tsx`, `app/(tabs)/home/_components/FeedbackDetailModal.tsx`
 
 ---
 

@@ -1,5 +1,5 @@
 import { useTheme } from "@/theme";
-import type { PolicyContent } from "@/utils/policies";
+import type { PolicyContent } from "@/utils/shared/policies";
 import { StyleSheet, Text, View } from "react-native";
 
 const LEVEL_INDENT = 16;

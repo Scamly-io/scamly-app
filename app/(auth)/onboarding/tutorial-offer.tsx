@@ -6,10 +6,10 @@ import {
   getAuthenticationMethodForAnalytics,
   trackOnboardingStepViewed,
   trackOnboardingTutorialDismissed,
-} from "@/utils/analytics";
-import { onboardingHref } from "@/utils/onboarding-href";
-import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding-tutorial-exit";
-import { captureError } from "@/utils/sentry";
+} from "@/utils/shared/analytics";
+import { onboardingHref } from "@/utils/onboarding/onboarding-href";
+import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboarding-tutorial-exit";
+import { captureError } from "@/utils/shared/sentry";
 import { useRouter } from "expo-router";
 import { BookOpen, Sparkles } from "lucide-react-native";
 import { useEffect, useState } from "react";

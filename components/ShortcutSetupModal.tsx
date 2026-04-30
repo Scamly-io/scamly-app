@@ -3,7 +3,7 @@ import {
   trackShortcutInstallLinkOpened,
   trackShortcutSetupModalOpened,
   type ShortcutSetupEntry,
-} from "@/utils/analytics";
+} from "@/utils/shared/analytics";
 import * as WebBrowser from "expo-web-browser";
 import {
   Download,

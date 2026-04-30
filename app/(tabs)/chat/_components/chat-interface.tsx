@@ -1,30 +1,37 @@
 import Button from "@/components/Button";
-import ChatChromeIconButton from "@/components/chat-chrome-icon-button";
-import ChatGlassInputBar from "@/components/chat-glass-input-bar";
-import ChatGlassPillButton from "@/components/chat-glass-pill-button";
-import MessageBlock, { type ChatMessage } from "@/components/MessageBlock";
+import ChatChromeIconButton from "./chat-chrome-icon-button";
+import ChatGlassInputBar from "./chat-glass-input-bar";
+import ChatGlassPillButton from "./chat-glass-pill-button";
+import MessageBlock, { type ChatMessage } from "./MessageBlock";
 import ThemedBackground from "@/components/ThemedBackground";
-import ThinkingIndicator from "@/components/ThinkingIndicator";
+import ThinkingIndicator from "./ThinkingIndicator";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
 import { getAiChatEdgeFunctionUrl } from "@/utils/ai/chat";
 import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
-import { trackUserVisibleError } from "@/utils/analytics";
+import { trackUserVisibleError } from "@/utils/shared/analytics";
+import {
+  createSignedUrlsForChatImages,
+  joinImageIdCsv,
+  normalizePickerBase64,
+  uploadChatImages,
+} from "@/utils/chat/chat-images";
 import {
   buildInitialChatRowPayload,
   insertInitialChatRow,
   needsInitialChatRowInsert,
-} from "@/utils/chat-initial-row";
-import { openNewChatSession } from "@/utils/chat-nav";
-import { captureChatError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+} from "@/utils/chat/chat-initial-row";
+import { openNewChatSession } from "@/utils/chat/chat-nav";
+import { captureChatError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { router, useFocusEffect } from "expo-router";
-import { Menu, Plus, X } from "lucide-react-native";
+import { ImagePlus, Menu, Plus, X } from "lucide-react-native";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, BackHandler, FlatList, Keyboard, Platform, StyleSheet, Text, View } from "react-native";
+import { Alert, BackHandler, FlatList, Keyboard, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView, KeyboardGestureArea } from "react-native-keyboard-controller";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
@@ -48,11 +55,13 @@ function toBlockMessage(m: StoreMessage): ChatMessage {
     id: m.id,
     role: m.role,
     content: m.content,
+    imageId: m.imageId,
+    imageUrls: m.imageUrls,
   };
 }
 
 const MessageRow = memo(
-  function MessageRow({ item }: { item: StoreMessage }) {
+  function MessageRow({ item, viewerUserId }: { item: StoreMessage; viewerUserId: string }) {
     if (item.role === "assistant" && item.streaming && item.content.trim() === "") {
       return (
         <View style={messageRowStyles.thinkingWrap}>
@@ -60,13 +69,15 @@ const MessageRow = memo(
         </View>
       );
     }
-    return <MessageBlock message={toBlockMessage(item)} />;
+    return <MessageBlock message={toBlockMessage(item)} viewerUserId={viewerUserId} />;
   },
   (prev, next) =>
     prev.item.id === next.item.id &&
     prev.item.content === next.item.content &&
     prev.item.streaming === next.item.streaming &&
-    prev.item.role === next.item.role
+    prev.item.role === next.item.role &&
+    prev.item.imageId === next.item.imageId &&
+    (prev.item.imageUrls?.join("\0") ?? "") === (next.item.imageUrls?.join("\0") ?? "")
 );
 
 const messageRowStyles = StyleSheet.create({
@@ -93,6 +104,13 @@ export default function ChatInterface({
   const isStreaming = useChatStore((s) => s.isStreaming);
 
   const [input, setInput] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<
+    { id: string; uri: string; mimeType?: string; base64: string }[]
+  >([]);
+
+  useEffect(() => {
+    setPendingAttachments([]);
+  }, [routeChatSegment]);
 
   const flatListRef = useRef<FlatList<StoreMessage>>(null);
 
@@ -126,6 +144,8 @@ export default function ChatInterface({
 
   const startNewChat = useCallback(() => {
     navigation.dispatch(DrawerActions.closeDrawer());
+    Keyboard.dismiss();
+    TextInput.State.blurTextInput();
     openNewChatSession();
   }, [navigation]);
 
@@ -139,10 +159,118 @@ export default function ChatInterface({
     scrollToPinnedEnd(false);
   }, [listData.length, scrollToPinnedEnd]);
 
+  const interactionLocked = isFreePlan;
+
+  const removeAttachment = useCallback((id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const pickImages = useCallback(async () => {
+    Keyboard.dismiss();
+    TextInput.State.blurTextInput();
+
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Photos", "Allow photo library access to attach images.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      quality: 0.85,
+      base64: true,
+    });
+    if (result.canceled) return;
+
+    const added = result.assets
+      .map((a) => {
+        const base64 = normalizePickerBase64(a.base64 ?? undefined);
+        if (!base64) return null;
+        return {
+          id: uuid.v4().toString(),
+          uri: a.uri,
+          mimeType: a.mimeType ?? undefined,
+          base64,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null);
+
+    if (added.length === 0) {
+      Alert.alert(
+        "Couldn't read images",
+        "We couldn't load the photo data. Try choosing different images or slightly lower resolution."
+      );
+      return;
+    }
+    if (added.length < result.assets.length) {
+      Alert.alert(
+        "Some images skipped",
+        "One or more photos could not be prepared for upload. The rest were added."
+      );
+    }
+
+    setPendingAttachments((prev) => [...prev, ...added]);
+  }, []);
+
+  const imagePickerSlot = useMemo(() => {
+    if (interactionLocked) return undefined;
+    if (planLoading || isStreaming) {
+      return (
+        <ChatChromeIconButton
+          accessibilityLabel="Insert image"
+          onPress={() => {}}
+          bg={colors.surface}
+          disabled
+        >
+          <ImagePlus size={22} color={colors.textPrimary} strokeWidth={2} />
+        </ChatChromeIconButton>
+      );
+    }
+    return (
+      <ChatChromeIconButton
+        accessibilityLabel="Insert image"
+        onPress={() => void pickImages()}
+        bg={colors.surface}
+      >
+        <ImagePlus size={22} color={colors.textPrimary} strokeWidth={2} />
+      </ChatChromeIconButton>
+    );
+  }, [colors.surface, colors.textPrimary, interactionLocked, isStreaming, pickImages, planLoading]);
+
   const sendWithStreaming = useCallback(async () => {
     if (isFreePlan || planLoading) return;
     const trimmed = input.trim();
-    if (!trimmed || isStreaming) return;
+    const pending = pendingAttachments;
+    if ((!trimmed && pending.length === 0) || isStreaming) return;
+
+    let imageIdCsv: string | undefined;
+    let imageUrlsForEdge: string[] | undefined;
+    let imageIdsForEdge: string[] | null = null;
+
+    if (pending.length > 0) {
+      const up = await uploadChatImages(
+        supabase,
+        userId,
+        pending.map((p) => ({
+          uri: p.uri,
+          base64: p.base64,
+          mimeType: p.mimeType,
+        })),
+        () => uuid.v4().toString()
+      );
+      if (up.error || up.filenames.length === 0) {
+        Alert.alert("Couldn't upload images", up.error || "Please try again.");
+        return;
+      }
+      imageIdCsv = joinImageIdCsv(up.filenames);
+      imageIdsForEdge = [...up.filenames];
+      const signed = await createSignedUrlsForChatImages(supabase, userId, up.filenames);
+      if (signed.error || signed.urls.length === 0) {
+        Alert.alert("Couldn't prepare images", signed.error || "Please try again.");
+        return;
+      }
+      imageUrlsForEdge = signed.urls;
+    }
 
     const beforeSend = useChatStore.getState();
     if (
@@ -156,7 +284,7 @@ export default function ChatInterface({
         buildInitialChatRowPayload({
           chatId: routeChatSegment,
           userId,
-          lastMessage: trimmed,
+          lastMessage: trimmed || (pending.length ? "Image" : ""),
         })
       );
       if (!rowResult.ok) {
@@ -167,14 +295,14 @@ export default function ChatInterface({
       useChatStore.getState().setChatRowPersistedInDb(true);
     }
 
-    /** AI thread id from edge only — null until `X-Conversation-Id` on a prior response */
     const conversationIdForPost = useChatStore.getState().activeConversationId;
-    console.log("conversationIdForPost", conversationIdForPost);
 
     const userMsg: StoreMessage = {
       id: uuid.v4().toString(),
       role: "user",
       content: trimmed,
+      imageId: imageIdCsv,
+      imageUrls: imageUrlsForEdge,
     };
     const assistantMsg: StoreMessage = {
       id: uuid.v4().toString(),
@@ -188,6 +316,7 @@ export default function ChatInterface({
     store.addMessage(assistantMsg);
     store.setStreaming(true);
     setInput("");
+    setPendingAttachments([]);
 
     try {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -226,6 +355,9 @@ export default function ChatInterface({
           conversationId: conversationIdForPost ?? null,
           userId,
           chatId: routeChatSegment,
+          imageUrls: imageUrlsForEdge ?? null,
+          /** Storage filenames under `chat-images/{userId}/…`; edge persists to `messages.image_id` (e.g. joined CSV). */
+          imageIds: imageIdsForEdge,
         },
         onConversationId: (id) => {
           useChatStore.getState().setConversationId(id);
@@ -246,14 +378,22 @@ export default function ChatInterface({
       );
       useChatStore.getState().setStreaming(false);
     }
-  }, [input, isFreePlan, planLoading, isStreaming, userId, routeChatSegment]);
+  }, [
+    input,
+    pendingAttachments,
+    isFreePlan,
+    planLoading,
+    isStreaming,
+    userId,
+    routeChatSegment,
+  ]);
 
   const renderItem = useCallback(
-    ({ item }: { item: StoreMessage }) => <MessageRow item={item} />,
-    []
+    ({ item }: { item: StoreMessage }) => (
+      <MessageRow item={item} viewerUserId={userId} />
+    ),
+    [userId]
   );
-
-  const interactionLocked = isFreePlan;
 
   const listEmpty = useMemo(
     () =>
@@ -317,13 +457,6 @@ export default function ChatInterface({
                 />
               </View>
             </View>
-            <Text
-              style={[styles.headerDate, { color: colors.textTertiary }]}
-              numberOfLines={1}
-              selectable
-            >
-              {headerDateLabel}
-            </Text>
             <View style={styles.headerColEnd}>
               <ChatChromeIconButton
                 accessibilityLabel="Close chat"
@@ -336,53 +469,58 @@ export default function ChatInterface({
           </View>
 
           {/*
-            One KeyboardAvoidingView for list + composer so overlap math matches the full column
-            below the header (messages stay readable). Wrapping only the FlatList broke avoidance
-            because the measured frame didn’t include the composer strip. Jitter stays fixed by *not*
-            driving composer height from onContentSizeChange (see ChatGlassInputBar).
+            One KeyboardAvoidingView for list + composer. `KeyboardGestureArea` wraps both the
+            inverted list and the composer so `textInputNativeID` targets a subtree that includes
+            the actual `TextInput` (required on iOS).
           */}
           <KeyboardAvoidingView behavior="padding" style={styles.flex} keyboardVerticalOffset={35}>
             <View style={styles.flex}>
               <KeyboardGestureArea style={styles.flex} textInputNativeID={CHAT_COMPOSER_NATIVE_ID}>
-                <FlatList
-                  ref={flatListRef}
-                  style={styles.flex}
-                  data={listData}
-                  inverted
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderItem}
-                  keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode={Platform.OS === "ios" ? "none" : "on-drag"}
-                  contentContainerStyle={[
-                    styles.listContent,
-                    listData.length === 0 ? styles.listEmptyGrow : undefined,
-                  ]}
-                  ListEmptyComponent={listEmpty}
-                  removeClippedSubviews={listData.length > 24}
-                  onContentSizeChange={() => scrollToPinnedEnd(false)}
-                  initialNumToRender={15}
-                  maxToRenderPerBatch={15}
-                  windowSize={10}
-                />
-              </KeyboardGestureArea>
+                <View style={styles.keyboardGestureColumn}>
+                  <FlatList
+                    ref={flatListRef}
+                    style={styles.flex}
+                    data={listData}
+                    inverted
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderItem}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode={Platform.OS === "ios" ? "none" : "on-drag"}
+                    contentContainerStyle={[
+                      styles.listContent,
+                      listData.length === 0 ? styles.listEmptyGrow : undefined,
+                    ]}
+                    ListEmptyComponent={listEmpty}
+                    removeClippedSubviews={listData.length > 24}
+                    onContentSizeChange={() => scrollToPinnedEnd(false)}
+                    initialNumToRender={15}
+                    maxToRenderPerBatch={15}
+                    windowSize={10}
+                  />
 
-              <View
-                style={[
-                  styles.inputShell,
-                  {
-                    paddingBottom: Math.max(insets.bottom, 10),
-                  },
-                ]}
-              >
-                <ChatGlassInputBar
-                  composerNativeID={CHAT_COMPOSER_NATIVE_ID}
-                  value={input}
-                  onChangeText={setInput}
-                  onSend={sendWithStreaming}
-                  placeholder="Message Scamly..."
-                  disabled={planLoading || isStreaming || interactionLocked}
-                />
-              </View>
+                  <View
+                    style={[
+                      styles.inputShell,
+                      {
+                        paddingBottom: Math.max(insets.bottom, 10),
+                      },
+                    ]}
+                  >
+                    <ChatGlassInputBar
+                      composerNativeID={CHAT_COMPOSER_NATIVE_ID}
+                      value={input}
+                      onChangeText={setInput}
+                      onSend={sendWithStreaming}
+                      placeholder="Message Scamly..."
+                      disabled={planLoading || isStreaming || interactionLocked}
+                      plusDisabled={planLoading || isStreaming || interactionLocked}
+                      plusSlot={imagePickerSlot}
+                      attachments={pendingAttachments}
+                      onRemoveAttachment={removeAttachment}
+                    />
+                  </View>
+                </View>
+              </KeyboardGestureArea>
             </View>
           </KeyboardAvoidingView>
         </View>
@@ -395,6 +533,10 @@ const HEADER_HEIGHT = 56;
 
 const styles = StyleSheet.create({
   flex: {
+    flex: 1,
+    minHeight: 0,
+  },
+  keyboardGestureColumn: {
     flex: 1,
     minHeight: 0,
   },

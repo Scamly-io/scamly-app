@@ -2,10 +2,10 @@ import ThemedBackground from "@/components/ThemedBackground";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
-import { trackFeatureOpened, trackUserVisibleError } from "@/utils/analytics";
-import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
-import { captureDataFetchError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+import { trackFeatureOpened, trackUserVisibleError } from "@/utils/shared/analytics";
+import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/shared/revenuecat";
+import { captureDataFetchError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import { useFocusEffect } from "@react-navigation/native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -111,7 +111,7 @@ export default function ChatDetail() {
 
       const msgRes = await supabase
         .from("messages")
-        .select("id, role, content")
+        .select("id, role, content, image_id")
         .eq("chat_id", chatRowId)
         .order("created_at", { ascending: true });
 
@@ -124,6 +124,7 @@ export default function ChatDetail() {
           id: r.id,
           role: r.role as "user" | "assistant",
           content: r.content,
+          imageId: (r as { image_id?: unknown }).image_id ?? undefined,
         }));
 
       useChatStore.getState().setMessages(mapped);
