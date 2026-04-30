@@ -29,7 +29,6 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
-  Info,
   Lock,
   Shield,
   TriangleAlert,
@@ -41,7 +40,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -136,7 +134,6 @@ export default function Scan() {
   const { colors, radius, shadows, isDark } = useTheme();
   const { user } = useAuth();
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const [showModal, setShowModal] = useState<boolean>(false);
   const [pageLoading, setPageLoading] = useState<boolean>(true);
   const [results, setResults] = useState<ScanResult | null>(null);
   const [aspectRatio, setAspectRatio] = useState<number>(1);
@@ -638,28 +635,21 @@ export default function Scan() {
                   exiting={FadeOut.duration(250)}
                 >
                   <Card style={styles.uploadCard} pressable={false}>
-                    <View style={styles.topActionsRow}>
-                      <TouchableOpacity
-                        style={styles.howToUseButton}
-                        onPress={() => setShowModal(true)}
-                      >
-                        <Info size={16} color={colors.accent} />
-                        <Text style={[styles.howToUseText, { color: colors.accent }]}>
-                          How to use this feature
-                        </Text>
-                      </TouchableOpacity>
-
-                      {Platform.OS === "ios" && !isFreePlan && (
-                        <TouchableOpacity
-                          style={styles.addShortcutButton}
-                          onPress={() => setShowShortcutSetup(true)}
-                        >
-                          <Text style={[styles.howToUseText, { color: colors.accent }]}>
-                            Enable Quick Scan
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                    {Platform.OS === "ios" && (
+                      <View style={styles.topActionsRow}>
+                        {!isFreePlan && (
+                          <TouchableOpacity
+                            style={styles.addShortcutButton}
+                            onPress={() => setShowShortcutSetup(true)}
+                          >
+                            <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                              Enable Quick Scan
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+               
 
                     {image ? (
                       <View style={styles.uploadedImageContainer}>
@@ -1124,36 +1114,6 @@ export default function Scan() {
             </>
           )}
         </ScrollView>
-
-        {/* How to Use Modal */}
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={showModal}
-          onRequestClose={() => setShowModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <Animated.View
-              entering={FadeIn.duration(200)}
-              style={[
-                styles.modalContainer,
-                {
-                  backgroundColor: colors.surface,
-                  borderRadius: radius["2xl"],
-                  ...shadows.xl,
-                },
-              ]}
-            >
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Tips</Text>
-              <Text style={[styles.modalText, { color: colors.textSecondary }]}>
-                For the best results:{"\n\n"}• Include the main message or section to analyze
-                {"\n"}• Capture contact details if relevant{"\n"}• Focus on the most suspicious
-                parts{"\n"}• Ensure text is easy to read{"\n\n"}Allow up to 10 seconds for results to appear.
-              </Text>
-              <Button onPress={() => setShowModal(false)}>Got it</Button>
-            </Animated.View>
-          </View>
-        </Modal>
       </SafeAreaView>
     </ThemedBackground>
     </>
@@ -1214,13 +1174,8 @@ const styles = StyleSheet.create({
   topActionsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "center",
     marginBottom: 16,
-  },
-  howToUseButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
   },
   addShortcutButton: {
     flexDirection: "row",
@@ -1471,32 +1426,6 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     fontSize: 13,
     lineHeight: 19,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modalContainer: {
-    width: "100%",
-    maxWidth: 340,
-    padding: 24,
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontFamily: "Poppins-Bold",
-    fontSize: 20,
-    marginBottom: 16,
-  },
-  modalText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 24,
-    textAlign: "left",
-    width: "100%",
   },
   scanningContainer: {
     marginBottom: 24,
