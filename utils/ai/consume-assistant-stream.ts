@@ -13,6 +13,7 @@
  *   forwarded immediately.
  *
  * Wire contract (must match `supabase/functions/ai-chat[-dev]/index.ts`):
+ *   `sendMessage` body may include `imageUrls` and `imageIds` (string[] storage filenames for `messages.image_id`).
  *   Content-Type: text/event-stream
  *   Each token delta → `data: ${JSON.stringify(delta)}\n\n`
  *   X-Conversation-Id exposed via Access-Control-Expose-Headers

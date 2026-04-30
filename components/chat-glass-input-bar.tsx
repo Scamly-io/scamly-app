@@ -1,12 +1,23 @@
 import ChatChromeIconButton from "@/components/chat-chrome-icon-button";
 import { useTheme } from "@/theme";
 import { GlassView, isGlassEffectAPIAvailable } from "expo-glass-effect";
-import { Plus, Send } from "lucide-react-native";
-import { Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { Image } from "expo-image";
+import { ImagePlus, Send, X } from "lucide-react-native";
+import type { ReactNode } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 /** Single-line-ish min height; padding keeps the row visually slim */
 const MIN_INPUT_HEIGHT = 30;
 const MAX_INPUT_HEIGHT = 148;
+const THUMB = 72;
+
+export type ChatComposerAttachment = {
+  id: string;
+  uri: string;
+  mimeType?: string;
+  /** Present when attachments are ready for storage upload (`expo-image-picker` + `base64: true`). */
+  base64: string;
+};
 
 type Props = {
   value: string;
@@ -14,7 +25,13 @@ type Props = {
   onSend: () => void;
   placeholder?: string;
   disabled?: boolean;
+  /** When using the default plus button, keep it inert (e.g. free plan). */
+  plusDisabled?: boolean;
   onPressPlus?: () => void;
+  /** When set, replaces the default plus `ChatChromeIconButton` (e.g. wrap with `NativeMenu`). */
+  plusSlot?: ReactNode;
+  attachments?: ChatComposerAttachment[];
+  onRemoveAttachment?: (id: string) => void;
   /** Links to `KeyboardGestureArea` (`textInputNativeID`) from react-native-keyboard-controller on iOS */
   composerNativeID?: string;
 };
@@ -29,49 +46,88 @@ export default function ChatGlassInputBar({
   onSend,
   placeholder,
   disabled,
+  plusDisabled = false,
   onPressPlus = () => {},
+  plusSlot,
+  attachments = [],
+  onRemoveAttachment,
   composerNativeID,
 }: Props) {
   const { colors, radius } = useTheme();
-  const canSend = value.trim().length > 0 && !disabled;
+  const hasAtt = attachments.length > 0;
+  const canSend = (value.trim().length > 0 || hasAtt) && !disabled;
+
+  const attachmentStrip = hasAtt ? (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.attachScrollContent}
+      >
+        {attachments.map((a) => (
+          <View key={a.id} style={styles.thumbWrap}>
+            <Image source={{ uri: a.uri }} style={[styles.thumb, { borderRadius: radius.md }]} contentFit="cover" />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Remove attachment"
+              onPress={() => (onRemoveAttachment ? onRemoveAttachment(a.id) : undefined)}
+              hitSlop={10}
+              style={({ pressed }) => [
+                styles.thumbRemove,
+                { opacity: pressed ? 0.85 : 1, backgroundColor: "rgba(0,0,0,0.45)" },
+              ]}
+            >
+              <X size={16} color="#fff" strokeWidth={2.5} />
+            </Pressable>
+          </View>
+        ))}
+      </ScrollView>
+    ) : null;
+
+  const divider = hasAtt ? (
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+    ) : null;
 
   const fieldInner = (
-    <View
-      style={[
-        styles.textCluster,
-        {
-          borderRadius: radius.xl,
-          /** Android: keep transparent so the outer `fallbackOuter` (`surface`) is one flat white field — no inner grey inset. */
-          backgroundColor: "transparent",
-        },
-      ]}
-    >
-      <TextInput
-        nativeID={composerNativeID}
-        style={[styles.input, { color: colors.textPrimary }]}
-        placeholder={placeholder ?? "Message Scamly..."}
-        placeholderTextColor={colors.textTertiary}
-        value={value}
-        onChangeText={onChangeText}
-        multiline
-        scrollEnabled
-        editable={!disabled}
-        blurOnSubmit={false}
-        returnKeyType="default"
-        textAlignVertical="top"
-        underlineColorAndroid="transparent"
-      />
-      {canSend ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Send message"
-          onPress={onSend}
-          hitSlop={12}
-          style={({ pressed }) => [styles.sendInside, { opacity: pressed ? 0.65 : 1 }]}
-        >
-          <Send size={22} color={colors.accent} strokeWidth={2} />
-        </Pressable>
-      ) : null}
+    <View style={styles.fieldColumn}>
+      {attachmentStrip}
+      {divider}
+      <View
+        style={[
+          styles.textCluster,
+          {
+            borderRadius: radius.xl,
+            backgroundColor: "transparent",
+          },
+        ]}
+      >
+        <TextInput
+          nativeID={composerNativeID}
+          style={[styles.input, { color: colors.textPrimary }]}
+          placeholder={placeholder ?? "Message Scamly..."}
+          placeholderTextColor={colors.textTertiary}
+          value={value}
+          onChangeText={onChangeText}
+          multiline
+          scrollEnabled
+          editable={!disabled}
+          blurOnSubmit={false}
+          returnKeyType="default"
+          textAlignVertical="top"
+          underlineColorAndroid="transparent"
+        />
+        {canSend ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+            onPress={onSend}
+            hitSlop={12}
+            style={({ pressed }) => [styles.sendInside, { opacity: pressed ? 0.65 : 1 }]}
+          >
+            <Send size={22} color={colors.accent} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 
@@ -105,13 +161,18 @@ export default function ChatGlassInputBar({
 
   return (
     <View style={styles.row}>
-      <ChatChromeIconButton
-        accessibilityLabel="Add attachment"
-        onPress={onPressPlus}
-        bg={colors.surface}
-      >
-        <Plus size={22} color={colors.textPrimary} strokeWidth={2} />
-      </ChatChromeIconButton>
+      <View style={styles.plusSlotWrap}>
+        {plusSlot ?? (
+          <ChatChromeIconButton
+            accessibilityLabel="Insert image"
+            onPress={onPressPlus}
+            bg={colors.surface}
+            disabled={plusDisabled}
+          >
+            <ImagePlus size={22} color={colors.textPrimary} strokeWidth={2} />
+          </ChatChromeIconButton>
+        )}
+      </View>
 
       {messageField}
     </View>
@@ -123,6 +184,47 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 10,
+  },
+  plusSlotWrap: {
+    flexShrink: 0,
+    alignSelf: "flex-end",
+    zIndex: 6,
+  },
+  fieldColumn: {
+    alignSelf: "stretch",
+    minWidth: 0,
+  },
+  attachScrollContent: {
+    paddingTop: 8,
+    paddingBottom: 4,
+    paddingHorizontal: 4,
+    gap: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  thumbWrap: {
+    position: "relative",
+    width: THUMB,
+    height: THUMB,
+  },
+  thumb: {
+    width: THUMB,
+    height: THUMB,
+  },
+  thumbRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 6,
+    opacity: 0.9,
   },
   glassOuter: {
     overflow: "hidden",
@@ -136,8 +238,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     minWidth: 0,
   },
-  /** No vertical `flex` here — `flex: 1` in a column parent stretches this row to fill GlassView and
-   *  stops multiline `TextInput` from sizing to its content on iOS. */
   textCluster: {
     alignSelf: "stretch",
     flexDirection: "row",
@@ -148,7 +248,6 @@ const styles = StyleSheet.create({
     minHeight: MIN_INPUT_HEIGHT,
     backgroundColor: "transparent",
   },
-  /** `flex: 1` shorthand can prevent vertical growth; grow only on the row axis via flexGrow + minWidth. */
   input: {
     flexGrow: 1,
     flexShrink: 1,

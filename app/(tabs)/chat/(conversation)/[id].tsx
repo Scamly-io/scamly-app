@@ -111,7 +111,7 @@ export default function ChatDetail() {
 
       const msgRes = await supabase
         .from("messages")
-        .select("id, role, content")
+        .select("id, role, content, image_id")
         .eq("chat_id", chatRowId)
         .order("created_at", { ascending: true });
 
@@ -124,6 +124,7 @@ export default function ChatDetail() {
           id: r.id,
           role: r.role as "user" | "assistant",
           content: r.content,
+          imageId: (r as { image_id?: unknown }).image_id ?? undefined,
         }));
 
       useChatStore.getState().setMessages(mapped);

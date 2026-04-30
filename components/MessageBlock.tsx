@@ -1,20 +1,66 @@
+import ChatImageStack from "@/components/chat-image-stack";
+import { useHydrateMessageImageUrls } from "@/hooks/use-hydrate-message-image-urls";
 import { useTheme } from "@/theme";
+import { parseImageIdCsv } from "@/utils/chat-images";
 import Markdown from "@ronradtke/react-native-markdown-display";
 import { memo, useEffect, useMemo, useRef } from "react";
-import { Animated, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Animated, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
   created_at?: string;
+  imageId?: string | string[] | null;
+  imageUrls?: string[];
 };
 
 type Props = {
   message: ChatMessage;
+  /** Required to resolve private bucket URLs for user image attachments. */
+  viewerUserId?: string;
 };
 
-const MessageBlock = memo(function MessageBlock({ message }: Props) {
+const UserAttachmentBlock = memo(function UserAttachmentBlock({
+  message,
+  viewerUserId,
+}: {
+  message: ChatMessage;
+  viewerUserId: string;
+}) {
+  const { colors, radius } = useTheme();
+  const hasIds = parseImageIdCsv(message.imageId ?? null).length > 0;
+  const { displayUrls, showLoadingGhost } = useHydrateMessageImageUrls({
+    messageId: message.id,
+    userId: viewerUserId,
+    imageId: message.imageId,
+    prefetchedUrls: message.imageUrls,
+  });
+
+  if (!hasIds && !showLoadingGhost) return null;
+
+  return (
+    <>
+      {showLoadingGhost ? (
+        <View
+          style={[
+            styles.imageGhost,
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              borderRadius: radius.lg,
+            },
+          ]}
+        >
+          <ActivityIndicator size="small" color={colors.accent} />
+        </View>
+      ) : null}
+      {displayUrls.length > 0 ? <ChatImageStack imageUrls={displayUrls} /> : null}
+    </>
+  );
+});
+
+const MessageBlock = memo(function MessageBlock({ message, viewerUserId }: Props) {
   const { colors, radius } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { width } = useWindowDimensions();
@@ -59,20 +105,27 @@ const MessageBlock = memo(function MessageBlock({ message }: Props) {
 
   return (
     <Animated.View style={[styles.userOuter, { opacity: fadeAnim }]}>
-      <View
-        style={[
-          styles.userBubble,
-          {
-            maxWidth: userBubbleMaxWidth,
-            borderRadius: radius.xl,
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.userText, { color: colors.textPrimary }]} selectable>
-          {message.content}
-        </Text>
+      <View style={styles.userColumn}>
+        {message.role === "user" && viewerUserId ? (
+          <UserAttachmentBlock message={message} viewerUserId={viewerUserId} />
+        ) : null}
+        {message.content.trim() !== "" ? (
+          <View
+            style={[
+              styles.userBubble,
+              {
+                maxWidth: userBubbleMaxWidth,
+                borderRadius: radius.xl,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.userText, { color: colors.textPrimary }]} selectable>
+              {message.content}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </Animated.View>
   );
@@ -94,6 +147,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-end",
     paddingVertical: 6,
+  },
+  userColumn: {
+    maxWidth: "100%",
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  imageGhost: {
+    width: 120,
+    height: 168,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 0,
   },
   userBubble: {
     paddingHorizontal: 14,

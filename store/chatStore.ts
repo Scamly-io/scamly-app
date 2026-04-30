@@ -5,6 +5,10 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   streaming?: boolean;
+  /** Storage filenames under `chat-images` (CSV string or JSON array from DB). */
+  imageId?: string | string[] | null;
+  /** Ephemeral signed URLs for rendering; re-generated on hydrate when missing. */
+  imageUrls?: string[];
 }
 
 export interface ChatStore {
@@ -19,6 +23,7 @@ export interface ChatStore {
   appendToLastMessage: (chunk: string) => void;
   completeLastAssistantMessage: () => void;
   failLastAssistant: (errorText: string) => void;
+  patchMessage: (id: string, patch: Partial<Message>) => void;
   clearMessages: () => void;
   setStreaming: (val: boolean) => void;
   setChatRowPersistedInDb: (value: boolean) => void;
@@ -71,6 +76,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
       }
       return { messages: msgs, isStreaming: false };
+    }),
+
+  patchMessage: (id, patch) =>
+    set((state) => {
+      const idx = state.messages.findIndex((m) => m.id === id);
+      if (idx === -1) return state;
+      const msgs = [...state.messages];
+      msgs[idx] = { ...msgs[idx], ...patch };
+      return { messages: msgs };
     }),
 
   clearMessages: () => set({ messages: [] }),
