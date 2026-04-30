@@ -3,6 +3,7 @@ import {
   trackPaywallFlowStarted,
   type PaywallTrigger,
 } from "@/utils/shared/analytics";
+import { getPromoOfferById, getSupportedPromoOffer, type PromoOfferId } from "@/utils/shared/promo";
 import { captureError } from "@/utils/shared/sentry";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, Platform } from "react-native";
@@ -13,10 +14,12 @@ import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 export const SCAMLY_PREMIUM_ENTITLEMENT_ID = "Scamly Premium";
 export const SCAMLY_MONTHLY_PACKAGE_ID = "$rc_monthly";
 export const SCAMLY_YEARLY_PACKAGE_ID = "$rc_yearly";
-export const EARLY_INTEREST_PROMO_OFFER_ID_YEARLY = "early_interest_yearly";
-export const EARLY_INTEREST_PROMO_OFFER_ID_MONTHLY = "early_interest_monthly";
-
+/**
+ * Legacy storage key. Kept for backwards compatibility with existing installs.
+ * New code should store the active offer in `PROMO_OFFER_STORAGE_KEY`.
+ */
 export const EARLY_INTEREST_STORAGE_KEY = "early_interest_user";
+export const PROMO_OFFER_STORAGE_KEY = "promo_offer";
 
 const REVENUECAT_API_KEY =
   Platform.OS === "ios"
@@ -73,37 +76,81 @@ export async function initializeRevenueCat(appUserId: string | null): Promise<vo
 
 // Must also set an async storage attribute as revenuecat will never return this tag.
 export async function tagEarlyInterestUser(): Promise<void> {
+  return tagDiscountUser("early_interest");
+}
+
+export async function tagDiscountUser(offer: string): Promise<void> {
   try {
-    await Purchases.setAttributes({ early_interest: "true" });
+    await Purchases.setAttributes({ [offer]: "true" });
   } catch (error) {
-    trackRevenueCatError("tagEarlyInterestUser", error);
+    trackRevenueCatError("tagDiscountUser", error);
   }
 }
 
-// Must set AsyncStorage.setItem(EARLY_INTEREST_STORAGE_KEY, "true"); when a user enters the early interest code.
 export async function isEarlyInterestUser(): Promise<boolean> {
   try {
-    const value = await AsyncStorage.getItem(EARLY_INTEREST_STORAGE_KEY);
-    return value === "true";
+    const legacy = await AsyncStorage.getItem(EARLY_INTEREST_STORAGE_KEY);
+    if (legacy === "true") return true;
+
+    const offerId = await getStoredPromoOfferId();
+    return offerId === "early_interest";
   } catch (error) {
     trackRevenueCatError("isEarlyInterestUser", error);
     return false;
   }
 }
 
-export async function getEarlyInterestPromoOffer(
-  pkg: PurchasesPackage
+export async function setStoredPromoOfferId(offerId: PromoOfferId): Promise<void> {
+  await AsyncStorage.setItem(PROMO_OFFER_STORAGE_KEY, offerId);
+  // Maintain legacy behavior for early interest installs.
+  if (offerId === "early_interest") {
+    await AsyncStorage.setItem(EARLY_INTEREST_STORAGE_KEY, "true");
+  }
+}
+
+export async function clearStoredPromoOffer(): Promise<void> {
+  await AsyncStorage.removeItem(PROMO_OFFER_STORAGE_KEY);
+  await AsyncStorage.removeItem(EARLY_INTEREST_STORAGE_KEY);
+  await AsyncStorage.removeItem("discount_user");
+  await AsyncStorage.removeItem("promoCode");
+}
+
+export async function getStoredPromoOfferId(): Promise<PromoOfferId | null> {
+  try {
+    const raw = await AsyncStorage.getItem(PROMO_OFFER_STORAGE_KEY);
+    if (!raw) return null;
+    const supported = getSupportedPromoOffer(raw);
+    return supported?.id ?? null;
+  } catch (error) {
+    trackRevenueCatError("getStoredPromoOfferId", error);
+    return null;
+  }
+}
+
+export function getAndroidOfferingIdForPromoOffer(offerId: PromoOfferId): string | undefined {
+  return getPromoOfferById(offerId).androidOfferingId;
+}
+
+export async function getStoredAndroidOfferingId(): Promise<string | undefined> {
+  const offerId = await getStoredPromoOfferId();
+  if (!offerId) return undefined;
+  return getAndroidOfferingIdForPromoOffer(offerId);
+}
+
+export async function getPromoOfferForPackage(
+  pkg: PurchasesPackage,
+  offerId: PromoOfferId
 ): Promise<PromotionalOffer | null> {
   if (Platform.OS !== "ios") return null;
 
-  // Pick the right offer ID based on which package we're looking at
-  const offerIdentifier =
+  const offer = getPromoOfferById(offerId);
+  const discountIdentifier =
     pkg.identifier === SCAMLY_MONTHLY_PACKAGE_ID
-      ? EARLY_INTEREST_PROMO_OFFER_ID_MONTHLY
-      : EARLY_INTEREST_PROMO_OFFER_ID_YEARLY;
+      ? offer.iosDiscountIdentifiers.monthly
+      : offer.iosDiscountIdentifiers.yearly;
 
   const discount = pkg.product.discounts?.find(
-    (d) => d.identifier === offerIdentifier
+    (d) => d.identifier === discountIdentifier
   );
 
   if (!discount) {
@@ -117,16 +164,17 @@ export async function getEarlyInterestPromoOffer(
     );
     return promoOffer ?? null;
   } catch (error) {
-    trackRevenueCatError("getEarlyInterestPromoOffer", error);
+    trackRevenueCatError("getPromoOfferForPackage", error);
     return null;
   }
 }
 
-export async function purchaseWithEarlyInterestPromo(
+export async function purchaseWithPromoOffer(
   packageIdentifier: typeof SCAMLY_MONTHLY_PACKAGE_ID | typeof SCAMLY_YEARLY_PACKAGE_ID,
-  promoOffer: PromotionalOffer
+  promoOffer: PromotionalOffer,
+  offeringId?: string
 ): Promise<CustomerInfo> {
-  const { monthly, yearly } = await getScamlyPackages();
+  const { monthly, yearly } = await getScamlyPackages(offeringId);
 
   const selectedPackage =
     packageIdentifier === SCAMLY_MONTHLY_PACKAGE_ID ? monthly : yearly;
@@ -142,7 +190,7 @@ export async function purchaseWithEarlyInterestPromo(
   return customerInfo;
 }
 
-export async function handleEarlyInterestPromoOffer(): Promise<void> {
+export async function handlePromoOffer(offerId: PromoOfferId): Promise<void> {
   try {
     // We need to know which package they just bought to fetch the right promo offer.
     // Get the active subscription period from customerInfo.
@@ -162,26 +210,32 @@ export async function handleEarlyInterestPromoOffer(): Promise<void> {
       return;
     }
 
-    const promoOffer = await getEarlyInterestPromoOffer(pkg);
+    const promoOffer = await getPromoOfferForPackage(pkg, offerId);
     if (!promoOffer) {
       // Offer not available — just show the normal success alert
       Alert.alert("Error", "We weren't able to apply that promotion. Your premium subscription is still active.");
       return;
     }
 
-    // Show the early interest offer UI
+    const offer = getPromoOfferById(offerId);
+    const copy = offer.claimCopy ?? {
+      title: "🎉 Promotion Available",
+      body: "Your discount is ready to apply. Claim it now.",
+      cta: "Claim Discount",
+      success: "Your discount has been applied!",
+    };
+
     Alert.alert(
-      "🎉 Early Supporter Offer",
-      "Thanks for being an early supporter! Claim your exclusive discount now.",
+      copy.title,
+      copy.body,
       [
         {
-          text: "Claim Discount",
+          text: copy.cta,
           onPress: async () => {
             try {
-              await purchaseWithEarlyInterestPromo(packageIdentifier, promoOffer);
-              await AsyncStorage.removeItem(EARLY_INTEREST_STORAGE_KEY);
-              await AsyncStorage.removeItem("promoCode");
-              Alert.alert("Success", "Your early supporter discount has been applied!");
+              await purchaseWithPromoOffer(packageIdentifier, promoOffer);
+              await clearStoredPromoOffer();
+              Alert.alert("Success", copy.success);
             } catch (error) {
               const message = trackRevenueCatError("purchase_promo_offer", error);
               Alert.alert("Error", message);
@@ -192,8 +246,7 @@ export async function handleEarlyInterestPromoOffer(): Promise<void> {
           text: "No thanks",
           style: "cancel",
           onPress: async () => {
-            await AsyncStorage.removeItem(EARLY_INTEREST_STORAGE_KEY);
-            await AsyncStorage.removeItem("promoCode");
+            await clearStoredPromoOffer();
             Alert.alert("Success", "Your premium subscription is now active.");
           },
         },
@@ -201,10 +254,26 @@ export async function handleEarlyInterestPromoOffer(): Promise<void> {
     );
   } catch (error) {
     // If anything goes wrong fetching the promo, fall back gracefully
-    trackRevenueCatError("handleEarlyInterestPromoOffer", error);
+    trackRevenueCatError("handlePromoOffer", error);
     Alert.alert("Error", "We weren't able to apply that promotion. Your premium subscription is still active.");
   }
 };
+
+// Backwards-compatible exports (older call sites).
+export async function getEarlyInterestPromoOffer(pkg: PurchasesPackage): Promise<PromotionalOffer | null> {
+  return getPromoOfferForPackage(pkg, "early_interest");
+}
+
+export async function purchaseWithEarlyInterestPromo(
+  packageIdentifier: typeof SCAMLY_MONTHLY_PACKAGE_ID | typeof SCAMLY_YEARLY_PACKAGE_ID,
+  promoOffer: PromotionalOffer
+): Promise<CustomerInfo> {
+  return purchaseWithPromoOffer(packageIdentifier, promoOffer);
+}
+
+export async function handleEarlyInterestPromoOffer(): Promise<void> {
+  return handlePromoOffer("early_interest");
+}
 
 export async function getRevenueCatCustomerInfo(): Promise<CustomerInfo> {
   return Purchases.getCustomerInfo();
