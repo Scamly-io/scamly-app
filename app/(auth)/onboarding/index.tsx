@@ -26,7 +26,7 @@ export default function OnboardingIndex() {
       return;
     }
     if (!user) {
-      router.replace(onboardingHref("/signup"));
+      router.replace(onboardingHref("/onboarding/signup"));
       return;
     }
 

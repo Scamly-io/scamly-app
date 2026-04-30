@@ -402,7 +402,7 @@ export default function OnboardingCollectProfile() {
   const { user, refreshAuth } = useAuth();
   const { signUpData, resetSignUpData } = useSignUp();
   const router = useRouter();
-  const isDraft = isEmailPasswordProfileDraft(signUpData);
+  const isDraft = isEmailPasswordProfileDraft(signUpData, user?.id ?? null);
   const authForStep = isDraft ? "email" : getAuthenticationMethodForAnalytics(user);
 
   const [step, setStep] = useState(0);
@@ -549,7 +549,7 @@ export default function OnboardingCollectProfile() {
       return;
     }
     if (shouldRedirectMissingEmailDraftToSignup({ userId, isDraft, accountCreated: accountCreatedRef.current })) {
-      router.replace(onboardingHref("/signup"));
+      router.replace(onboardingHref("/onboarding/signup"));
     }
   }, [userId, isDraft, signUpData, router]);
 
@@ -568,7 +568,7 @@ export default function OnboardingCollectProfile() {
       return;
     }
     if (step <= 0) {
-      replaceFromProfileStep(router, COLLECT_PROFILE_HREF, signUpData);
+      replaceFromProfileStep(router, COLLECT_PROFILE_HREF, signUpData, user?.id ?? null);
       return;
     }
     hasNavigated.current = true;
@@ -743,7 +743,7 @@ export default function OnboardingCollectProfile() {
           accountCreatedRef.current = true;
           resetSignUpData();
           setLoading(false);
-          // `replace` from a nested onboarding screen can leave the (auth) stack on /signup.
+          // `replace` from a nested onboarding screen can leave the (auth) stack on /onboarding/signup.
           router.dismissTo(onboardingHref("/signup-confirm"));
           return;
         }

@@ -1,5 +1,6 @@
 import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
+import { useSignUp } from "@/contexts/SignUpContext";
 import { useTheme } from "@/theme";
 import {
   getAuthenticationMethodForAnalytics,
@@ -58,6 +59,7 @@ export default function Login() {
   const [passwordFocused, setPasswordFocused] = useState(false);
 
   const router = useRouter();
+  const { resetSignUpData } = useSignUp();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -108,6 +110,7 @@ export default function Login() {
 
       // The AuthContext SIGNED_IN handler will check onboarding status
       // and update onboardingComplete, which drives routing in app/index.tsx
+      resetSignUpData();
       router.replace("/");
     } catch (error) {
       Alert.alert("Error", "Something went wrong while logging in. Please try again.");
@@ -168,11 +171,13 @@ export default function Login() {
               .eq("id", userId);
           }
           trackOAuthSignInCompleted("google");
+          resetSignUpData();
           router.replace("/onboarding");
           return;
         }
 
         trackOAuthSignInCompleted("google");
+        resetSignUpData();
         router.replace("/");
       }
     } catch (error: any) {
@@ -244,11 +249,13 @@ export default function Login() {
               .eq("id", userId);
           }
           trackOAuthSignInCompleted("apple");
+          resetSignUpData();
           router.replace("/onboarding");
           return;
         }
 
         trackOAuthSignInCompleted("apple");
+        resetSignUpData();
         router.replace("/");
         return;
       }
@@ -551,7 +558,7 @@ export default function Login() {
                 <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
                   New here?{" "}
                 </Text>
-                <Pressable onPress={() => router.push("/signup")} disabled={isAnyLoading}>
+                <Pressable onPress={() => router.push("/onboarding/signup")} disabled={isAnyLoading}>
                   <Text style={[styles.disclaimerLink, { color: colors.accent }]}>
                     Create an account
                   </Text>

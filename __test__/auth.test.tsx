@@ -178,16 +178,36 @@ describe("auth schemas", () => {
 describe("signup profile draft helpers", () => {
   it("identifies an email/password profile draft", () => {
     expect(
-      isEmailPasswordProfileDraft({
-        email: "user@example.com",
-        password: "password123",
-        firstName: "",
-        dob: "",
-        country: "",
-        gender: "",
-        referralSource: "",
-      })
+      isEmailPasswordProfileDraft(
+        {
+          email: "user@example.com",
+          password: "password123",
+          firstName: "",
+          dob: "",
+          country: "",
+          gender: "",
+          referralSource: "",
+        },
+        null,
+      ),
     ).toBe(true);
+  });
+
+  it("is not a pre-signup email draft when a session already exists (e.g. after switching to OAuth)", () => {
+    expect(
+      isEmailPasswordProfileDraft(
+        {
+          email: "user@example.com",
+          password: "password123",
+          firstName: "",
+          dob: "",
+          country: "",
+          gender: "",
+          referralSource: "",
+        },
+        "auth-user-id",
+      ),
+    ).toBe(false);
   });
 
   it("does not redirect to signup after an account was created and the draft was cleared", () => {
