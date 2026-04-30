@@ -50,3 +50,9 @@ app-example
 
 # VS Code
 .vscode/
+
+#Build Files
+*.tar.gz
+*.apk
+*.ipa
+*.app
