@@ -2,22 +2,22 @@ import ThemedBackground from "@/components/ThemedBackground";
 import FirstOnboardingScanPanel, {
   type FirstOnboardingScanPanelHandle,
   type FirstOnboardingScanPhase,
-} from "@/components/onboarding/first-onboarding-scan-panel";
+} from "./_components/first-onboarding-scan-panel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import {
   getAuthenticationMethodForAnalytics,
   trackOnboardingStepViewed,
   trackOnboardingTutorialDismissed,
-} from "@/utils/analytics";
-import { onboardingHref } from "@/utils/onboarding-href";
-import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding-tutorial-exit";
+} from "@/utils/shared/analytics";
+import { onboardingHref } from "@/utils/onboarding/onboarding-href";
+import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboarding-tutorial-exit";
 import {
   clearOnboardingTutorialStorage,
   getStoredOnboardingTutorialStep,
   setStoredOnboardingTutorialStep,
-} from "@/utils/onboarding-tutorial-storage";
-import { captureError } from "@/utils/sentry";
+} from "@/utils/onboarding/onboarding-tutorial-storage";
+import { captureError } from "@/utils/shared/sentry";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Camera, ImageUp, Scan, Smartphone } from "lucide-react-native";

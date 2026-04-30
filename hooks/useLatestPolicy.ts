@@ -1,5 +1,5 @@
-import { captureDataFetchError } from "@/utils/sentry";
-import { fetchLatestPolicy, type FetchedPolicy, type PolicyType } from "@/utils/policies";
+import { captureDataFetchError } from "@/utils/shared/sentry";
+import { fetchLatestPolicy, type FetchedPolicy, type PolicyType } from "@/utils/shared/policies";
 import { useEffect, useState } from "react";
 
 export function useLatestPolicy(policyType: PolicyType) {

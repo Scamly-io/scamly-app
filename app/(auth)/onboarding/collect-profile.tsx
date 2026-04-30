@@ -12,22 +12,22 @@ import {
   trackSignupAttempted,
   trackSignupCompleted,
   trackSignupFailed,
-} from "@/utils/analytics";
-import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
-import { getPublicIp } from "@/utils/network";
-import { getOAuthCollectWelcomeSeen, setOAuthCollectWelcomeSeen } from "@/utils/oauth-collect-welcome-seen";
+} from "@/utils/shared/analytics";
+import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/shared/date";
+import { getPublicIp } from "@/utils/shared/network";
+import { getOAuthCollectWelcomeSeen, setOAuthCollectWelcomeSeen } from "@/utils/onboarding/oauth-collect-welcome-seen";
 import {
   COLLECT_PROFILE_HREF,
   getInitialCollectProfileUiStep,
   getProfileCollectStepIndex,
   type ProfileOnboardingRow,
-} from "@/utils/onboarding";
-import { onboardingHref } from "@/utils/onboarding-href";
-import { replaceFromProfileStep } from "@/utils/profile-onboarding-nav";
-import { addActionBreadcrumb, captureError } from "@/utils/sentry";
-import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/signup-profile-draft";
-import { supabase } from "@/utils/supabase";
-import { genderOptions, referralSourceOptions, signUpSchema } from "@/utils/validation/auth";
+} from "@/utils/onboarding/onboarding";
+import { onboardingHref } from "@/utils/onboarding/onboarding-href";
+import { replaceFromProfileStep } from "@/utils/onboarding/profile-onboarding-nav";
+import { addActionBreadcrumb, captureError } from "@/utils/shared/sentry";
+import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/auth/signup-profile-draft";
+import { supabase } from "@/utils/shared/supabase";
+import { genderOptions, referralSourceOptions, signUpSchema } from "@/utils/auth/auth";
 import type { User } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import {

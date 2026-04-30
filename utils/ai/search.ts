@@ -1,7 +1,7 @@
-import { trackUserVisibleError } from '@/utils/analytics';
-import { captureError } from '@/utils/sentry';
-import { supabase } from '@/utils/supabase';
-import { SearchResult } from '@/utils/types';
+import { trackUserVisibleError } from "@/utils/shared/analytics";
+import { captureError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
+import { SearchResult } from "@/utils/shared/types";
 
 /**
  * Custom error class for search-related errors.

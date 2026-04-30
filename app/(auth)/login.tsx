@@ -7,9 +7,9 @@ import {
   trackOAuthSignInCompleted,
   trackUserVisibleError,
   type UserPlan,
-} from "@/utils/analytics";
-import { captureError, setUserContext } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+} from "@/utils/shared/analytics";
+import { captureError, setUserContext } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import {
   GoogleSignin,
   isSuccessResponse,

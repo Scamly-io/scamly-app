@@ -1,16 +1,16 @@
 import Button from "@/components/Button";
-import PersonalStepShell from "@/components/onboarding/personal-step-shell";
+import PersonalStepShell from "./_components/personal-step-shell";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import {
   getAuthenticationMethodForAnalytics,
   trackOnboardingStepViewed,
   trackOnboardingTutorialDismissed,
-} from "@/utils/analytics";
-import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding-tutorial-exit";
-import { onboardingHref } from "@/utils/onboarding-href";
-import { captureError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+} from "@/utils/shared/analytics";
+import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboarding-tutorial-exit";
+import { onboardingHref } from "@/utils/onboarding/onboarding-href";
+import { captureError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, TextInput, View, ActivityIndicator, Pressable, StyleSheet } from "react-native";

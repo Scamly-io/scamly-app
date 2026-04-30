@@ -1,30 +1,30 @@
 import Button from "@/components/Button";
-import ChatChromeIconButton from "@/components/chat-chrome-icon-button";
-import ChatGlassInputBar from "@/components/chat-glass-input-bar";
-import ChatGlassPillButton from "@/components/chat-glass-pill-button";
-import MessageBlock, { type ChatMessage } from "@/components/MessageBlock";
+import ChatChromeIconButton from "./chat-chrome-icon-button";
+import ChatGlassInputBar from "./chat-glass-input-bar";
+import ChatGlassPillButton from "./chat-glass-pill-button";
+import MessageBlock, { type ChatMessage } from "./MessageBlock";
 import ThemedBackground from "@/components/ThemedBackground";
-import ThinkingIndicator from "@/components/ThinkingIndicator";
+import ThinkingIndicator from "./ThinkingIndicator";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
 import { getAiChatEdgeFunctionUrl } from "@/utils/ai/chat";
 import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
-import { trackUserVisibleError } from "@/utils/analytics";
+import { trackUserVisibleError } from "@/utils/shared/analytics";
 import {
   createSignedUrlsForChatImages,
   joinImageIdCsv,
   normalizePickerBase64,
   uploadChatImages,
-} from "@/utils/chat-images";
+} from "@/utils/chat/chat-images";
 import {
   buildInitialChatRowPayload,
   insertInitialChatRow,
   needsInitialChatRowInsert,
-} from "@/utils/chat-initial-row";
-import { openNewChatSession } from "@/utils/chat-nav";
-import { captureChatError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+} from "@/utils/chat/chat-initial-row";
+import { openNewChatSession } from "@/utils/chat/chat-nav";
+import { captureChatError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";

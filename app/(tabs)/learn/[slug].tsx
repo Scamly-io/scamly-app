@@ -1,16 +1,16 @@
 import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
-import { getIsPremium } from "@/utils/access";
+import { getIsPremium } from "@/utils/shared/access";
 import {
   trackArticleEngaged,
   trackArticleScrollDepthReached,
   trackArticleViewed,
   trackUserVisibleError,
   type ArticleScrollDepthBand,
-} from "@/utils/analytics";
-import { captureDataFetchError, captureWarning } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
+} from "@/utils/shared/analytics";
+import { captureDataFetchError, captureWarning } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
 import Markdown from "@ronradtke/react-native-markdown-display";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";

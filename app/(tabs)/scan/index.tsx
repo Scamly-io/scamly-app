@@ -14,12 +14,12 @@ import {
   trackScanStarted,
   trackUserVisibleError,
   type ResultCategory,
-} from "@/utils/analytics";
-import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/revenuecat";
-import { promptReview } from "@/utils/review";
-import { captureDataFetchError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
-import { ScanResult } from "@/utils/types";
+} from "@/utils/shared/analytics";
+import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/shared/revenuecat";
+import { promptReview } from "@/utils/shared/review";
+import { captureDataFetchError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
+import { ScanResult } from "@/utils/shared/types";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";

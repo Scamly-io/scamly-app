@@ -2,11 +2,11 @@ import Button from "@/components/Button";
 import PickerModal from "@/components/PickerModal";
 import { countries } from "@/constants/countries";
 import { useTheme } from "@/theme";
-import { formatDobInput, parseDob } from "@/utils/date";
+import { formatDobInput, parseDob } from "@/utils/shared/date";
 import {
   genderOptions,
   referralSourceOptions,
-} from "@/utils/validation/auth";
+} from "@/utils/auth/auth";
 import {
   Calendar,
   ChevronDown,

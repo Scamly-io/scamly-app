@@ -5,14 +5,14 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { countries } from "@/constants/countries";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
-import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/date";
-import { getSupportedPromoOffer } from "@/utils/promo";
+import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/shared/date";
+import { getSupportedPromoOffer } from "@/utils/shared/promo";
 import {
   trackAccountDeletionConfirmed,
   trackAccountDeletionFailed,
   trackAccountDeletionSucceeded,
   trackFeatureOpened,
-} from "@/utils/analytics";
+} from "@/utils/shared/analytics";
 import {
   EARLY_INTEREST_STORAGE_KEY,
   getRevenueCatCustomerInfo,
@@ -23,10 +23,10 @@ import {
   presentScamlyPaywallIfNeeded,
   tagEarlyInterestUser,
   trackRevenueCatError,
-} from "@/utils/revenuecat";
-import { captureError } from "@/utils/sentry";
-import { supabase } from "@/utils/supabase";
-import { genderOptions } from "@/utils/validation/auth";
+} from "@/utils/shared/revenuecat";
+import { captureError } from "@/utils/shared/sentry";
+import { supabase } from "@/utils/shared/supabase";
+import { genderOptions } from "@/utils/auth/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";

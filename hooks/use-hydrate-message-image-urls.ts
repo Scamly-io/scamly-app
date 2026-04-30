@@ -1,6 +1,6 @@
 import { useChatStore } from "@/store/chatStore";
-import { createSignedUrlsForChatImages, parseImageIdCsv } from "@/utils/chat-images";
-import { supabase } from "@/utils/supabase";
+import { createSignedUrlsForChatImages, parseImageIdCsv } from "@/utils/chat/chat-images";
+import { supabase } from "@/utils/shared/supabase";
 import { useEffect, useMemo, useState } from "react";
 
 export type UseHydrateMessageImageUrlsArgs = {
