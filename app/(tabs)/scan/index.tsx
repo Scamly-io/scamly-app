@@ -1,10 +1,8 @@
 import Button from "@/components/Button";
 import Card from "@/components/Card";
-import ShimmerText from "@/components/ShimmerText";
 import ShortcutSetupModal from "@/components/ShortcutSetupModal";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQuickScanRedirect } from "@/hooks/useQuickScanRedirect";
 import { useTheme } from "@/theme";
 import { ScanError, scanImage } from "@/utils/ai/scan";
 import {
@@ -13,7 +11,6 @@ import {
   trackScanCompleted,
   trackScanStarted,
   trackUserVisibleError,
-  type ResultCategory,
 } from "@/utils/shared/analytics";
 import { presentScamlyPaywallIfNeeded, trackRevenueCatError } from "@/utils/shared/revenuecat";
 import { promptReview } from "@/utils/shared/review";
@@ -21,20 +18,9 @@ import { captureDataFetchError } from "@/utils/shared/sentry";
 import { supabase } from "@/utils/shared/supabase";
 import { ScanResult } from "@/utils/shared/types";
 import { useFocusEffect } from "@react-navigation/native";
-import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import {
-  Check,
-  CheckCircle,
-  ChevronDown,
-  ChevronUp,
-  Lock,
-  Shield,
-  TriangleAlert,
-  Upload,
-  XCircle,
-} from "lucide-react-native";
+import { Check, Lock } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -45,10 +31,75 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ScanDetectionsCard from "./_components/ScanDetectionsCard";
+import ScanDisclaimer from "./_components/ScanDisclaimer";
+import ScanFailureCard from "./_components/ScanFailureCard";
+import ScanningProgressPanel from "./_components/ScanningProgressPanel";
+import ScanResultSummaryCard from "./_components/ScanResultSummaryCard";
+import ScanStaySafeTipsCard from "./_components/ScanStaySafeTipsCard";
+import ScanUploadCard from "./_components/ScanUploadCard";
+
+/**
+ * Resize/compress a picked image to a JPEG base64 payload suitable for {@link scanImage}.
+ */
+async function convertPickerUriToJpegBase64(imageUri: string): Promise<string | undefined> {
+  const ImageManipulator = await import("expo-image-manipulator");
+  const result = await ImageManipulator.manipulateAsync(
+    imageUri,
+    [{ resize: { height: 1024 } }],
+    { compress: 0.7, base64: true, format: ImageManipulator.SaveFormat.JPEG }
+  );
+  return result.base64 ?? undefined;
+}
+
+/**
+ * Stage copy shown while scanning (upload → analysis → research).
+ */
+const SCAN_STAGE_OPTIONS = {
+  upload: ["Uploading your image"],
+  analysis: [
+    "Analysing content",
+    "Examining message patterns",
+    "Scanning for red flags",
+    "Reviewing message content",
+  ],
+  research: [
+    "Researching contact information",
+    "Cross-referencing known scam patterns",
+    "Verifying sender details",
+    "Checking against scam databases",
+  ],
+} as const;
+
+/** Choose a random entry from the stage pool (uniform distribution). */
+function pickRandomScanLine<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]!;
+}
+
+/**
+ * Stage lines for Scan tab: fixed upload copy, random analysis/research.
+ */
+function tabClipboardScanStageTexts(): [string, string, string] {
+  return [
+    SCAN_STAGE_OPTIONS.upload[0],
+    pickRandomScanLine(SCAN_STAGE_OPTIONS.analysis),
+    pickRandomScanLine(SCAN_STAGE_OPTIONS.research),
+  ];
+}
+
+/**
+ * Maps AI scan output to the analytics `ResultCategory` bucket used by PostHog.
+ */
+function getScanResultCategory(isScam: boolean, riskLevel: string) {
+  if (isScam && riskLevel === "high") return "scam" as const;
+  if (isScam && riskLevel === "medium") return "likely_scam" as const;
+  if (!isScam && riskLevel === "low") return "safe" as const;
+  return "unsure" as const;
+}
 
 function getUserBillingPeriod(createdAt: string | Date) {
   const created = new Date(createdAt);
@@ -88,17 +139,6 @@ const SCAN_PREMIUM_UPSELL_BULLETS = [
   "Faster, easier scanning with Quick Scan on iOS.",
 ] as const;
 
-/**
- * Map scan results to analytics result category.
- * Uses is_scam and risk_level to determine the category.
- */
-function getResultCategory(isScam: boolean, riskLevel: string): ResultCategory {
-  if (isScam && riskLevel === "high") return "scam";
-  if (isScam && riskLevel === "medium") return "likely_scam";
-  if (!isScam && riskLevel === "low") return "safe";
-  return "unsure";
-}
-
 type ScanPhase = "idle" | "scanning" | "complete";
 type PageMountCache = {
   userRef: ReturnType<typeof useAuth>["user"];
@@ -108,30 +148,24 @@ type PageMountCache = {
   isFreePlan: boolean;
 };
 
-const STAGE_OPTIONS = {
-  upload: ["Uploading your image"],
-  analysis: [
-    "Analysing content",
-    "Examining message patterns",
-    "Scanning for red flags",
-    "Reviewing message content",
-  ],
-  research: [
-    "Researching contact information",
-    "Cross-referencing known scam patterns",
-    "Verifying sender details",
-    "Checking against scam databases",
-  ],
-};
-
-function pickRandom(arr: string[]): string {
-  return arr[Math.floor(Math.random() * arr.length)];
+/**
+ * True when the `quickscan` search param enables Quick Scan (deeplink `scamlyapp://scan?quickscan=true`).
+ * Handles Expo Router shapes: string, repeated keys as string[], or absent.
+ */
+function isQuickScanQuery(value: string | string[] | undefined): boolean {
+  if (value === undefined) return false;
+  const v = Array.isArray(value) ? value[0] : value;
+  return typeof v === "string" && v.toLowerCase() === "true";
 }
+
 
 export default function Scan() {
   const { quickscan } = useLocalSearchParams<{ quickscan?: string | string[] }>();
-  useQuickScanRedirect(quickscan);
-  const { colors, radius, shadows, isDark } = useTheme();
+  useEffect(() => {
+    if (!isQuickScanQuery(quickscan)) return;
+    router.replace("/scan/clipboard");
+  }, [quickscan]);
+  const { colors } = useTheme();
   const { user } = useAuth();
   const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [pageLoading, setPageLoading] = useState<boolean>(true);
@@ -148,7 +182,7 @@ export default function Scan() {
 
   const [scanPhase, setScanPhase] = useState<ScanPhase>("idle");
   const [scanStage, setScanStage] = useState<number>(0);
-  const [stageTexts, setStageTexts] = useState<string[]>(["", "", ""]);
+  const [stageTexts, setStageTexts] = useState<[string, string, string]>(["", "", ""]);
 
   const loading = scanPhase === "scanning";
 
@@ -315,19 +349,6 @@ export default function Scan() {
     }
   }
 
-  async function convertImageToB64(imageUri: string): Promise<string> {
-    const result = await ImageManipulator.manipulateAsync(
-      imageUri,
-      [{ resize: { height: 1024 } }], 
-      {
-        compress: 0.7,
-        base64: true,
-        format: ImageManipulator.SaveFormat.JPEG
-      }
-    )
-    return result.base64
-  }
-
   async function handleScan() {
     if (!image) return;
     if (!user) return;
@@ -337,19 +358,18 @@ export default function Scan() {
     setExpandedDetections(new Set());
     hasTrackedResultView.current = false;
 
-    setStageTexts([
-      STAGE_OPTIONS.upload[0],
-      pickRandom(STAGE_OPTIONS.analysis),
-      pickRandom(STAGE_OPTIONS.research),
-    ]);
+    setStageTexts(tabClipboardScanStageTexts());
 
     setScanPhase("scanning");
     trackScanStarted("screenshot", "upload");
 
-    const imageB64 = await convertImageToB64(image.uri!);
+    const imageB64 = await convertPickerUriToJpegBase64(image.uri!);
     const scanStartTime = Date.now();
 
     try {
+      if (!imageB64) {
+        throw new Error("Image encoding failed");
+      }
       const scanResults = await scanImage(imageB64);
       const processingTimeMs = Date.now() - scanStartTime;
 
@@ -367,7 +387,7 @@ export default function Scan() {
         return;
       }
 
-      const resultCategory = getResultCategory(scanResults.is_scam, scanResults.risk_level);
+      const resultCategory = getScanResultCategory(scanResults.is_scam, scanResults.risk_level);
       trackScanCompleted("screenshot", resultCategory, processingTimeMs);
 
       trackResultViewed(resultCategory);
@@ -503,56 +523,6 @@ export default function Scan() {
     });
   }
 
-  function getRiskColor(riskLevel: string) {
-    switch (riskLevel) {
-      case "low":
-        return colors.success;
-      case "medium":
-        return colors.warning;
-      case "high":
-        return colors.error;
-      default:
-        return colors.textSecondary;
-    }
-  }
-
-  function getRiskBgColor(riskLevel: string) {
-    switch (riskLevel) {
-      case "low":
-        return colors.successMuted;
-      case "medium":
-        return colors.warningMuted;
-      case "high":
-        return colors.errorMuted;
-      default:
-        return colors.backgroundSecondary;
-    }
-  }
-
-  function getSeverityIcon(severity: string) {
-    switch (severity) {
-      case "low":
-        return <TriangleAlert size={20} color={colors.success} />;
-      case "medium":
-        return <TriangleAlert size={20} color={colors.warning} />;
-      case "high":
-        return <XCircle size={20} color={colors.error} />;
-      default:
-        return null;
-    }
-  }
-
-  function getResultTitle(riskLevel: string) {
-    switch (riskLevel) {
-      case "low":
-        return "Looks Safe";
-      case "medium":
-        return "Possibly a Scam";
-      case "high":
-        return "Likely a Scam";
-    }
-  }
-
   const scanButtonDisabled = !image || loading || !user || scanQuotaReached || scanQuotaJustReached;
 
   const handleOpenPaywall = async () => {
@@ -570,7 +540,7 @@ export default function Scan() {
           pageMountCacheRef.current = { ...cached, isFreePlan: false };
         }
         void handlePageMount({ forceRefresh: true });
-        router.push("/subscription-success");
+        router.push("/SubscriptionSuccess");
       }
     } catch (error) {
       const message = trackRevenueCatError("present_paywall_scan", error);
@@ -612,7 +582,10 @@ export default function Scan() {
               {(scanQuotaReached || scanQuotaJustReached) && (
                 <Animated.View entering={FadeIn.duration(300)}>
                   <Card
-                    style={[styles.quotaCard, { backgroundColor: colors.errorMuted }]}
+                    style={StyleSheet.flatten([
+                      styles.quotaCard,
+                      { backgroundColor: colors.errorMuted },
+                    ])}
                     pressable={false}
                   >
                     <Lock size={20} color={colors.error} />
@@ -634,88 +607,36 @@ export default function Scan() {
                   entering={FadeInDown.duration(400).delay(100)}
                   exiting={FadeOut.duration(250)}
                 >
-                  <Card style={styles.uploadCard} pressable={false}>
-                    {Platform.OS === "ios" && (
-                      <View style={styles.topActionsRow}>
-                        {!isFreePlan && (
-                          <TouchableOpacity
-                            style={styles.addShortcutButton}
-                            onPress={() => setShowShortcutSetup(true)}
-                          >
-                            <Text style={[styles.howToUseText, { color: colors.accent }]}>
-                              Enable Quick Scan
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-               
-
-                    {image ? (
-                      <View style={styles.uploadedImageContainer}>
-                        <Image
-                          source={{ uri: image.uri }}
-                          style={[
-                            styles.uploadedImage,
-                            { aspectRatio: aspectRatio, borderRadius: radius.lg },
-                          ]}
-                          resizeMode="contain"
-                        />
+                  <ScanUploadCard
+                    imageUri={image?.uri ?? null}
+                    aspectRatio={aspectRatio}
+                    onPickImage={() => {
+                      if (!scanQuotaReached) pickImage();
+                    }}
+                    onClear={() => {
+                      setImage(null);
+                      setResults(null);
+                      setScanFailureWarning(null);
+                      if (scanQuotaJustReached) {
+                        setScanQuotaJustReached(false);
+                        setScanQuotaReached(true);
+                      }
+                    }}
+                    pickDisabled={scanQuotaReached}
+                    disabledOverlay={<Lock size={28} color="white" />}
+                    topSlot={
+                      Platform.OS === "ios" && !isFreePlan ? (
                         <TouchableOpacity
-                          onPress={() => {
-                            setImage(null);
-                            setResults(null);
-                            setScanFailureWarning(null);
-                            if (scanQuotaJustReached) {
-                              setScanQuotaJustReached(false);
-                              setScanQuotaReached(true);
-                            }
-                          }}
+                          style={styles.addShortcutButton}
+                          onPress={() => setShowShortcutSetup(true)}
                         >
-                          <Text style={[styles.clearButtonText, { color: colors.error }]}>
-                            Clear
+                          <Text style={[styles.howToUseText, { color: colors.accent }]}>
+                            Enable Quick Scan
                           </Text>
                         </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={[
-                          styles.uploadPlaceholder,
-                          {
-                            borderColor: colors.border,
-                            backgroundColor: colors.backgroundSecondary,
-                            borderRadius: radius.xl,
-                          },
-                        ]}
-                        onPress={() => {
-                          if (!scanQuotaReached) pickImage();
-                        }}
-                        disabled={scanQuotaReached}
-                      >
-                        <View
-                          style={[
-                            styles.uploadIconContainer,
-                            { backgroundColor: colors.accentMuted },
-                          ]}
-                        >
-                          <Upload size={28} color={colors.accent} />
-                        </View>
-                        <Text style={[styles.uploadTitle, { color: colors.textPrimary }]}>
-                          Upload a Screenshot
-                        </Text>
-                        <Text style={[styles.uploadSubtitle, { color: colors.textSecondary }]}>
-                          Tap to select an image
-                        </Text>
-                        {scanQuotaReached && (
-                          <View
-                            style={[styles.uploadOverlay, { backgroundColor: "rgba(0,0,0,0.6)" }]}
-                          >
-                            <Lock size={28} color="white" />
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                  </Card>
+                      ) : undefined
+                    }
+                  />
 
                   <View style={styles.scanButtonContainer}>
                     <Button
@@ -730,337 +651,57 @@ export default function Scan() {
                 </Animated.View>
               )}
 
-              {/* Scanning / Complete Phase: Compact Header */}
               {(scanPhase === "scanning" || scanPhase === "complete") && image && (
                 <Animated.View
                   entering={FadeIn.duration(350).delay(150)}
                   style={styles.scanningContainer}
                 >
-                  <View style={styles.scanningHeader}>
-                    <Image
-                      source={{ uri: image.uri }}
-                      style={[
-                        styles.thumbnailImage,
-                        {
-                          borderRadius: radius.md,
-                          backgroundColor: colors.backgroundSecondary,
-                        },
-                      ]}
-                    />
-                    <View style={styles.scanningTextContainer}>
-                      {scanPhase === "scanning" && (
-                        <View>
-                          <View style={{ marginBottom: 6 }}>
-                            {scanStage === 0 ? (
-                              <ShimmerText
-                                size="sm"
-                                bold={false}
-                                duration={1.4}
-                                containerStyle={{ alignItems: "flex-start" }}
-                                style={{ fontFamily: "Poppins-Medium", textAlign: "left" }}
-                                colors={{
-                                  light: {
-                                    text: colors.textSecondary,
-                                    shimmer: {
-                                      start: colors.textSecondary,
-                                      middle: colors.accentMuted,
-                                      end: colors.textSecondary,
-                                    },
-                                  },
-                                  dark: {
-                                    text: colors.textSecondary,
-                                    shimmer: {
-                                      start: colors.textSecondary,
-                                      middle: colors.accentMuted,
-                                      end: colors.textSecondary,
-                                    },
-                                  },
-                                }}
-                              >
-                                {stageTexts[0]}
-                              </ShimmerText>
-                            ) : (
-                              <Text style={[styles.scanningStageText, { color: colors.textPrimary }]}>
-                                {stageTexts[0]}
-                              </Text>
-                            )}
-                          </View>
-
-                          {scanStage >= 1 && (
-                            <View style={{ marginBottom: 6 }}>
-                              {scanStage === 1 ? (
-                                <ShimmerText
-                                  size="sm"
-                                  bold={false}
-                                  duration={1.4}
-                                  containerStyle={{ alignItems: "flex-start" }}
-                                  style={{ fontFamily: "Poppins-Medium", textAlign: "left" }}
-                                  colors={{
-                                    light: {
-                                      text: colors.textSecondary,
-                                      shimmer: {
-                                        start: colors.textSecondary,
-                                        middle: colors.accentMuted,
-                                        end: colors.textSecondary,
-                                      },
-                                    },
-                                    dark: {
-                                      text: colors.textSecondary,
-                                      shimmer: {
-                                        start: colors.textSecondary,
-                                        middle: colors.accentMuted,
-                                        end: colors.textSecondary,
-                                      },
-                                    },
-                                  }}
-                                >
-                                  {stageTexts[1]}
-                                </ShimmerText>
-                              ) : (
-                                <Text style={[styles.scanningStageText, { color: colors.textPrimary }]}>
-                                  {stageTexts[1]}
-                                </Text>
-                              )}
-                            </View>
-                          )}
-
-                          {scanStage >= 2 && (
-                            <View style={{ marginBottom: 6 }}>
-                              <ShimmerText
-                                size="sm"
-                                bold={false}
-                                duration={1.4}
-                                containerStyle={{ alignItems: "flex-start" }}
-                                style={{ fontFamily: "Poppins-Medium", textAlign: "left" }}
-                                colors={{
-                                  light: {
-                                    text: colors.textSecondary,
-                                    shimmer: {
-                                      start: colors.textSecondary,
-                                      middle: colors.accentMuted,
-                                      end: colors.textSecondary,
-                                    },
-                                  },
-                                  dark: {
-                                    text: colors.textSecondary,
-                                    shimmer: {
-                                      start: colors.textSecondary,
-                                      middle: colors.accentMuted,
-                                      end: colors.textSecondary,
-                                    },
-                                  },
-                                }}
-                              >
-                                {stageTexts[2]}
-                              </ShimmerText>
-                            </View>
-                          )}
+                  <ScanningProgressPanel
+                    thumbnailUri={image.uri}
+                    scanPhase={scanPhase === "scanning" ? "scanning" : "complete"}
+                    scanStage={scanStage}
+                    stageTexts={stageTexts}
+                    completeSlot={
+                      <Animated.View entering={FadeIn.duration(300)}>
+                        <Text style={[styles.scanCompleteText, { color: colors.textPrimary }]}>
+                          Scan Complete
+                        </Text>
+                        <View style={styles.scanCompleteActions}>
+                          <Button variant="secondary" size="sm" onPress={resetScan}>
+                            Clear Results
+                          </Button>
+                          <Button variant="primary" size="sm" onPress={handleScan}>
+                            Rescan
+                          </Button>
                         </View>
-                      )}
-
-                      {scanPhase === "complete" && (
-                        <Animated.View entering={FadeIn.duration(300)}>
-                          <Text
-                            style={[
-                              styles.scanCompleteText,
-                              { color: colors.textPrimary },
-                            ]}
-                          >
-                            Scan Complete
-                          </Text>
-                          <View style={styles.scanCompleteActions}>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onPress={resetScan}
-                            >
-                              Clear Results
-                            </Button>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onPress={handleScan}
-                            >
-                              Rescan
-                            </Button>
-                          </View>
-                        </Animated.View>
-                      )}
-                    </View>
-                  </View>
+                      </Animated.View>
+                    }
+                  />
                 </Animated.View>
               )}
 
-              {/* Scan Failure Warning */}
               {scanFailureWarning && scanPhase === "complete" && (
                 <Animated.View entering={FadeIn.duration(300)}>
-                  <Card
-                    style={[styles.scanFailureCard, { backgroundColor: colors.warningMuted }]}
-                    pressable={false}
-                  >
-                    <View style={styles.scanFailureHeader}>
-                      <TriangleAlert size={20} color={colors.warning} />
-                      <Text style={[styles.scanFailureTitle, { color: colors.warning }]}>
-                        We couldn&apos;t complete this scan
-                      </Text>
-                    </View>
-                    <Text style={[styles.scanFailureReason, { color: colors.textPrimary }]}>
-                      {scanFailureWarning}
-                    </Text>
-                  </Card>
+                  <ScanFailureCard message={scanFailureWarning} />
                 </Animated.View>
               )}
 
               {results && scanPhase === "complete" && (
                 <Animated.View entering={FadeIn.duration(400)}>
-                  {/* Risk Level Card */}
-                  <Card
-                    style={[
-                      styles.resultCard,
-                      { backgroundColor: getRiskBgColor(results.risk_level) },
-                    ]}
-                    pressable={false}
-                  >
-                    <View style={styles.resultHeader}>
-                      <View style={styles.resultTitleRow}>
-                        {results.is_scam ? (
-                          <TriangleAlert size={24} color={getRiskColor(results.risk_level)} />
-                        ) : (
-                          <CheckCircle size={24} color={getRiskColor(results.risk_level)} />
-                        )}
-                        <Text
-                          style={[
-                            styles.resultTitle,
-                            { color: getRiskColor(results.risk_level) },
-                          ]}
-                        >
-                          {getResultTitle(results.risk_level)}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.confidenceText,
-                          { color: getRiskColor(results.risk_level) },
-                        ]}
-                      >
-                        {results.confidence}%
-                      </Text>
-                    </View>
-                    <View style={styles.resultDetails}>
-                      <Text style={[styles.riskLevelText, { color: colors.textSecondary }]}>
-                        {results.risk_level.charAt(0).toUpperCase() + results.risk_level.slice(1)}{" "}
-                        risk detected
-                      </Text>
-                      <Text style={[styles.confidenceLabel, { color: colors.textSecondary }]}>
-                        Confidence
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.warningBox,
-                        { backgroundColor: isDark ? colors.surface : "rgba(255,255,255,0.6)" },
-                      ]}
-                    >
-                      <Text style={[styles.warningText, { color: colors.textPrimary }]}>
-                        {results.is_scam
-                          ? "Do not respond or click any links. Report and delete this message immediately."
-                          : "This looks safe. But always verify the sender before responding."}
-                      </Text>
-                    </View>
-                  </Card>
-
-                  {/* Key Detections */}
-                  <Card style={styles.detectionsCard} pressable={false}>
-                    <Text style={[styles.detectionsTitle, { color: colors.textPrimary }]}>
-                      Key Detections
-                    </Text>
-                    <View style={styles.detectionsList}>
-                      {results.detections.map((detection, index) => {
-                        const isExpanded = expandedDetections.has(index);
-                        return (
-                          <View
-                            key={index}
-                            style={[
-                              styles.detectionWrapper,
-                              { backgroundColor: colors.backgroundSecondary, borderRadius: radius.lg },
-                            ]}
-                          >
-                            <TouchableOpacity
-                              style={[
-                                styles.detectionItem,
-                                { backgroundColor: colors.backgroundSecondary },
-                              ]}
-                              onPress={() => {
-                                setExpandedDetections((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(index)) next.delete(index);
-                                  else next.add(index);
-                                  return next;
-                                });
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              {getSeverityIcon(detection.severity)}
-                              <Text
-                                style={[styles.detectionDescription, { color: colors.textPrimary }]}
-                                numberOfLines={isExpanded ? undefined : 1}
-                              >
-                                {detection.description}
-                              </Text>
-                              
-                              {isExpanded ? (
-                                <ChevronUp size={20} color={colors.textSecondary} />
-                              ) : (
-                                <ChevronDown size={20} color={colors.textSecondary} />
-                              )}
-                            </TouchableOpacity>
-                            {isExpanded && (
-                              <View
-                                style={[
-                                  styles.detectionDetailsContainer,
-                                  { borderTopColor: colors.border },
-                                ]}
-                              >
-                                <Text
-                                  style={[styles.detectionDetailsText, { color: colors.textSecondary }]}
-                                >
-                                  {detection.details}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </Card>
-
-                  {/* Safety Tips */}
-                  <Card
-                    style={[styles.tipsCard, { backgroundColor: colors.accentMuted }]}
-                    pressable={false}
-                  >
-                    <View style={styles.tipsHeader}>
-                      <Shield size={20} color={colors.accent} />
-                      <Text style={[styles.tipsTitle, { color: colors.textPrimary }]}>
-                        Stay Safe
-                      </Text>
-                    </View>
-                    <View style={styles.tipsList}>
-                      {[
-                        "Never share passwords or financial information via text or email.",
-                        "Verify the sender through official channels.",
-                        "Be wary of urgent requests or threats.",
-                        "Check URL details carefully before clicking links.",
-                      ].map((tip, index) => (
-                        <View key={index} style={styles.tipItem}>
-                          <Text style={[styles.tipBullet, { color: colors.accent }]}>•</Text>
-                          <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-                            {tip}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </Card>
+                  <ScanResultSummaryCard result={results} />
+                  <ScanDetectionsCard
+                    detections={results.detections}
+                    expandedDetections={expandedDetections}
+                    onToggleExpanded={(index) => {
+                      setExpandedDetections((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(index)) next.delete(index);
+                        else next.add(index);
+                        return next;
+                      });
+                    }}
+                  />
+                  <ScanStaySafeTipsCard />
                 </Animated.View>
               )}
 
@@ -1100,17 +741,7 @@ export default function Scan() {
                 </Animated.View>
               )}
 
-              {/* Disclaimer */}
-              <View style={styles.disclaimer}>
-                <Text style={[styles.disclaimerTitle, { color: colors.textSecondary }]}>
-                  Disclaimer
-                </Text>
-                <Text style={[styles.disclaimerText, { color: colors.textTertiary }]}>
-                  This tool uses AI to analyze content for potential scams. Results are generated
-                  automatically and may not always reflect the full context. Always use your own
-                  judgment and verify through official sources.
-                </Text>
-              </View>
+              <ScanDisclaimer />
             </>
           )}
         </ScrollView>
@@ -1168,15 +799,6 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     fontSize: 13,
   },
-  uploadCard: {
-    marginBottom: 16,
-  },
-  topActionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
   addShortcutButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1184,52 +806,6 @@ const styles = StyleSheet.create({
   howToUseText: {
     fontFamily: "Poppins-Medium",
     fontSize: 14,
-  },
-  uploadedImageContainer: {
-    alignItems: "center",
-    gap: 16,
-  },
-  uploadedImage: {
-    width: "100%",
-    maxHeight: 300,
-  },
-  clearButtonText: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 15,
-  },
-  uploadPlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    gap: 12,
-    position: "relative",
-    overflow: "hidden",
-  },
-  uploadIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  uploadTitle: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 17,
-    textAlign: "center",
-  },
-  uploadSubtitle: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  uploadOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 20,
   },
   scanButtonContainer: {
     marginBottom: 24,
@@ -1275,178 +851,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
-  scanFailureCard: {
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  scanFailureHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  },
-  scanFailureTitle: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 16,
-  },
-  scanFailureReason: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  resultCard: {
-    marginBottom: 16,
-  },
-  resultHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  resultTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  resultTitle: {
-    fontFamily: "Poppins-Bold",
-    fontSize: 20,
-  },
-  confidenceText: {
-    fontFamily: "Poppins-Bold",
-    fontSize: 26,
-  },
-  resultDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  riskLevelText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-  },
-  confidenceLabel: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-  },
-  warningBox: {
-    padding: 14,
-    borderRadius: 12,
-  },
-  warningText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  detectionsCard: {
-    marginBottom: 16,
-  },
-  detectionsTitle: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 18,
-    marginBottom: 14,
-  },
-  detectionsList: {
-    gap: 10,
-  },
-  detectionWrapper: {
-    overflow: "hidden",
-  },
-  detectionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-  },
-  detectionDescription: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 14,
-    flex: 1,
-    lineHeight: 20,
-  },
-  detectionSeverityBadge: {
-    marginRight: 4,
-  },
-  detectionSeverityText: {
-    fontFamily: "Poppins-Medium",
-    fontSize: 12,
-    textTransform: "capitalize",
-  },
-  detectionDetailsContainer: {
-    paddingVertical: 12,
-    paddingLeft: 46,
-    paddingRight: 14,
-    borderTopWidth: 1,
-  },
-  detectionDetailsText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  tipsCard: {
-    marginBottom: 24,
-  },
-  tipsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 14,
-  },
-  tipsTitle: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 17,
-  },
-  tipsList: {
-    gap: 10,
-  },
-  tipItem: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  tipBullet: {
-    fontFamily: "Poppins-Bold",
-    fontSize: 16,
-  },
-  tipText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    flex: 1,
-    lineHeight: 20,
-  },
-  disclaimer: {
-    marginTop: 8,
-  },
-  disclaimerTitle: {
-    fontFamily: "Poppins-SemiBold",
-    fontSize: 14,
-    marginBottom: 6,
-  },
-  disclaimerText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 13,
-    lineHeight: 19,
-  },
   scanningContainer: {
     marginBottom: 24,
-  },
-  scanningHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  thumbnailImage: {
-    width: 56,
-    height: 74,
-  },
-  scanningTextContainer: {
-    flex: 1,
-    paddingTop: 2,
-  },
-  scanningStageText: {
-    fontFamily: "Poppins-Medium",
-    fontSize: 14,
-    lineHeight: 20,
   },
   scanCompleteText: {
     fontFamily: "Poppins-SemiBold",

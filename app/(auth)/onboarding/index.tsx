@@ -1,13 +1,16 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
-import { onboardingHref } from "@/utils/onboarding/onboarding-href";
+import { onboardingHref } from "@/utils/onboarding/onboardingHref";
 import { captureError } from "@/utils/shared/sentry";
 import {
   fetchProfileOnboardingRow,
   getNextProfileOnboardingHref,
   resolveOnboardingEntryPath,
 } from "@/utils/onboarding/onboarding";
-import { clearOnboardingTutorialStorage, getStoredOnboardingTutorialStep } from "@/utils/onboarding/onboarding-tutorial-storage";
+import {
+  clearOnboardingTutorialStorage,
+  getStoredOnboardingTutorialStep,
+} from "@/utils/onboarding/onboardingTutorialStorage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";

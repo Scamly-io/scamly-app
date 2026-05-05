@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/shared/analytics";
 import { pickByWeeklyViewsOrRandom } from "@/utils/shared/articleWeeklyRanking";
-import { openNewChatSession } from "@/utils/chat/chat-nav";
+import { openNewChatSession } from "@/utils/chat/chatNav";
 import { captureDataFetchError, captureError, captureWarning } from "@/utils/shared/sentry";
 import { supabase } from "@/utils/shared/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";

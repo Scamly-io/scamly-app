@@ -616,7 +616,7 @@ trackUserVisibleError('chat', 'session_invalid', false);
 
 ### Signup Flow
 
-**File:** `app/(auth)/signup.tsx`, `app/(auth)/signup-profile.tsx`
+**File:** `app/(auth)/onboarding/signup.tsx`, `app/(auth)/onboarding/collect-profile.tsx`
 
 | Event                  | Trigger                           | Properties                                           |
 |------------------------|-----------------------------------|------------------------------------------------------|

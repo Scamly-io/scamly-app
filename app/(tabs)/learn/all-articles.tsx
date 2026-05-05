@@ -93,7 +93,7 @@ export default function AllArticles() {
       });
       if (didUnlockEntitlement) {
         setIsPremium(true);
-        router.push("/subscription-success");
+        router.push("/SubscriptionSuccess");
       }
     } catch (error) {
       const message = trackRevenueCatError("present_paywall_library_articles", error);

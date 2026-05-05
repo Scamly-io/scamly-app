@@ -2,13 +2,13 @@ import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
+import { onboardingHref } from "@/utils/onboarding/onboardingHref";
+import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboardingTutorialExit";
 import {
   getAuthenticationMethodForAnalytics,
   trackOnboardingStepViewed,
   trackOnboardingTutorialDismissed,
 } from "@/utils/shared/analytics";
-import { onboardingHref } from "@/utils/onboarding/onboarding-href";
-import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboarding-tutorial-exit";
 import { captureError } from "@/utils/shared/sentry";
 import { useRouter } from "expo-router";
 import { BookOpen, Sparkles } from "lucide-react-native";
@@ -18,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 /**
  * Shown after profile onboarding when the user is ready for the in-app product tutorial.
- * Opt-in before the screenshot + first-scan flow in `tutorial-how-it-works`.
+ * Opt-in before the screenshot + first-scan flow in `TutorialHowItWorks`.
  */
 export default function OnboardingTutorialOffer() {
   const { colors, radius, shadows } = useTheme();
@@ -34,9 +34,12 @@ export default function OnboardingTutorialOffer() {
   }, [authMethod]);
 
   const onStartTutorial = () => {
-    router.replace(onboardingHref("/onboarding/tutorial-how-it-works"));
+    router.replace(onboardingHref("/onboarding/TutorialHowItWorks"));
   };
 
+  /**
+   * Decline the in-app tutorial and proceed to the end-of-tutorial paywall flow.
+   */
   const onNotNow = async () => {
     if (!user) {
       return;

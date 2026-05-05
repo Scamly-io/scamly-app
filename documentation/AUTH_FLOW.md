@@ -14,7 +14,7 @@ Scamly uses **Supabase Auth** with a React context (`AuthProvider`) as the singl
 | Supabase client (storage, refresh) | `utils/supabase.ts` |
 | Onboarding flag in DB | `utils/onboarding.ts` (`profiles.onboarding_completed`) |
 | Email / social sign-in UI | `app/(auth)/login.tsx` |
-| Email sign-up | `app/(auth)/signup.tsx`, `signup-profile.tsx`, `signup-confirm.tsx` |
+| Email sign-up | `app/(auth)/onboarding/signup.tsx`, `app/(auth)/onboarding/collect-profile.tsx`, `app/(auth)/signup-confirm.tsx` |
 
 ---
 
@@ -25,7 +25,7 @@ All methods ultimately create a Supabase session (access + refresh tokens) store
 ### Email and password
 
 - **Sign in:** `supabase.auth.signInWithPassword({ email, password })` in `app/(auth)/login.tsx`.
-- **Sign up:** `supabase.auth.signUp({ email, password, options: { … } })` in `app/(auth)/signup-profile.tsx`, with profile fields passed in `options.data` and `emailRedirectTo` set for confirmation flows as configured.
+- **Sign up:** `supabase.auth.signUp({ email, password, options: { … } })` is initiated from the onboarding flow (step 1: `app/(auth)/onboarding/signup.tsx`, profile collection: `app/(auth)/onboarding/collect-profile.tsx`), with profile fields passed in `options.data` and `emailRedirectTo` set for confirmation flows as configured.
 
 ### Google
 

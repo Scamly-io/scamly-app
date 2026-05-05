@@ -1,7 +1,7 @@
 import { getAuthenticationMethodForAnalytics, trackOnboardingTutorialPaywallResult } from "@/utils/shared/analytics";
 import { markAppTutorialCompleted } from "@/utils/onboarding/onboarding";
-import { onboardingHref } from "@/utils/onboarding/onboarding-href";
-import { clearOnboardingTutorialStorage } from "@/utils/onboarding/onboarding-tutorial-storage";
+import { onboardingHref } from "@/utils/onboarding/onboardingHref";
+import { clearOnboardingTutorialStorage } from "@/utils/onboarding/onboardingTutorialStorage";
 import { presentScamlyPaywall } from "@/utils/shared/revenuecat";
 import { captureError } from "@/utils/shared/sentry";
 import type { User } from "@supabase/supabase-js";

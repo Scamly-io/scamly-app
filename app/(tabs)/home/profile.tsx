@@ -17,15 +17,15 @@ import { getSupportedPromoOffer } from "@/utils/shared/promo";
 import {
   clearStoredPromoOffer,
   getAndroidOfferingIdForPromoOffer,
-  getStoredPromoOfferId,
   getRevenueCatCustomerInfo,
+  getStoredPromoOfferId,
   handlePromoOffer,
   hasScamlyPremiumEntitlement,
   presentScamlyCustomerCenter,
   presentScamlyPaywallIfNeeded,
   setStoredPromoOfferId,
-  tagEarlyInterestUser,
   tagDiscountUser,
+  tagEarlyInterestUser,
   trackRevenueCatError,
 } from "@/utils/shared/revenuecat";
 import { captureError } from "@/utils/shared/sentry";
@@ -521,7 +521,7 @@ export default function Profile() {
 
       setShowDeleteModal(false);
       setDeleteConfirmationText("");
-      router.replace("/account-deleted");
+      router.replace("/AccountDeleted");
     } catch (err) {
       trackAccountDeletionFailed("unexpected");
       captureError(err, {
@@ -560,7 +560,7 @@ export default function Profile() {
         if (storedOfferId) {
           await clearStoredPromoOffer();
         }
-        router.push("/subscription-success");
+        router.push("/SubscriptionSuccess");
       }
     } catch (error) {
       const message = trackRevenueCatError("present_paywall", error);

@@ -5,6 +5,16 @@ import { countries } from "@/constants/countries";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSignUp } from "@/contexts/SignUpContext";
 import { useTheme } from "@/theme";
+import { genderOptions, referralSourceOptions, signUpSchema } from "@/utils/auth/auth";
+import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/auth/signup-profile-draft";
+import {
+  COLLECT_PROFILE_HREF,
+  getInitialCollectProfileUiStep,
+  getPreviousProfileOnboardingHref,
+  getProfileCollectStepIndex,
+  type ProfileOnboardingRow,
+} from "@/utils/onboarding/onboarding";
+import { onboardingHref } from "@/utils/onboarding/onboardingHref";
 import {
   getAuthenticationMethodForAnalytics,
   trackEmailPasswordSignupAccountCreated,
@@ -15,19 +25,9 @@ import {
 } from "@/utils/shared/analytics";
 import { formatDobInput, isoToDobDisplay, parseDob, toISODate } from "@/utils/shared/date";
 import { getPublicIp } from "@/utils/shared/network";
-import { getOAuthCollectWelcomeSeen, setOAuthCollectWelcomeSeen } from "@/utils/onboarding/oauth-collect-welcome-seen";
-import {
-  COLLECT_PROFILE_HREF,
-  getInitialCollectProfileUiStep,
-  getProfileCollectStepIndex,
-  type ProfileOnboardingRow,
-} from "@/utils/onboarding/onboarding";
-import { onboardingHref } from "@/utils/onboarding/onboarding-href";
-import { replaceFromProfileStep } from "@/utils/onboarding/profile-onboarding-nav";
 import { addActionBreadcrumb, captureError } from "@/utils/shared/sentry";
-import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/auth/signup-profile-draft";
 import { supabase } from "@/utils/shared/supabase";
-import { genderOptions, referralSourceOptions, signUpSchema } from "@/utils/auth/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { User } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import {
@@ -71,6 +71,49 @@ const TOTAL_STEPS = 5;
 const GENDER_OPTION_ROWS = genderOptions.map((g) => ({ label: g, value: g }));
 const REFERRAL_OPTION_ROWS = referralSourceOptions.map((g) => ({ label: g, value: g }));
 
+/**
+ * Storage key for the OAuth-only welcome screen (per user).
+ */
+const keyForOAuthCollectWelcomeSeen = (userId: string) => `oauth_collect_welcome_seen_v1_${userId}`;
+
+/**
+ * Whether the OAuth onboarding welcome step has been seen for this user.
+ */
+async function getOAuthCollectWelcomeSeen(userId: string): Promise<boolean> {
+  const v = await AsyncStorage.getItem(keyForOAuthCollectWelcomeSeen(userId));
+  return v === "1";
+}
+
+/**
+ * Mark the OAuth onboarding welcome step as seen for this user.
+ */
+async function setOAuthCollectWelcomeSeen(userId: string): Promise<void> {
+  await AsyncStorage.setItem(keyForOAuthCollectWelcomeSeen(userId), "1");
+}
+
+/**
+ * Replace navigation when moving backward from a profile step.
+ * Routes depend on whether the user is completing an email/password draft vs. a signed-in OAuth flow.
+ */
+function replaceFromProfileStepLocal(params: {
+  router: ReturnType<typeof useRouter>;
+  currentHref: string;
+  signUpData: ReturnType<typeof useSignUp>["signUpData"];
+  sessionUserId?: string | null;
+}): void {
+  const draft = isEmailPasswordProfileDraft(params.signUpData, params.sessionUserId);
+  const prev = getPreviousProfileOnboardingHref(params.currentHref);
+  if (prev) {
+    params.router.replace(onboardingHref(prev));
+    return;
+  }
+  if (draft) {
+    params.router.back();
+    return;
+  }
+  params.router.replace(onboardingHref("/login"));
+}
+
 const STEP_ANALYTICS = [
   "profile_name",
   "profile_dob",
@@ -79,6 +122,9 @@ const STEP_ANALYTICS = [
   "profile_referral",
 ] as const;
 
+/**
+ * Map the current profile UI step to the analytics step name.
+ */
 function collectProfileStepAnalytics(
   step: number,
   oauth: boolean,
@@ -92,6 +138,9 @@ function collectProfileStepAnalytics(
 // Per-step icons
 const STEP_ICONS = [UserIcon, Calendar, Users, Globe, Megaphone] as const;
 
+/**
+ * True when the session user signed in via an OAuth provider (Google/Apple).
+ */
 function signedInWithOAuth(u: User | null): boolean {
   if (!u) {
     return false;
@@ -129,6 +178,10 @@ type StepBodyProps = {
   oauthWelcomeStep: boolean;
 };
 
+/**
+ * Renders the step-specific form body for profile collection.
+ * The OAuth flow uses an extra welcome step at index 0 (welcome + display name).
+ */
 function StepFormFields(p: StepBodyProps) {
   const { colors, radius } = p;
   if (p.oauthWelcomeStep) {
@@ -568,7 +621,12 @@ export default function OnboardingCollectProfile() {
       return;
     }
     if (step <= 0) {
-      replaceFromProfileStep(router, COLLECT_PROFILE_HREF, signUpData, user?.id ?? null);
+      replaceFromProfileStepLocal({
+        router,
+        currentHref: COLLECT_PROFILE_HREF,
+        signUpData,
+        sessionUserId: user?.id ?? null,
+      });
       return;
     }
     hasNavigated.current = true;
@@ -744,7 +802,7 @@ export default function OnboardingCollectProfile() {
           resetSignUpData();
           setLoading(false);
           // `replace` from a nested onboarding screen can leave the (auth) stack on /onboarding/signup.
-          router.dismissTo(onboardingHref("/signup-confirm"));
+          router.dismissTo(onboardingHref("/SignupConfirm"));
           return;
         }
 

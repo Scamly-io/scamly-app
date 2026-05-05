@@ -61,6 +61,9 @@ export default function Login() {
   const router = useRouter();
   const { resetSignUpData } = useSignUp();
 
+  /**
+   * Email/password sign-in and post-login identification (analytics + Sentry).
+   */
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Error", "Please enter an email and password");
@@ -125,6 +128,9 @@ export default function Login() {
     }
   };
 
+  /**
+   * OAuth sign-in via Google, then route to onboarding if the user's profile is incomplete.
+   */
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
 
@@ -199,6 +205,9 @@ export default function Login() {
     }
   };
 
+  /**
+   * OAuth sign-in via Apple, then route to onboarding if the user's profile is incomplete.
+   */
   const handleAppleSignIn = async () => {
     setAppleLoading(true);
     try {

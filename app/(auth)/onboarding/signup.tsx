@@ -2,10 +2,10 @@ import Button from "@/components/Button";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useSignUp } from "@/contexts/SignUpContext";
 import { useTheme } from "@/theme";
+import { signUpStep1Schema } from "@/utils/auth/auth";
+import { onboardingHref } from "@/utils/onboarding/onboardingHref";
 import { trackSignupStarted } from "@/utils/shared/analytics";
 import { addActionBreadcrumb } from "@/utils/shared/sentry";
-import { onboardingHref } from "@/utils/onboarding/onboarding-href";
-import { signUpStep1Schema } from "@/utils/auth/auth";
 import { useRouter } from "expo-router";
 import { Lock, Mail } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -62,7 +62,7 @@ export default function OnboardingSignUp() {
     setErrors({});
     updateSignUpData({ email, password });
     addActionBreadcrumb("signup_step1_to_profile", "signup");
-    router.push(onboardingHref("/onboarding/collect-profile"));
+    router.push(onboardingHref("/onboarding/CollectProfile"));
   };
 
   const clearError = (field: string) => {

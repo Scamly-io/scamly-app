@@ -2,11 +2,11 @@ import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
 import { deleteConversationId } from "@/utils/ai/chat";
 import { trackUserVisibleError } from "@/utils/shared/analytics";
-import type { CachedChatSummary } from "@/utils/chat/chat-history-cache";
+import type { CachedChatSummary } from "@/utils/chat/chatHistoryCache";
 import {
   getChatHistoryCache,
   setChatHistoryCache,
-} from "@/utils/chat/chat-history-cache";
+} from "@/utils/chat/chatHistoryCache";
 import { captureChatError, captureDataFetchError } from "@/utils/shared/sentry";
 import { supabase } from "@/utils/shared/supabase";
 import { foregroundColor, frame, padding, scaleEffect } from "@expo/ui/swift-ui/modifiers";
@@ -30,7 +30,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { openNewChatSession } from "@/utils/chat/chat-nav";
+import { openNewChatSession } from "@/utils/chat/chatNav";
 
 function formatChatTitleDate(iso: string): string {
   const date = new Date(iso);

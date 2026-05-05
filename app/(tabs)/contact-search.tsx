@@ -151,7 +151,7 @@ export default function PhoneSearch() {
       if (didUnlockEntitlement) {
         setIsFreePlan(false);
         setPlanLoading(false);
-        router.push("/subscription-success");
+        router.push("/SubscriptionSuccess");
       }
     } catch (error) {
       const message = trackRevenueCatError("present_paywall_contact_search", error);
