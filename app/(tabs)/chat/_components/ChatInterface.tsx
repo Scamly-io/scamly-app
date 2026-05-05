@@ -4,7 +4,7 @@ import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
 import { getAiChatEdgeFunctionUrl } from "@/utils/ai/chat";
-import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
+import { streamAssistantMessage } from "@/utils/ai/consumeAssistantStream";
 import {
   createSignedUrlsForChatImages,
   joinImageIdCsv,

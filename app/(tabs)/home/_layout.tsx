@@ -5,7 +5,7 @@ export default function HomeLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="profile" />
-      <Stack.Screen name="privacy-policy" />
+      <Stack.Screen name="PrivacyPolicy" />
       <Stack.Screen name="terms" />
     </Stack>
   );

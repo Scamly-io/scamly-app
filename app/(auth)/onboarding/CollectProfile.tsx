@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSignUp } from "@/contexts/SignUpContext";
 import { useTheme } from "@/theme";
 import { genderOptions, referralSourceOptions, signUpSchema } from "@/utils/auth/auth";
-import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/auth/signup-profile-draft";
+import { isEmailPasswordProfileDraft, shouldRedirectMissingEmailDraftToSignup } from "@/utils/auth/signupProfileDraft";
 import {
   COLLECT_PROFILE_HREF,
   getInitialCollectProfileUiStep,

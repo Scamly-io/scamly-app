@@ -76,7 +76,7 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="contact-search"
+          name="ContactSearch"
           options={{
             title: "Search",
             tabBarIcon: ({ focused, color }) => (

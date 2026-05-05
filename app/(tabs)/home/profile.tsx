@@ -980,7 +980,7 @@ export default function Profile() {
               <Card style={styles.card} pressable={false}>
                 <Pressable
                   style={styles.linkRow}
-                  onPress={() => router.push("/home/privacy-policy")}
+                  onPress={() => router.push("/home/PrivacyPolicy")}
                 >
                   <View style={[styles.fieldIcon, { backgroundColor: colors.accentMuted }]}>
                     <Shield size={18} color={colors.accent} />
