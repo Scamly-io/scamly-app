@@ -8,7 +8,7 @@
 
 import { supabase } from "@/utils/shared/supabase";
 
-import type { StoredOnboardingTutorialStep } from "./onboarding-tutorial-storage";
+import type { StoredOnboardingTutorialStep } from "./onboardingTutorialStorage";
 
 // ============================================================================
 // Types

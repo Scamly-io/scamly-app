@@ -11,7 +11,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import ChatInterface from "../_components/chat-interface";
+import ChatInterface from "../_components/ChatInterface";
 
 export default function ChatDetail() {
   const { colors } = useTheme();

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Row shape for first-time insert into `public.chats` before the first outbound edge message */
+/** Row shape for first-time insert into `public.chats` before the first outbound edge message. */
 export type InitialChatRowPayload = {
   id: string;
   user_id: string;
@@ -36,3 +36,4 @@ export async function insertInitialChatRow(
   if (error.code === "23505") return { ok: true };
   return { ok: false, message: error.message };
 }
+

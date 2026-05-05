@@ -3,8 +3,8 @@ import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import { getAuthenticationMethodForAnalytics, trackOnboardingStepViewed } from "@/utils/shared/analytics";
-import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboarding-tutorial-exit";
-import { setStoredOnboardingTutorialStep } from "@/utils/onboarding/onboarding-tutorial-storage";
+import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboardingTutorialExit";
+import { setStoredOnboardingTutorialStep } from "@/utils/onboarding/onboardingTutorialStorage";
 import { captureError } from "@/utils/shared/sentry";
 import { useRouter } from "expo-router";
 import { CheckCircle } from "lucide-react-native";
@@ -27,6 +27,9 @@ export default function OnboardingTutorialCelebration() {
     trackOnboardingStepViewed("tutorial_celebration", { auth_method: authMethod });
   }, [authMethod]);
 
+  /**
+   * Finish the tutorial (paywall, then exit into the main app).
+   */
   const onFinish = async () => {
     if (!user) {
       return;

@@ -382,7 +382,7 @@ export default function Learn() {
                     Quick Tips
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => router.push("/learn/all-quick-tips")}>
+                <TouchableOpacity onPress={() => router.push("/learn/AllQuickTips")}>
                   <Text style={[styles.viewAllText, { color: colors.accent }]}>View All</Text>
                 </TouchableOpacity>
               </View>
@@ -406,7 +406,7 @@ export default function Learn() {
           {/* View All Articles */}
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.viewAllSection}>
             <Button
-              onPress={() => router.push("/learn/all-articles")}
+              onPress={() => router.push("/learn/AllArticles")}
               variant="secondary"
               fullWidth
             >

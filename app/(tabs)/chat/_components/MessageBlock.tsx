@@ -1,10 +1,11 @@
-import ChatImageStack from "./chat-image-stack";
-import { useHydrateMessageImageUrls } from "@/hooks/use-hydrate-message-image-urls";
+import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
-import { parseImageIdCsv } from "@/utils/chat/chat-images";
+import { createSignedUrlsForChatImages, parseImageIdCsv } from "@/utils/chat/chatImages";
+import { supabase } from "@/utils/shared/supabase";
 import Markdown from "@ronradtke/react-native-markdown-display";
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import ChatImageStack from "./ChatImageStack";
 
 export type ChatMessage = {
   id: string;
@@ -21,6 +22,64 @@ type Props = {
   viewerUserId?: string;
 };
 
+type UseHydrateMessageImageUrlsArgs = {
+  messageId: string;
+  userId: string;
+  imageId: string | string[] | null | undefined;
+  /** Already resolved (e.g. just after send); skips network. */
+  prefetchedUrls: string[] | undefined;
+};
+
+function useHydrateMessageImageUrlsLocal({
+  messageId,
+  userId,
+  imageId,
+  prefetchedUrls,
+}: UseHydrateMessageImageUrlsArgs): { displayUrls: string[]; showLoadingGhost: boolean } {
+  const filenames = useMemo(() => parseImageIdCsv(imageId ?? null), [imageId]);
+  const hasIds = filenames.length > 0;
+
+  const [fetchedUrls, setFetchedUrls] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const prefetchKey = prefetchedUrls && prefetchedUrls.length > 0 ? prefetchedUrls.join("\0") : "";
+
+  useEffect(() => {
+    if (prefetchKey) setLoading(false);
+  }, [prefetchKey]);
+
+  useEffect(() => {
+    setFetchedUrls([]);
+  }, [imageId, messageId]);
+
+  useEffect(() => {
+    if (!hasIds || !userId) return;
+    if (prefetchKey) return;
+
+    let cancelled = false;
+    setLoading(true);
+
+    void (async () => {
+      const ids = parseImageIdCsv(imageId ?? null);
+      const { urls, error } = await createSignedUrlsForChatImages(supabase, userId, ids);
+      if (cancelled) return;
+      setLoading(false);
+      if (error || urls.length === 0) return;
+      setFetchedUrls(urls);
+      useChatStore.getState().patchMessage(messageId, { imageUrls: urls });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasIds, userId, messageId, imageId, prefetchKey]);
+
+  const displayUrls = prefetchKey.length > 0 ? (prefetchedUrls as string[]) : fetchedUrls;
+  const showLoadingGhost = hasIds && displayUrls.length === 0 && loading;
+
+  return { displayUrls, showLoadingGhost };
+}
+
 const UserAttachmentBlock = memo(function UserAttachmentBlock({
   message,
   viewerUserId,
@@ -30,7 +89,7 @@ const UserAttachmentBlock = memo(function UserAttachmentBlock({
 }) {
   const { colors, radius } = useTheme();
   const hasIds = parseImageIdCsv(message.imageId ?? null).length > 0;
-  const { displayUrls, showLoadingGhost } = useHydrateMessageImageUrls({
+  const { displayUrls, showLoadingGhost } = useHydrateMessageImageUrlsLocal({
     messageId: message.id,
     userId: viewerUserId,
     imageId: message.imageId,

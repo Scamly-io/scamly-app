@@ -9,7 +9,7 @@ import {
   ProfileNotFoundError,
   resolveOnboardingEntryPath,
 } from "@/utils/onboarding/onboarding";
-import { onboardingHref } from "@/utils/onboarding/onboarding-href";
+import { onboardingHref } from "@/utils/onboarding/onboardingHref";
 import { supabase } from "@/utils/shared/supabase";
 
 jest.mock("@/utils/shared/supabase", () => ({
@@ -279,7 +279,7 @@ describe("onboarding scan tutorial completion actions", () => {
   it("shows a view results prompt instead of rescan controls", () => {
     const sourcePath = path.join(
       process.cwd(),
-      "app/(auth)/onboarding/_components/first-onboarding-scan-panel.tsx"
+      "app/(tabs)/scan/_components/OnboardingFirstScanPanel.tsx"
     );
     const source = fs.readFileSync(sourcePath, "utf8");
 

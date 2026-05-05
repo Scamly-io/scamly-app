@@ -7,15 +7,15 @@ import {
   getChatHistoryCache,
   setChatHistoryCache,
   type CachedChatSummary,
-} from "@/utils/chat/chat-history-cache";
+} from "@/utils/chat/chatHistoryCache";
 import {
   buildChatImageStoragePath,
   chatImageSignedUrlExpirySeconds,
   joinImageIdCsv,
   normalizePickerBase64,
   parseImageIdCsv,
-} from "@/utils/chat/chat-images";
-import { buildInitialChatRowPayload, needsInitialChatRowInsert } from "@/utils/chat/chat-initial-row";
+} from "@/utils/chat/chatImages";
+import { buildInitialChatRowPayload, needsInitialChatRowInsert } from "@/app/(tabs)/chat/_components/chatInitialRow";
 import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
 
 describe("chat-images", () => {
@@ -171,7 +171,7 @@ describe("useChatStore patchMessage", () => {
 
 describe("chat premium upsell cta layout", () => {
   it("uses centered button styling instead of full-width paywall cta", () => {
-    const sourcePath = path.join(process.cwd(), "app/(tabs)/chat/_components/chat-interface.tsx");
+    const sourcePath = path.join(process.cwd(), "app/(tabs)/chat/_components/ChatInterface.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source).toContain("Unlock AI Scam Chat");

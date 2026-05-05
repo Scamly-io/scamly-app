@@ -1,40 +1,40 @@
 import Button from "@/components/Button";
-import ChatChromeIconButton from "./chat-chrome-icon-button";
-import ChatGlassInputBar from "./chat-glass-input-bar";
-import ChatGlassPillButton from "./chat-glass-pill-button";
-import MessageBlock, { type ChatMessage } from "./MessageBlock";
 import ThemedBackground from "@/components/ThemedBackground";
-import ThinkingIndicator from "./ThinkingIndicator";
 import type { Message as StoreMessage } from "@/store/chatStore";
 import { useChatStore } from "@/store/chatStore";
 import { useTheme } from "@/theme";
 import { getAiChatEdgeFunctionUrl } from "@/utils/ai/chat";
-import { streamAssistantMessage } from "@/utils/ai/consume-assistant-stream";
-import { trackUserVisibleError } from "@/utils/shared/analytics";
+import { streamAssistantMessage } from "@/utils/ai/consumeAssistantStream";
 import {
   createSignedUrlsForChatImages,
   joinImageIdCsv,
   normalizePickerBase64,
   uploadChatImages,
-} from "@/utils/chat/chat-images";
+} from "@/utils/chat/chatImages";
 import {
   buildInitialChatRowPayload,
   insertInitialChatRow,
   needsInitialChatRowInsert,
-} from "@/utils/chat/chat-initial-row";
-import { openNewChatSession } from "@/utils/chat/chat-nav";
+} from "@/utils/chat/chatInitialRow";
+import { openNewChatSession } from "@/utils/chat/chatNav";
+import { trackUserVisibleError } from "@/utils/shared/analytics";
 import { captureChatError } from "@/utils/shared/sentry";
 import { supabase } from "@/utils/shared/supabase";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
+import { GlassView, isGlassEffectAPIAvailable } from "expo-glass-effect";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router, useFocusEffect } from "expo-router";
-import { ImagePlus, Menu, Plus, X } from "lucide-react-native";
+import { ImagePlus, Menu, Plus, Send, X } from "lucide-react-native";
+import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, BackHandler, FlatList, Keyboard, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, BackHandler, FlatList, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView, KeyboardGestureArea } from "react-native-keyboard-controller";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import uuid from "react-native-uuid";
+import MessageBlock, { type ChatMessage } from "./MessageBlock";
+import ThinkingIndicator from "./ThinkingIndicator";
 
 /** `TextInput.nativeID` + `KeyboardGestureArea` `textInputNativeID` (iOS) */
 const CHAT_COMPOSER_NATIVE_ID = "scamly-chat-composer";
@@ -85,6 +85,423 @@ const messageRowStyles = StyleSheet.create({
     width: "100%",
     paddingVertical: 10,
     alignItems: "flex-start",
+  },
+});
+
+function isIosGlassAvailable(): boolean {
+  return Platform.OS === "ios" && typeof isGlassEffectAPIAvailable === "function" && isGlassEffectAPIAvailable();
+}
+
+function ChatChromeIconButtonLocal({
+  children,
+  onPress,
+  accessibilityLabel,
+  bg,
+  disabled,
+}: {
+  children: ReactNode;
+  onPress: () => void;
+  accessibilityLabel: string;
+  bg: string;
+  disabled?: boolean;
+}) {
+  const { colors } = useTheme();
+  const iosGlass = isIosGlassAvailable();
+
+  const inner = (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => [
+        chromeStyles.chromeBtnInner,
+        { opacity: disabled ? 0.35 : pressed ? 0.75 : 1 },
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
+
+  if (iosGlass) {
+    return (
+      <GlassView style={chromeStyles.chromeGlass} glassEffectStyle="regular" colorScheme="auto">
+        {inner}
+      </GlassView>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        chromeStyles.chromeFallback,
+        Platform.OS === "android"
+          ? {
+              backgroundColor: colors.surface,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: colors.border,
+            }
+          : { backgroundColor: bg },
+      ]}
+    >
+      {inner}
+    </View>
+  );
+}
+
+function ChatGlassPillButtonLocal({
+  label,
+  icon,
+  onPress,
+  accessibilityLabel,
+  bg,
+  labelColor,
+  disabled,
+}: {
+  label: string;
+  icon: ReactNode;
+  onPress: () => void;
+  accessibilityLabel: string;
+  bg: string;
+  labelColor: string;
+  disabled?: boolean;
+}) {
+  const { colors } = useTheme();
+  const iosGlass = isIosGlassAvailable();
+
+  const inner = (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => [
+        pillStyles.inner,
+        { opacity: disabled ? 0.35 : pressed ? 0.75 : 1 },
+      ]}
+    >
+      {icon}
+      <Text style={[pillStyles.label, { color: labelColor }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+
+  if (iosGlass) {
+    return (
+      <GlassView style={pillStyles.glass} glassEffectStyle="regular" colorScheme="auto">
+        {inner}
+      </GlassView>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        pillStyles.fallback,
+        Platform.OS === "android"
+          ? {
+              backgroundColor: colors.surface,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: colors.border,
+            }
+          : { backgroundColor: bg },
+      ]}
+    >
+      {inner}
+    </View>
+  );
+}
+
+type ChatComposerAttachment = {
+  id: string;
+  uri: string;
+  mimeType?: string;
+  base64: string;
+};
+
+function ChatGlassInputBarLocal({
+  value,
+  onChangeText,
+  onSend,
+  placeholder,
+  disabled,
+  plusDisabled = false,
+  onPressPlus = () => {},
+  plusSlot,
+  attachments = [],
+  onRemoveAttachment,
+  composerNativeID,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  onSend: () => void;
+  placeholder?: string;
+  disabled?: boolean;
+  plusDisabled?: boolean;
+  onPressPlus?: () => void;
+  plusSlot?: ReactNode;
+  attachments?: ChatComposerAttachment[];
+  onRemoveAttachment?: (id: string) => void;
+  composerNativeID?: string;
+}) {
+  const { colors, radius } = useTheme();
+  const hasAtt = attachments.length > 0;
+  const canSend = (value.trim().length > 0 || hasAtt) && !disabled;
+
+  const attachmentStrip = hasAtt ? (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={composerStyles.attachScrollContent}
+    >
+      {attachments.map((a) => (
+        <View key={a.id} style={composerStyles.thumbWrap}>
+          <Image source={{ uri: a.uri }} style={[composerStyles.thumb, { borderRadius: radius.md }]} contentFit="cover" />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remove attachment"
+            onPress={() => (onRemoveAttachment ? onRemoveAttachment(a.id) : undefined)}
+            hitSlop={10}
+            style={({ pressed }) => [
+              composerStyles.thumbRemove,
+              { opacity: pressed ? 0.85 : 1, backgroundColor: "rgba(0,0,0,0.45)" },
+            ]}
+          >
+            <X size={16} color="#fff" strokeWidth={2.5} />
+          </Pressable>
+        </View>
+      ))}
+    </ScrollView>
+  ) : null;
+
+  const divider = hasAtt ? <View style={[composerStyles.divider, { backgroundColor: colors.border }]} /> : null;
+
+  const fieldInner = (
+    <View style={composerStyles.fieldColumn}>
+      {attachmentStrip}
+      {divider}
+      <View style={[composerStyles.textCluster, { borderRadius: radius.xl, backgroundColor: "transparent" }]}>
+        <TextInput
+          nativeID={composerNativeID}
+          style={[composerStyles.input, { color: colors.textPrimary }]}
+          placeholder={placeholder ?? "Message Scamly..."}
+          placeholderTextColor={colors.textTertiary}
+          value={value}
+          onChangeText={onChangeText}
+          multiline
+          scrollEnabled
+          editable={!disabled}
+          blurOnSubmit={false}
+          returnKeyType="default"
+          textAlignVertical="top"
+          underlineColorAndroid="transparent"
+        />
+        {canSend ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+            onPress={onSend}
+            hitSlop={12}
+            style={({ pressed }) => [composerStyles.sendInside, { opacity: pressed ? 0.65 : 1 }]}
+          >
+            <Send size={22} color={colors.accent} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  const useGlass = isIosGlassAvailable();
+  const messageField = useGlass ? (
+    <GlassView
+      style={[composerStyles.glassOuter, { borderRadius: radius["2xl"], flex: 1 }]}
+      glassEffectStyle="regular"
+      colorScheme="auto"
+    >
+      {fieldInner}
+    </GlassView>
+  ) : (
+    <View
+      style={[
+        composerStyles.fallbackOuter,
+        {
+          flex: 1,
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderRadius: radius["2xl"],
+        },
+      ]}
+    >
+      {fieldInner}
+    </View>
+  );
+
+  return (
+    <View style={composerStyles.row}>
+      <View style={composerStyles.plusSlotWrap}>
+        {plusSlot ?? (
+          <ChatChromeIconButtonLocal
+            accessibilityLabel="Insert image"
+            onPress={onPressPlus}
+            bg={colors.surface}
+            disabled={plusDisabled}
+          >
+            <ImagePlus size={22} color={colors.textPrimary} strokeWidth={2} />
+          </ChatChromeIconButtonLocal>
+        )}
+      </View>
+      {messageField}
+    </View>
+  );
+}
+
+const MIN_INPUT_HEIGHT = 30;
+const THUMB = 72;
+
+const chromeStyles = StyleSheet.create({
+  chromeGlass: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: "hidden",
+  },
+  chromeFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: "hidden",
+  },
+  chromeBtnInner: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
+const pillStyles = StyleSheet.create({
+  glass: {
+    height: 44,
+    borderRadius: 22,
+    overflow: "hidden",
+    alignSelf: "flex-start",
+    maxWidth: 200,
+  },
+  fallback: {
+    height: 44,
+    borderRadius: 22,
+    overflow: "hidden",
+    alignSelf: "flex-start",
+    maxWidth: 200,
+  },
+  inner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    height: 44,
+    justifyContent: "center",
+  },
+  label: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+    flexShrink: 1,
+  },
+});
+
+const composerStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+  },
+  plusSlotWrap: {
+    flexShrink: 0,
+    alignSelf: "flex-end",
+    zIndex: 6,
+  },
+  fieldColumn: {
+    alignSelf: "stretch",
+    minWidth: 0,
+  },
+  attachScrollContent: {
+    paddingTop: 8,
+    paddingBottom: 4,
+    paddingHorizontal: 4,
+    gap: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  thumbWrap: {
+    position: "relative",
+    width: THUMB,
+    height: THUMB,
+  },
+  thumb: {
+    width: THUMB,
+    height: THUMB,
+  },
+  thumbRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 6,
+    opacity: 0.9,
+  },
+  glassOuter: {
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minWidth: 0,
+  },
+  fallbackOuter: {
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minWidth: 0,
+  },
+  textCluster: {
+    alignSelf: "stretch",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    minHeight: MIN_INPUT_HEIGHT,
+    backgroundColor: "transparent",
+  },
+  input: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    fontFamily: "Poppins-Regular",
+    fontSize: 16,
+    lineHeight: 22,
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    minHeight: MIN_INPUT_HEIGHT - 14,
+    maxHeight: 148,
+  },
+  sendInside: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 1,
   },
 });
 
@@ -216,24 +633,24 @@ export default function ChatInterface({
     if (interactionLocked) return undefined;
     if (planLoading || isStreaming) {
       return (
-        <ChatChromeIconButton
+        <ChatChromeIconButtonLocal
           accessibilityLabel="Insert image"
           onPress={() => {}}
           bg={colors.surface}
           disabled
         >
           <ImagePlus size={22} color={colors.textPrimary} strokeWidth={2} />
-        </ChatChromeIconButton>
+        </ChatChromeIconButtonLocal>
       );
     }
     return (
-      <ChatChromeIconButton
+      <ChatChromeIconButtonLocal
         accessibilityLabel="Insert image"
         onPress={() => void pickImages()}
         bg={colors.surface}
       >
         <ImagePlus size={22} color={colors.textPrimary} strokeWidth={2} />
-      </ChatChromeIconButton>
+      </ChatChromeIconButtonLocal>
     );
   }, [colors.surface, colors.textPrimary, interactionLocked, isStreaming, pickImages, planLoading]);
 
@@ -438,15 +855,15 @@ export default function ChatInterface({
           <View style={[styles.headerRow, { minHeight: HEADER_HEIGHT }]}>
             <View style={styles.headerColStart}>
               <View style={styles.headerLeftActions}>
-                <ChatChromeIconButton
+                <ChatChromeIconButtonLocal
                   accessibilityLabel="Open chat history"
                   onPress={openDrawer}
                   bg={colors.surface}
                   disabled={interactionLocked}
                 >
                   <Menu size={22} color={colors.textPrimary} strokeWidth={2} />
-                </ChatChromeIconButton>
-                <ChatGlassPillButton
+                </ChatChromeIconButtonLocal>
+                <ChatGlassPillButtonLocal
                   label="New chat"
                   icon={<Plus size={18} color={colors.textPrimary} strokeWidth={2} />}
                   onPress={startNewChat}
@@ -458,13 +875,13 @@ export default function ChatInterface({
               </View>
             </View>
             <View style={styles.headerColEnd}>
-              <ChatChromeIconButton
+              <ChatChromeIconButtonLocal
                 accessibilityLabel="Close chat"
                 onPress={goHome}
                 bg={colors.surface}
               >
                 <X size={22} color={colors.textPrimary} strokeWidth={2} />
-              </ChatChromeIconButton>
+              </ChatChromeIconButtonLocal>
             </View>
           </View>
 
@@ -506,7 +923,7 @@ export default function ChatInterface({
                       },
                     ]}
                   >
-                    <ChatGlassInputBar
+                    <ChatGlassInputBarLocal
                       composerNativeID={CHAT_COMPOSER_NATIVE_ID}
                       value={input}
                       onChangeText={setInput}

@@ -282,7 +282,7 @@ addActionBreadcrumb('scan_started', 'scan', { scanType: 'image' });
 addActionBreadcrumb('signup_started', 'signup');
 ```
 
-**Used in:** Signup flow (`app/(auth)/signup.tsx`, `app/(auth)/signup-profile.tsx`) to trace the user journey through the multi-step signup process.
+**Used in:** Signup/onboarding flow (e.g. `app/(auth)/onboarding/signup.tsx`) to trace the user journey through account creation.
 
 ## Feature Names
 
@@ -381,7 +381,7 @@ Valid feature names used throughout error tracking:
 - Auth errors (invalid credentials) are filtered automatically
 - Only unexpected errors are captured
 
-### Signup Flow (`app/(auth)/signup.tsx`, `app/(auth)/signup-profile.tsx`)
+### Signup Flow (`app/(auth)/onboarding/signup.tsx`, `app/(auth)/onboarding/collect-profile.tsx`)
 
 | Action              | Function Used    | Severity   | Description                                  |
 |---------------------|------------------|------------|----------------------------------------------|

@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 
 import { useChatStore } from "@/store/chatStore";
-import { clearChatHistoryCache } from "@/utils/chat/chat-history-cache";
+import { clearChatHistoryCache } from "@/utils/chat/chatHistoryCache";
 
 /**
  * Starts a fresh chat session by replacing the current route with `/chat`, which

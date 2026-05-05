@@ -1,5 +1,5 @@
-import QuickTipTile from "@/components/QuickTipTile";
 import Button from "@/components/Button";
+import QuickTipTile from "@/components/QuickTipTile";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useTheme } from "@/theme";
 import { getIsPremium } from "@/utils/shared/access";
@@ -91,7 +91,7 @@ export default function AllQuickTips() {
       });
       if (didUnlockEntitlement) {
         setIsPremium(true);
-        router.push("/subscription-success");
+        router.push("/SubscriptionSuccess");
       }
     } catch (error) {
       const message = trackRevenueCatError("present_paywall_library_quick_tips", error);

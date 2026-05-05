@@ -1,7 +1,7 @@
 import { useTheme } from "@/theme";
 import { Drawer } from "expo-router/drawer";
 import { useWindowDimensions } from "react-native";
-import ChatDrawerContent from "./_components/chat-drawer-content";
+import ChatDrawerContent from "./_components/ChatDrawerContent";
 
 export default function ChatLayout() {
   const { colors } = useTheme();

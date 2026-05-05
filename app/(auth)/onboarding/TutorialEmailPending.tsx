@@ -1,5 +1,5 @@
 import Button from "@/components/Button";
-import PersonalStepShell from "./_components/personal-step-shell";
+import PersonalStepShell from "./_components/PersonalStepShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
 import {
@@ -7,8 +7,8 @@ import {
   trackOnboardingStepViewed,
   trackOnboardingTutorialDismissed,
 } from "@/utils/shared/analytics";
-import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboarding-tutorial-exit";
-import { onboardingHref } from "@/utils/onboarding/onboarding-href";
+import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboardingTutorialExit";
+import { onboardingHref } from "@/utils/onboarding/onboardingHref";
 import { captureError } from "@/utils/shared/sentry";
 import { supabase } from "@/utils/shared/supabase";
 import { useRouter } from "expo-router";
@@ -33,6 +33,9 @@ export default function OnboardingTutorialEmailPending() {
     trackOnboardingStepViewed("tutorial_email_reminder", { auth_method: authMethod });
   }, [authMethod]);
 
+  /**
+   * Skip the email-confirm reminder and proceed to the end-of-tutorial paywall flow.
+   */
   const onSkip = async () => {
     if (!user) {
       return;
@@ -48,6 +51,9 @@ export default function OnboardingTutorialEmailPending() {
     }
   };
 
+  /**
+   * Resend the Supabase email confirmation link to the signed-in user's email.
+   */
   const onResend = async () => {
     if (!user?.email) {
       return;
@@ -64,6 +70,9 @@ export default function OnboardingTutorialEmailPending() {
     setLoading(false);
   };
 
+  /**
+   * Refresh the session and continue once Supabase reports the email as confirmed.
+   */
   const onRefresh = async () => {
     setLoading(true);
     try {
@@ -81,6 +90,9 @@ export default function OnboardingTutorialEmailPending() {
     }
   };
 
+  /**
+   * Password sign-in attempt used to re-check email confirmation on devices where session refresh is stale.
+   */
   const onSignInCheck = async () => {
     if (!user?.email || !password) {
       return;

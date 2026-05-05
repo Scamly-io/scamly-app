@@ -1,14 +1,13 @@
 import ArticleTile from "@/components/ArticleTile";
 import Button from "@/components/Button";
 import Card from "@/components/Card";
-import FeedbackWallModal from "./_components/FeedbackWallModal";
 import QuickTipTile from "@/components/QuickTipTile";
 import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
+import { openNewChatSession } from "@/utils/chat/chatNav";
 import { trackFeatureOpened, trackUserVisibleError } from "@/utils/shared/analytics";
 import { pickByWeeklyViewsOrRandom } from "@/utils/shared/articleWeeklyRanking";
-import { openNewChatSession } from "@/utils/chat/chat-nav";
 import { captureDataFetchError, captureError, captureWarning } from "@/utils/shared/sentry";
 import { supabase } from "@/utils/shared/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -28,6 +27,7 @@ import {
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import FeedbackWallModal from "./_components/FeedbackWallModal";
 
 type Article = {
   id: string;
@@ -281,7 +281,7 @@ export default function Home() {
     {
       icon: Search,
       label: "Contact Search",
-      route: "/contact-search",
+      route: "/ContactSearch",
       color: colors.accent,
     },
   ];
@@ -350,7 +350,7 @@ export default function Home() {
                   Trending Articles
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => router.push("/learn/all-articles")}>
+              <TouchableOpacity onPress={() => router.push("/learn/AllArticles")}>
                 <Text style={[styles.viewAllText, { color: colors.accent }]}>View All</Text>
               </TouchableOpacity>
             </View>
@@ -384,7 +384,7 @@ export default function Home() {
                 </View>
                 <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Tips</Text>
               </View>
-              <TouchableOpacity onPress={() => router.push("/learn/all-quick-tips")}>
+              <TouchableOpacity onPress={() => router.push("/learn/AllQuickTips")}>
                 <Text style={[styles.viewAllText, { color: colors.accent }]}>View All</Text>
               </TouchableOpacity>
             </View>

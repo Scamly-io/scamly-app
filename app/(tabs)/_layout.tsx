@@ -1,6 +1,6 @@
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useTheme } from "@/theme";
-import { openNewChatSession } from "@/utils/chat/chat-nav";
+import { openNewChatSession } from "@/utils/chat/chatNav";
 import { Tabs, usePathname } from "expo-router";
 import { BookOpen, House, MessageCircle, SearchCode, Sparkles } from "lucide-react-native";
 import { Platform, StyleSheet } from "react-native";
@@ -76,7 +76,7 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="contact-search"
+          name="ContactSearch"
           options={{
             title: "Search",
             tabBarIcon: ({ focused, color }) => (

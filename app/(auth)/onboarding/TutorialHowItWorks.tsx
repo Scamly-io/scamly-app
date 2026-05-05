@@ -1,22 +1,22 @@
-import ThemedBackground from "@/components/ThemedBackground";
-import FirstOnboardingScanPanel, {
+import OnboardingFirstScanPanel, {
   type FirstOnboardingScanPanelHandle,
   type FirstOnboardingScanPhase,
-} from "./_components/first-onboarding-scan-panel";
+} from "@/app/(tabs)/scan/_components/OnboardingFirstScanPanel";
+import ThemedBackground from "@/components/ThemedBackground";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/theme";
+import { onboardingHref } from "@/utils/onboarding/onboardingHref";
+import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboardingTutorialExit";
+import {
+  clearOnboardingTutorialStorage,
+  getStoredOnboardingTutorialStep,
+  setStoredOnboardingTutorialStep,
+} from "@/utils/onboarding/onboardingTutorialStorage";
 import {
   getAuthenticationMethodForAnalytics,
   trackOnboardingStepViewed,
   trackOnboardingTutorialDismissed,
 } from "@/utils/shared/analytics";
-import { onboardingHref } from "@/utils/onboarding/onboarding-href";
-import { completeOnboardingTutorialWithPaywall } from "@/utils/onboarding/onboarding-tutorial-exit";
-import {
-  clearOnboardingTutorialStorage,
-  getStoredOnboardingTutorialStep,
-  setStoredOnboardingTutorialStep,
-} from "@/utils/onboarding/onboarding-tutorial-storage";
 import { captureError } from "@/utils/shared/sentry";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -42,7 +42,7 @@ const phoneIllustration = require("@/assets/images/page-images/scan-tutorial-dia
 
 /**
  * In-app tutorial: (1) how to capture a screenshot, then (2) upload + first real scan.
- * Swipeable / progress UI aligned with `collect-profile` onboarding.
+ * Swipeable / progress UI aligned with `CollectProfile` onboarding.
  */
 export default function OnboardingTutorialHowItWorks() {
   const { colors, radius, shadows, isDark } = useTheme();
@@ -110,11 +110,17 @@ export default function OnboardingTutorialHowItWorks() {
     }, [subStep]),
   );
 
+  /**
+   * Move to the celebration screen after the embedded first scan completes.
+   */
   const onContinueAfterScan = async () => {
     await setStoredOnboardingTutorialStep("celebration");
-    router.push(onboardingHref("/onboarding/tutorial-celebration"));
+    router.push(onboardingHref("/onboarding/TutorialCelebration"));
   };
 
+  /**
+   * Skip the tutorial and proceed to the end-of-tutorial paywall flow.
+   */
   const onSkip = async () => {
     if (!user) {
       return;
@@ -348,7 +354,7 @@ export default function OnboardingTutorialHowItWorks() {
                   the app.
                 </Text>
                 <View style={{ flex: 1, minHeight: 0 }}>
-                  <FirstOnboardingScanPanel
+                  <OnboardingFirstScanPanel
                     ref={scanPanelRef}
                     userId={user.id}
                     onContinueAfterSuccess={onContinueAfterScan}
